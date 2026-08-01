@@ -11,7 +11,7 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 export const DEFAULT_CONTRACT_ID =
   process.env.NEXT_PUBLIC_CONTRACT_ID ||
-  "CDLZFC3SYJYDZT7K67VZ75WJDSVIE52RKKQ7YNJCK6VNVNFBS44ABTBS";
+  "CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W";
 
 // ── 3 Error Types ──────────────────────────────────────────────
 
