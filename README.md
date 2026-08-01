@@ -23,6 +23,7 @@ Built on the [Stellar](https://stellar.org) network with [Soroban](https://sorob
 - **Payment Dashboard** — Track payment history, statuses, and transaction details
 - **Smart Contracts** — Soroban contract deployment and interaction via `/contracts`
 - **Event Streaming** — Real-time SSE event feed at `/events` for payment lifecycle tracking
+- **Inter-Contract Communication** — `PaymentEventEmitter` contract receives cross-contract events from the main OphirPay contract on every payment creation
 - **Mobile Responsive** — Fully responsive with hamburger sidebar for mobile devices
 - **Error Handling** — Error boundaries, loading skeletons, and classified contract errors
 - **CI/CD Pipeline** — GitHub Actions workflow with build, lint, test, and typecheck
@@ -93,6 +94,7 @@ NEXT_PUBLIC_STELLAR_NETWORK="TESTNET"
 NEXT_PUBLIC_STELLAR_RPC_URL="https://soroban-testnet.stellar.org:443"
 NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
 NEXT_PUBLIC_CONTRACT_ID="CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W"
+NEXT_PUBLIC_EMITTER_CONTRACT_ID="CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 ```
 
@@ -223,7 +225,8 @@ src/
 ├── types/
 │   └── index.ts            # Shared TypeScript types
 contracts/
-└── ophirpay/               # Rust Soroban contract
+├── ophirpay/               # Main Rust Soroban contract (payment lifecycle)
+└── emitter/                # PaymentEventEmitter contract (cross-contract events)
 .github/
 └── workflows/ci.yml        # GitHub Actions CI/CD
 scripts/
@@ -236,7 +239,24 @@ scripts/
 
 ## 🧪 Smart Contract Development
 
-### Deployed Contract
+### 🔗 Inter-Contract Communication
+
+OphirPay uses **two Soroban contracts** that communicate via cross-contract invocation:
+
+```
+OphirPayContract.create_payment()
+  │
+  ├── Stores payment in persistent storage
+  └── Cross-contract call → PaymentEventEmitter.emit_payment()
+        │
+        └── Stores PaymentEvent record (id, payer, payee, amount, tx_hash)
+```
+
+When a payment is created on the main **OphirPayContract**, it calls `invoke_contract` on the **PaymentEventEmitter** to record a `PaymentEvent` struct. The emitter contract stores the full event data (event ID, emitter name, payer, payee, amount, transaction hash) in its persistent storage. This enables external systems to query emitted payment events independently without touching the main payment contract.
+
+---
+
+### 📦 Main Contract — OphirPay
 
 | Detail | Value |
 |---|---|
@@ -248,35 +268,92 @@ scripts/
 | Owner | `GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U` |
 | Explorer | [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
 
-### Contract Functions
+**Functions:**
 
-- `init(owner)` — Initialize with owner address
-- `get_owner()` — Query contract owner
-- `create_payment(payer, payee, amount, tx_hash)` — Store payment on-chain
-- `get_payment(id)` — Retrieve payment by ID
-- `get_payment_count()` — Total payments stored
+| Function | Description |
+|---|---|
+| `init(owner, emitter)` | Initialize with owner address and emitter contract address |
+| `get_owner()` | Query contract owner |
+| `get_emitter()` | Get the configured PaymentEventEmitter contract address |
+| `create_payment(payer, payee, amount, tx_hash)` | Store payment + cross-contract emit event |
+| `get_payment(id)` | Retrieve payment by ID |
+| `get_payment_count()` | Total payments stored |
+
+---
+
+### 📡 Emitter Contract — PaymentEventEmitter
+
+| Detail | Value |
+|---|---|
+| Contract ID | `CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4` |
+| Network | Stellar Testnet |
+| Purpose | Receives cross-contract payment events from OphirPayContract |
+| Explorer | [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4) |
+
+**Functions:**
+
+| Function | Description |
+|---|---|
+| `init(owner)` | Initialize with owner address |
+| `get_owner()` | Query emitter owner |
+| `emit_payment(emitter, payer, payee, amount, tx_hash)` | Store PaymentEvent in persistent storage |
+| `get_event(event_id)` | Retrieve event by ID |
+| `get_event_count()` | Total events emitted |
+
+**PaymentEvent struct:** `{ id, emitter, payer, payee, amount, tx_hash }`
+
+---
 
 ### Building Locally
 
 ```bash
+# Main contract
 cd contracts/ophirpay
 cargo build --target wasm32-unknown-unknown --release
+
+# Emitter contract
+cd contracts/emitter
+cargo build --target wasm32-unknown-unknown --release
+```
+
+### Deployment (both contracts)
+
+```bash
+# 1. Deploy emitter first
+stellar contract deploy \
+  --wasm contracts/emitter/target/wasm32-unknown-unknown/release/ophirpay_emitter.wasm \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015"
+
+# 2. Init emitter
+stellar contract invoke \
+  --id <EMITTER_CONTRACT_ID> \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- init --owner <OWNER_PUBLIC_KEY>
+
+# 3. Deploy main contract
+stellar contract deploy \
+  --wasm contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015"
+
+# 4. Init main contract with emitter address
+stellar contract invoke \
+  --id <OPHIRPAY_CONTRACT_ID> \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- init --owner <OWNER_PUBLIC_KEY> --emitter <EMITTER_CONTRACT_ID>
 ```
 
 ### Automated Deployment Workflow
 
 ```bash
 ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY>
-```
-
-### Deploy with Stellar CLI
-
-```bash
-stellar contract deploy \
-  --wasm contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
-  --source-account <SECRET_KEY> \
-  --rpc-url "https://soroban-testnet.stellar.org:443" \
-  --network-passphrase "Test SDF Network ; September 2015"
 ```
 
 ---
