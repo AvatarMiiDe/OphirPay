@@ -125,7 +125,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🌐 Live Demo
 
-> 🚀 Live demo coming soon — deploy to Vercel with `vercel --prod` after connecting your account.
+🚀 **[ophirpay.vercel.app](https://ophirpay.vercel.app)** — deployed on Vercel with automatic builds from `main`.
 
 ---
 
