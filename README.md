@@ -275,7 +275,9 @@ stellar contract deploy \
 
 ## 🎥 Demo Video
 
-> 📹 Coming soon — 1–2 minute walkthrough of the platform.
+▶️ **[Watch the OphirPay Demo](./public/demo.mp4)** — 1-minute walkthrough covering wallet connection, sending payments, transaction success, mobile responsive UI, CI/CD pipeline, and test suite.
+
+<video src="./public/demo.mp4" controls width="100%" style="max-width:720px;border-radius:12px"></video>
 
 ---
 
