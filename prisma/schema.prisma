@@ -1,0 +1,201 @@
+// This is a Prisma schema for OphirPay
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── User / Organization ──────────────────────────────────────
+
+model User {
+  id              String   @id @default(cuid())
+  stellarAddress  String?  @unique
+  name            String?
+  email           String?  @unique
+  avatarUrl       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  accounts        Account[]
+  payments        Payment[]
+  webhooks        Webhook[]
+  apiKeys         ApiKey[]
+}
+
+// ── Stellar Accounts ──────────────────────────────────────────
+
+model Account {
+  id            String   @id @default(cuid())
+  userId        String
+  publicKey     String   @unique
+  name          String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User       @relation(fields: [userId], references: [id])
+  paymentsFrom  Payment[]  @relation("PaymentSourceAccount")
+  paymentsTo    Payment[]  @relation("PaymentDestinationAccount")
+}
+
+// ── Payments ───────────────────────────────────────────────────
+
+model Payment {
+  id                String    @id @default(cuid())
+  userId            String
+
+  // Payment details
+  amount            Float
+  assetCode         String    @default("XLM")
+  assetIssuer       String?
+  description       String?
+  memo              String?
+
+  // Status
+  status            PaymentStatus @default(CREATED)
+
+  // Stellar
+  transactionHash   String?
+  stellarOpId       String?
+
+  // Relations
+  sourceAccountId   String?
+  destAccountId     String?
+
+  // Batch & recurring
+  batchId           String?
+  recurrenceId      String?
+
+  // Metadata
+  metadata          String?   // JSON string for flexible metadata
+  errorMessage      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  completedAt       DateTime?
+
+  user              User      @relation(fields: [userId], references: [id])
+  sourceAccount     Account?  @relation("PaymentSourceAccount", fields: [sourceAccountId], references: [id])
+  destAccount       Account?  @relation("PaymentDestinationAccount", fields: [destAccountId], references: [id])
+  batch             Batch?    @relation(fields: [batchId], references: [id])
+  recurrence        Recurrence? @relation(fields: [recurrenceId], references: [id])
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ── Batch Payments ────────────────────────────────────────────
+
+model Batch {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  status      BatchStatus @default(CREATED)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payments    Payment[]
+}
+
+enum BatchStatus {
+  CREATED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+// ── Recurring Payments ────────────────────────────────────────
+
+model Recurrence {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  frequency   Frequency
+  amount      Float
+  assetCode   String        @default("XLM")
+  assetIssuer String?
+  destAddress String
+  description String?
+  isActive    Boolean       @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  payments    Payment[]
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+// ── Payment Requests ──────────────────────────────────────────
+
+model PaymentRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  amount        Float
+  assetCode     String   @default("XLM")
+  assetIssuer   String?
+  description   String?
+  recipientAddress String?
+  status        RequestStatus @default(PENDING)
+  transactionHash String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum RequestStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+// ── Webhooks ───────────────────────────────────────────────────
+
+model Webhook {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  events    String   // JSON array of event types
+  isActive  Boolean  @default(true)
+  secret    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// ── API Keys ──────────────────────────────────────────────────
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  keyHash   String   @unique
+  prefix    String   // First 8 chars for display
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  user      User     @relation(fields: [userId], references: [id])
+}
