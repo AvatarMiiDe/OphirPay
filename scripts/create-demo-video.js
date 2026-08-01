@@ -1,9 +1,11 @@
 /**
  * OphirPay Demo Video Generator
  *
- * Creates a 1-2 minute demo video by:
+ * Creates a ~2 minute demo video by:
  * 1. Capturing screenshots of key app pages via Puppeteer
  * 2. Compiling frames into MP4 with FFmpeg
+ *
+ * Math: 12 slides × 10 frames each = 120 frames @ 1fps = 120s = 2 minutes
  */
 
 const puppeteer = require("puppeteer");
@@ -43,19 +45,39 @@ const DEMO_SLIDES = [
     description: "Search, filter, status badges",
   },
   {
+    file: "mockups/contracts-page.html",
+    label: "Smart Contracts",
+    description: "Two deployed Soroban contracts on Testnet",
+  },
+  {
+    file: "mockups/inter-contract.html",
+    label: "Inter-Contract Communication",
+    description: "Cross-contract invoke: OphirPay → PaymentEventEmitter",
+  },
+  {
+    file: "mockups/events-feed.html",
+    label: "Live Event Streaming",
+    description: "SSE real-time payment lifecycle events",
+  },
+  {
     file: "mockups/mobile-responsive.html",
     label: "Mobile Responsive",
-    description: "iPhone 375px viewport",
+    description: "iPhone 375px viewport with hamburger menu",
   },
   {
     file: "mockups/ci-pipeline.html",
     label: "CI/CD Pipeline",
-    description: "GitHub Actions build, lint, test, deploy",
+    description: "GitHub Actions: typecheck, lint, test, build",
   },
   {
     file: "mockups/test-output.html",
     label: "Test Suite",
-    description: "23 passing tests, 3 suites",
+    description: "23 passing tests across 3 suites",
+  },
+  {
+    file: "mockups/architecture.html",
+    label: "Production Architecture",
+    description: "Next.js 15 + Stellar + Soroban + Vercel",
   },
 ];
 
@@ -79,7 +101,7 @@ async function captureFrames() {
     const filePath = `file://${path.resolve(__dirname, slide.file)}`;
     console.log(`  Capturing: ${slide.label}`);
 
-    // Capture 3 frames per slide with slight delays for natural feel
+    // Capture 10 frames per slide (~10 seconds at 1fps)
     const tab = await browser.newPage();
     const isMobile = slide.file.includes("mobile");
 
@@ -92,28 +114,41 @@ async function captureFrames() {
       timeout: 15000,
     });
 
-    // Frame 1: full page
+    // Frame 1: base page (1s)
     await tab.screenshot({
       path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
     });
     frameIndex++;
 
-    // Add overlay with slide label
-    await tab.evaluate((label, desc) => {
-      const overlay = document.createElement("div");
-      overlay.id = "__demo_overlay";
-      overlay.innerHTML = `
-        <div style="position:fixed;bottom:24px;left:24px;right:24px;background:rgba(0,0,0,0.85);color:white;padding:16px 24px;border-radius:12px;z-index:9999;font-family:system-ui,sans-serif">
-          <div style="font-size:20px;font-weight:700;margin-bottom:4px">${label}</div>
-          <div style="font-size:14px;opacity:0.8">${desc}</div>
-        </div>`;
-      document.body.appendChild(overlay);
-    }, slide.label, slide.description);
+    // Frame 2-5: gradual overlay fade in
+    for (let i = 0; i < 4; i++) {
+      const opacity = (i + 1) * 0.25;
+      await tab.evaluate((label, desc, op) => {
+        const existing = document.getElementById("__demo_overlay");
+        if (existing) existing.remove();
+        const overlay = document.createElement("div");
+        overlay.id = "__demo_overlay";
+        overlay.innerHTML = `
+          <div style="position:fixed;bottom:24px;left:24px;right:24px;background:rgba(0,0,0,${op * 0.85});color:white;padding:16px 24px;border-radius:12px;z-index:9999;font-family:system-ui,sans-serif;transition:opacity 0.5s">
+            <div style="font-size:20px;font-weight:700;margin-bottom:4px">${label}</div>
+            <div style="font-size:14px;opacity:0.8">${desc}</div>
+          </div>`;
+        document.body.appendChild(overlay);
+      }, slide.label, slide.description, opacity);
 
-    await tab.screenshot({
-      path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
-    });
-    frameIndex++;
+      await tab.screenshot({
+        path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
+      });
+      frameIndex++;
+    }
+
+    // Frame 6-10: hold with full overlay
+    for (let i = 0; i < 5; i++) {
+      await tab.screenshot({
+        path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
+      });
+      frameIndex++;
+    }
 
     await tab.close();
   }
@@ -125,11 +160,11 @@ async function captureFrames() {
 function compileVideo() {
   console.log("🎬 Compiling video with FFmpeg...");
 
-  // Create video: each frame = 0.5s, so ~1.5s per slide × 8 slides = ~12s total
+  // 120 frames @ 1fps = 120 seconds = 2 minutes
   const framesPattern = path.join(FRAMES_DIR, "frame_%04d.png");
 
   execSync(
-    `ffmpeg -y -framerate 2 -i ${framesPattern} -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -r 30 -preset ultrafast -movflags +faststart ${VIDEO_OUTPUT}`,
+    `ffmpeg -y -framerate 1 -i ${framesPattern} -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -r 30 -preset ultrafast -movflags +faststart ${VIDEO_OUTPUT}`,
     { stdio: "inherit" }
   );
 
