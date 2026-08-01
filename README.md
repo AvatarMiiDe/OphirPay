@@ -8,7 +8,7 @@ Built on the [Stellar](https://stellar.org) network with [Soroban](https://sorob
 [![Tests](https://img.shields.io/badge/tests-23%20passed-brightgreen.svg)](src/__tests__/)
 [![Vercel](https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel)](https://ophirpay.vercel.app)
 [![Demo](https://img.shields.io/badge/demo-video-8A2BE2.svg?logo=video)](./public/demo.mp4)
-[![Contract](https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg)](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W)
+[![Contract](https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg)](https://stellar.expert/explorer/testnet/contract/CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)]()
 
@@ -93,7 +93,7 @@ DATABASE_URL="file:./dev.db"
 NEXT_PUBLIC_STELLAR_NETWORK="TESTNET"
 NEXT_PUBLIC_STELLAR_RPC_URL="https://soroban-testnet.stellar.org:443"
 NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
-NEXT_PUBLIC_CONTRACT_ID="CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W"
+NEXT_PUBLIC_CONTRACT_ID="CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB"
 NEXT_PUBLIC_EMITTER_CONTRACT_ID="CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 ```
@@ -260,13 +260,14 @@ When a payment is created on the main **OphirPayContract**, it calls `invoke_con
 
 | Detail | Value |
 |---|---|
-| Contract ID | `CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W` |
+| Contract ID | `CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB` |
 | Network | Stellar Testnet |
-| WASM Hash | `bf9500e70231177eaddd78e92f2a2b1c490d07040a3b72a2dc70b871c107cbd8` |
-| Deploy TX | [`29879bd9...`](https://stellar.expert/explorer/testnet/tx/29879bd9ab20ddfa7f4dfaf5c01fafda59831272188dbfc00790181142577e80) |
-| Init TX | [`18d91f40...`](https://stellar.expert/explorer/testnet/tx/18d91f40a897eec454f3fd5011b559d114cf20b453b7b69ff9e3a84496717621) |
+| WASM Hash | `44ac9d15718b844be236fac8682e131eed62c333a8b1cf4e11d0b61489e43e9d` |
+| Deploy TX | [`46b565b6...`](https://stellar.expert/explorer/testnet/tx/46b565b60170743b847fce7b99708593532f29111688b74494db63ea2ddb3cd9) |
+| Init TX | [`2e0df1c2...`](https://stellar.expert/explorer/testnet/tx/2e0df1c2db2cd87f52729daf8605e26d06f128f0206b98f7fd958abaab3213f8) |
+| Cross-Contract TX | [`80cf9b7f...`](https://stellar.expert/explorer/testnet/tx/80cf9b7f4276739edc1dab8106d7a124fd4e472c13493974f85f7e1e49d79ac1) |
 | Owner | `GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U` |
-| Explorer | [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
+| Explorer | [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB) |
 
 **Functions:**
 

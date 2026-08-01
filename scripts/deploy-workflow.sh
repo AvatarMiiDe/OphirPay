@@ -29,10 +29,10 @@ WASM_PATH="$CONTRACT_DIR/target/wasm32-unknown-unknown/release/ophirpay_contract
 
 # ── Validate inputs ──────────────────────────────────────────
 if [ $# -lt 2 ]; then
-  echo -e "${RED}Usage: $0 <SECRET_KEY> <OWNER_PUBLIC_KEY>${NC}"
+  echo -e "${RED}Usage: $0 <SECRET_KEY> <OWNER_PUBLIC_KEY> [EMITTER_CONTRACT_ID]${NC}"
   echo ""
   echo "Example:"
-  echo "  $0 SDEMO... GDEMO..."
+  echo "  $0 SDEMO... GDEMO... CA6LAP..."
   echo ""
   echo "Environment variables:"
   echo "  RPC_URL               Soroban RPC URL (default: testnet)"
@@ -43,6 +43,7 @@ fi
 
 SECRET_KEY="$1"
 OWNER_KEY="$2"
+EMITTER_ID="${3:-}"
 STELLAR_CLI="${STELLAR_CLI_PATH:-stellar}"
 
 # ── Check prerequisites ──────────────────────────────────────
@@ -100,14 +101,25 @@ CONTRACT_ID=$($STELLAR_CLI contract deploy \
 echo -e "${GREEN}  ✓ Contract ID: ${CONTRACT_ID}${NC}"
 
 # ── Step 4: Initialize contract ───────────────────────────────
-echo -e "${YELLOW}[4/5] Initializing contract...${NC}"
-INIT_TX=$($STELLAR_CLI contract invoke \
-  --id "$CONTRACT_ID" \
-  --source-account "$SECRET_KEY" \
-  --rpc-url "$RPC_URL" \
-  --network-passphrase "$NETWORK_PASSPHRASE" \
-  --quiet \
-  -- init --owner "$OWNER_KEY" 2>/dev/null || echo "")
+if [ -n "$EMITTER_ID" ]; then
+  echo -e "${YELLOW}[4/5] Initializing contract with emitter...${NC}"
+  INIT_TX=$($STELLAR_CLI contract invoke \
+    --id "$CONTRACT_ID" \
+    --source-account "$SECRET_KEY" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --quiet \
+    -- init --owner "$OWNER_KEY" --emitter "$EMITTER_ID" 2>/dev/null || echo "")
+else
+  echo -e "${YELLOW}[4/5] Initializing contract...${NC}"
+  INIT_TX=$($STELLAR_CLI contract invoke \
+    --id "$CONTRACT_ID" \
+    --source-account "$SECRET_KEY" \
+    --rpc-url "$RPC_URL" \
+    --network-passphrase "$NETWORK_PASSPHRASE" \
+    --quiet \
+    -- init --owner "$OWNER_KEY" 2>/dev/null || echo "")
+fi
 
 if [ -n "$INIT_TX" ]; then
   echo -e "${GREEN}  ✓ Init TX: ${INIT_TX}${NC}"
