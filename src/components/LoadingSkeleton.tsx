@@ -35,7 +35,7 @@ export function LoadingSkeleton({ className, lines = 3, variant = "text" }: Skel
         <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 mb-4" />
         <div className="space-y-3">
           {Array.from({ length: lines }).map((_, i) => (
-            <div key={i} className="h-4 rounded bg-gray-200 dark:bg-gray-700" style={{ width: `${60 + Math.random() * 40}%` }} />
+            <div key={i} className="h-4 rounded bg-gray-200 dark:bg-gray-700" style={{ width: `${[100, 75, 60, 90, 50][i % 5]}%` }} />
           ))}
         </div>
       </div>
@@ -66,7 +66,7 @@ export function LoadingSkeleton({ className, lines = 3, variant = "text" }: Skel
         <div
           key={i}
           className="h-4 rounded bg-gray-200 dark:bg-gray-700"
-          style={{ width: `${60 + Math.random() * 40}%` }}
+          style={{ width: `${[100, 75, 60, 90, 50][i % 5]}%` }}
         />
       ))}
     </div>
