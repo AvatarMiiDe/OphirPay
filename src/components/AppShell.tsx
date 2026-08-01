@@ -9,9 +9,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <WalletProvider>
       <div className="flex min-h-screen">
         <Sidebar />
-        <div className="flex-1 ml-64">
+        <div className="flex-1 lg:ml-64">
           <Header />
-          <main className="p-6">{children}</main>
+          <main className="p-4 md:p-6">{children}</main>
         </div>
       </div>
     </WalletProvider>

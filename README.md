@@ -10,13 +10,14 @@ Built on the [Stellar](https://stellar.org) network with [Soroban](https://sorob
 
 - **Wallet Connection** — Connect your Freighter wallet to Stellar Testnet with one click
 - **Real-Time Balance** — View your XLM balance fetched live from the Stellar network
-- **Send Payments** — Send XLM transactions on Testnet with Freighter signing, tx hash feedback, and explorer links
+- **Send Payments** — Send XLM transactions with Freighter signing, tx hash feedback, and explorer links
+- **Batch Payments** — Process multiple payments in a single transaction
 - **Payment Dashboard** — Track payment history, statuses, and transaction details
-- **Batch Payments** — Process multiple payments in a single transaction with dynamic recipient management
-- **Recurring Payments** — Schedule automated recurring payouts *(coming soon)*
-- **Payment Requests** — Generate and share payment request links *(coming soon)*
-- **Webhooks** — Real-time event notifications for external integrations *(coming soon)*
-- **Analytics** — Payment volume, success rates, and financial insights *(coming soon)*
+- **Smart Contracts** — Soroban contract deployment and interaction via `/contracts`
+- **Event Streaming** — Real-time SSE event feed at `/events` for payment lifecycle tracking
+- **Mobile Responsive** — Fully responsive with hamburger sidebar for mobile devices
+- **Error Handling** — Error boundaries, loading skeletons, and classified contract errors
+- **CI/CD Pipeline** — GitHub Actions workflow with build, lint, test, and typecheck
 
 ---
 
@@ -26,10 +27,19 @@ Built on the [Stellar](https://stellar.org) network with [Soroban](https://sorob
 |---|---|
 | Frontend | [Next.js 15](https://nextjs.org) + TypeScript |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com) |
+| Testing | [Vitest](https://vitest.dev) + React Testing Library |
 | Blockchain | [Stellar](https://stellar.org) + [Soroban](https://soroban.stellar.org) SDK v13 |
 | Wallet | [Freighter](https://freighter.app) browser extension |
 | Database | [Prisma](https://prisma.io) + SQLite |
+| CI/CD | [GitHub Actions](https://github.com/features/actions) |
+| Hosting | [Vercel](https://vercel.com) |
 | Network | Stellar Testnet |
+
+---
+
+## 🌐 Live Demo
+
+🚀 **[ophirpay.vercel.app](https://ophirpay.vercel.app)** — deployed on Vercel with automatic builds from `main`.
 
 ---
 
@@ -63,8 +73,6 @@ npx prisma generate
 
 ### 4. Configure environment
 
-Copy `.env.example` to `.env` (already provided with Testnet defaults):
-
 ```bash
 cp .env.example .env
 ```
@@ -76,6 +84,7 @@ DATABASE_URL="file:./dev.db"
 NEXT_PUBLIC_STELLAR_NETWORK="TESTNET"
 NEXT_PUBLIC_STELLAR_RPC_URL="https://soroban-testnet.stellar.org:443"
 NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
+NEXT_PUBLIC_CONTRACT_ID="CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 ```
 
@@ -89,80 +98,130 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Full CI pipeline (typecheck + lint + test + build)
+npm run ci
+```
+
+**23 tests passing** across 3 test suites:
+- `src/__tests__/utils.test.ts` — Utility functions (shortenAddress, formatAmount, getStatusColor, timeAgo, cn)
+- `src/__tests__/contracts.test.ts` — Contract error classification (NETWORK, CONTRACT, USER_REJECTION)
+- `src/__tests__/stellar.test.ts` — Stellar SDK helpers (address validation, explorer URLs)
+
+![Test Output](./public/screenshots/test-output.png)
+
+---
+
+## 🔄 CI/CD Pipeline
+
+[![OphirPay CI/CD](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg)](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml)
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push to `main`:
+
+1. **Checkout** — Clone the repository
+2. **Setup Node.js 20** — With npm caching
+3. **Install** — `npm ci`
+4. **Prisma Generate** — Generate database client
+5. **TypeScript Check** — `tsc --noEmit`
+6. **Lint** — `next lint`
+7. **Test** — `vitest run`
+8. **Build** — `next build`
+
+![CI/CD Pipeline](./public/screenshots/ci-pipeline.png)
+
+---
+
 ## 📸 Screenshots
 
 ### Wallet Options Available
-
-*Disconnected state showing the "Connect Freighter" button — users can see available wallet options before connecting:*
-
+*Disconnected state showing wallet options before connecting:*
 ![Wallet Options](./public/screenshots/wallet-options.png)
 
+### Mobile Responsive UI
+*Dashboard on mobile with hamburger sidebar menu:*
+![Mobile UI](./public/screenshots/mobile-responsive.png)
+
 ### Treasury Dashboard
-
-*The main dashboard showing stats cards, connected wallet balance, recent payments table, and quick actions:*
-
+*Stats cards, connected wallet balance, recent payments, quick actions:*
 ![Treasury Dashboard](./public/screenshots/dashboard.png)
 
+### CI/CD Pipeline
+*GitHub Actions workflow passing:*
+![CI/CD Pipeline](./public/screenshots/ci-pipeline.png)
+
 ### Payments List
-
-*Payment history with search, filter tabs, status badges, and Stellar Explorer transaction links:*
-
+*Search, filter tabs, status badges, transaction links:*
 ![Payments List](./public/screenshots/payments.png)
 
 ### Send Payment
-
-*Send XLM form with destination address, amount, memo, and real-time balance display:*
-
+*Send XLM with destination, amount, memo, balance:*
 ![Send Payment](./public/screenshots/send-payment.png)
 
 ### Transaction Success
-
-*After Freighter signs the transaction, the tx hash is shown with a link to Stellar Expert explorer:*
-
+*TX result with hash and Stellar Expert link:*
 ![Transaction Success](./public/screenshots/transaction-success.png)
 
 ---
 
-## 🌐 Live Demo
+## 🏗 Architecture
 
-🚀 **[ophirpay.vercel.app](https://ophirpay.vercel.app)** — deployed on Vercel with automatic builds from `main`.
+### Production-Ready Patterns
 
----
+- **Error Boundaries** (`src/components/ErrorBoundary.tsx`) — React error boundary catching render errors with fallback UI
+- **Loading Skeletons** (`src/components/LoadingSkeleton.tsx`) — Shimmer loading states for text, card, table, and stats variants
+- **3 Contract Error Types** — NETWORK, CONTRACT, USER_REJECTION classified errors
+- **Mobile Responsive** — Collapsible hamburger sidebar with slide-over panel
+- **Real-Time Events** — SSE endpoint at `/api/events` for live payment streaming
 
-## 🔧 Project Structure
+### Project Structure
 
 ```
 src/
-├── app/                    # Next.js App Router pages
-│   ├── layout.tsx          # Root layout (server component)
-│   ├── page.tsx            # Treasury Dashboard
+├── __tests__/              # Vitest test suites (23 tests)
+│   ├── contracts.test.ts   # Contract error classification
+│   ├── stellar.test.ts     # Stellar SDK helpers
+│   └── utils.test.ts       # Utility functions
+├── app/
+│   ├── api/
+│   │   ├── events/route.ts # SSE event streaming endpoint
+│   │   ├── health/route.ts # Health check
+│   │   └── batches/route.ts# Batch CRUD API
+│   ├── contracts/page.tsx  # Smart contract interaction
+│   ├── events/page.tsx     # Live event feed
 │   ├── send/page.tsx       # Send payment flow
-│   ├── payments/page.tsx   # Payment history
-│   ├── batches/page.tsx    # Batch listing + detail
-│   ├── batches/new/page.tsx # New batch form
-│   ├── recurring/page.tsx  # Recurring payments
-│   ├── requests/page.tsx   # Payment requests
-│   ├── webhooks/page.tsx   # Webhook management
-│   ├── analytics/page.tsx  # Analytics dashboard
-│   └── api/
-│       ├── health/route.ts  # Health check endpoint
-│       └── batches/route.ts # Batch CRUD API
-├── components/             # Reusable UI components
-│   ├── AppShell.tsx        # Client shell (wallet provider + layout)
-│   ├── WalletButton.tsx    # Connect/disconnect + balance display
-│   ├── Sidebar.tsx         # Navigation sidebar
-│   ├── Header.tsx          # Top header bar
-│   └── EmptyState.tsx      # Reusable empty state component
+│   ├── page.tsx            # Treasury Dashboard
+│   └── ...
+├── components/
+│   ├── ErrorBoundary.tsx   # React error boundary
+│   ├── LoadingSkeleton.tsx # Shimmer loading states
+│   ├── AppShell.tsx        # Client shell (wallet + layout)
+│   ├── WalletButton.tsx    # Connect/disconnect + balance
+│   ├── Sidebar.tsx         # Mobile-responsive nav
+│   └── Header.tsx          # Top header bar
 ├── hooks/
 │   └── useFreighter.tsx    # Wallet context + hook
 ├── lib/
-│   ├── stellar.ts          # Stellar SDK config + helpers
-│   ├── prisma.ts           # Prisma client singleton
-│   └── utils.ts            # Formatting + utility functions
+│   ├── contracts.ts        # Smart contract interaction
+│   ├── stellar.ts          # Stellar SDK config
+│   └── utils.ts            # Formatting utilities
 ├── types/
 │   └── index.ts            # Shared TypeScript types
-prisma/
-└── schema.prisma           # Database schema (8 models)
+contracts/
+└── ophirpay/               # Rust Soroban contract
+.github/
+└── workflows/ci.yml        # GitHub Actions CI/CD
+scripts/
+├── deploy-contract.js      # SDK deployment script
+├── deploy-workflow.sh      # Automated deployment pipeline
+└── capture-mockups.js      # Screenshot capture tool
 ```
 
 ---
@@ -179,17 +238,15 @@ prisma/
 | Deploy TX | [`29879bd9...`](https://stellar.expert/explorer/testnet/tx/29879bd9ab20ddfa7f4dfaf5c01fafda59831272188dbfc00790181142577e80) |
 | Init TX | [`18d91f40...`](https://stellar.expert/explorer/testnet/tx/18d91f40a897eec454f3fd5011b559d114cf20b453b7b69ff9e3a84496717621) |
 | Owner | `GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U` |
-| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
-| Stellar Lab | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
+| Explorer | [Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
 
-### Contract Interaction
+### Contract Functions
 
-Interact with the deployed contract at **/contracts** in the OphirPay dashboard:
-
-- `get_payment_count()` — Returns total payments stored on-chain
-- `get_payment(id)` — Fetch a specific payment by ID
-- `get_owner()` — Returns the contract owner address
-- `create_payment(payer, payee, amount, tx_hash)` — Create a new payment record
+- `init(owner)` — Initialize with owner address
+- `get_owner()` — Query contract owner
+- `create_payment(payer, payee, amount, tx_hash)` — Store payment on-chain
+- `get_payment(id)` — Retrieve payment by ID
+- `get_payment_count()` — Total payments stored
 
 ### Building Locally
 
@@ -198,7 +255,11 @@ cd contracts/ophirpay
 cargo build --target wasm32-unknown-unknown --release
 ```
 
-Compiled WASM: `contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm`
+### Automated Deployment Workflow
+
+```bash
+./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY>
+```
 
 ### Deploy with Stellar CLI
 
@@ -210,25 +271,11 @@ stellar contract deploy \
   --network-passphrase "Test SDF Network ; September 2015"
 ```
 
-### Invoke Contract Functions
+---
 
-```bash
-# Initialize the contract
-stellar contract invoke \
-  --id CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W \
-  --source-account <SECRET_KEY> \
-  --rpc-url "https://soroban-testnet.stellar.org:443" \
-  --network-passphrase "Test SDF Network ; September 2015" \
-  -- init --owner <OWNER_PUBLIC_KEY>
+## 🎥 Demo Video
 
-# Read payment count (simulate only, no tx fee)
-stellar contract invoke \
-  --id CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W \
-  --source-account <SECRET_KEY> \
-  --rpc-url "https://soroban-testnet.stellar.org:443" \
-  --network-passphrase "Test SDF Network ; September 2015" \
-  -- get_payment_count
-```
+> 📹 Coming soon — 1–2 minute walkthrough of the platform.
 
 ---
 
