@@ -3,6 +3,7 @@ const path = require("path");
 
 const pages = [
   { file: "dashboard.html", name: "dashboard" },
+  { file: "wallet-options.html", name: "wallet-options" },
   { file: "send-form.html", name: "send-payment" },
   { file: "tx-success.html", name: "transaction-success" },
   { file: "payments-list.html", name: "payments" },
