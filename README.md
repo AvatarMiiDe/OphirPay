@@ -161,10 +161,14 @@ prisma/
 
 | Detail | Value |
 |---|---|
-| Contract ID | `CDLZFC3SYJYDZT7K67VZ75WJDSVIE52RKKQ7YNJCK6VNVNFBS44ABTBS` |
+| Contract ID | `CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W` |
 | Network | Stellar Testnet |
-| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75WJDSVIE52RKKQ7YNJCK6VNVNFBS44ABTBS) |
-| Contract Hash | Verify at `/contracts` page |
+| WASM Hash | `bf9500e70231177eaddd78e92f2a2b1c490d07040a3b72a2dc70b871c107cbd8` |
+| Deploy TX | [`29879bd9...`](https://stellar.expert/explorer/testnet/tx/29879bd9ab20ddfa7f4dfaf5c01fafda59831272188dbfc00790181142577e80) |
+| Init TX | [`18d91f40...`](https://stellar.expert/explorer/testnet/tx/18d91f40a897eec454f3fd5011b559d114cf20b453b7b69ff9e3a84496717621) |
+| Owner | `GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U` |
+| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
+| Stellar Lab | [View on Stellar Lab](https://lab.stellar.org/r/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W) |
 
 ### Contract Interaction
 
@@ -184,13 +188,34 @@ cargo build --target wasm32-unknown-unknown --release
 
 Compiled WASM: `contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm`
 
-### Deploy with Soroban CLI
+### Deploy with Stellar CLI
 
 ```bash
-soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
-  --source alice \
-  --network testnet
+stellar contract deploy \
+  --wasm contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015"
+```
+
+### Invoke Contract Functions
+
+```bash
+# Initialize the contract
+stellar contract invoke \
+  --id CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- init --owner <OWNER_PUBLIC_KEY>
+
+# Read payment count (simulate only, no tx fee)
+stellar contract invoke \
+  --id CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W \
+  --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- get_payment_count
 ```
 
 ---
