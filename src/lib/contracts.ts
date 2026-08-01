@@ -11,7 +11,7 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 export const DEFAULT_CONTRACT_ID =
   process.env.NEXT_PUBLIC_CONTRACT_ID ||
-  "CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W";
+  "CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB";
 
 /** Emitter contract that receives cross-contract payment events */
 export const EMITTER_CONTRACT_ID =
