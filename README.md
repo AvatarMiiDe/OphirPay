@@ -95,25 +95,25 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 *The main dashboard showing stats cards, connected wallet balance, recent payments table, and quick actions:*
 
-![Treasury Dashboard](./screenshots/dashboard.png)
+![Treasury Dashboard](./public/screenshots/dashboard.png)
 
 ### Payments List
 
 *Payment history with search, filter tabs, status badges, and Stellar Explorer transaction links:*
 
-![Payments List](./screenshots/payments.png)
+![Payments List](./public/screenshots/payments.png)
 
 ### Send Payment
 
 *Send XLM form with destination address, amount, memo, and real-time balance display:*
 
-![Send Payment](./screenshots/send-payment.png)
+![Send Payment](./public/screenshots/send-payment.png)
 
 ### Transaction Success
 
 *After Freighter signs the transaction, the tx hash is shown with a link to Stellar Expert explorer:*
 
-![Transaction Success](./screenshots/transaction-success.png)
+![Transaction Success](./public/screenshots/transaction-success.png)
 
 ---
 
