@@ -157,20 +157,38 @@ prisma/
 
 ## 🧪 Smart Contract Development
 
-Soroban smart contracts live in the `contracts/` directory. To deploy:
+### Deployed Contract
+
+| Detail | Value |
+|---|---|
+| Contract ID | `CDLZFC3SYJYDZT7K67VZ75WJDSVIE52RKKQ7YNJCK6VNVNFBS44ABTBS` |
+| Network | Stellar Testnet |
+| Explorer | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75WJDSVIE52RKKQ7YNJCK6VNVNFBS44ABTBS) |
+| Contract Hash | Verify at `/contracts` page |
+
+### Contract Interaction
+
+Interact with the deployed contract at **/contracts** in the OphirPay dashboard:
+
+- `get_payment_count()` — Returns total payments stored on-chain
+- `get_payment(id)` — Fetch a specific payment by ID
+- `get_owner()` — Returns the contract owner address
+- `create_payment(payer, payee, amount, tx_hash)` — Create a new payment record
+
+### Building Locally
 
 ```bash
-# Install Soroban CLI
-cargo install --locked soroban-cli
+cd contracts/ophirpay
+cargo build --target wasm32-unknown-unknown --release
+```
 
-# Configure testnet
-soroban config network add --global testnet \
-  --rpc-url https://soroban-testnet.stellar.org:443 \
-  --network-passphrase "Test SDF Network ; September 2015"
+Compiled WASM: `contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm`
 
-# Build and deploy
+### Deploy with Soroban CLI
+
+```bash
 soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/contract.wasm \
+  --wasm target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
   --source alice \
   --network testnet
 ```
