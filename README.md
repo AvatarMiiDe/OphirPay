@@ -4,6 +4,14 @@
 
 Built on the [Stellar](https://stellar.org) network with [Soroban](https://soroban.stellar.org) smart contract support.
 
+[![CI](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg)](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-23%20passed-brightgreen.svg)](src/__tests__/)
+[![Vercel](https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel)](https://ophirpay.vercel.app)
+[![Demo](https://img.shields.io/badge/demo-video-8A2BE2.svg?logo=video)](./public/demo.mp4)
+[![Contract](https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg)](https://stellar.expert/explorer/testnet/contract/CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)]()
+
 ---
 
 ## 📋 Features
