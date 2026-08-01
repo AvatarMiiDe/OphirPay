@@ -13,6 +13,11 @@ export const DEFAULT_CONTRACT_ID =
   process.env.NEXT_PUBLIC_CONTRACT_ID ||
   "CDPYJWGBQI3PDWF3Q47SFIXI35OC6A2ADVH5WWDHRGFSXTIJADNPL55W";
 
+/** Emitter contract that receives cross-contract payment events */
+export const EMITTER_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID ||
+  "CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4";
+
 // ── 3 Error Types ──────────────────────────────────────────────
 
 export enum ContractErrorType {
