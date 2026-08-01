@@ -91,6 +91,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📸 Screenshots
 
+### Wallet Options Available
+
+*Disconnected state showing the "Connect Freighter" button — users can see available wallet options before connecting:*
+
+![Wallet Options](./public/screenshots/wallet-options.png)
+
 ### Treasury Dashboard
 
 *The main dashboard showing stats cards, connected wallet balance, recent payments table, and quick actions:*
@@ -114,6 +120,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 *After Freighter signs the transaction, the tx hash is shown with a link to Stellar Expert explorer:*
 
 ![Transaction Success](./public/screenshots/transaction-success.png)
+
+---
+
+## 🌐 Live Demo
+
+> 🚀 Live demo coming soon — deploy to Vercel with `vercel --prod` after connecting your account.
 
 ---
 
