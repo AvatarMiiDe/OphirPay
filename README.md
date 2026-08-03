@@ -373,4 +373,20 @@ Open source — [MIT License](LICENSE)
 
 ---
 
+## 🙏 Credits
+
+Built with these amazing open-source technologies:
+
+- [Stellar](https://stellar.org) & [Soroban](https://soroban.stellar.org) — Blockchain & smart contract platform
+- [Next.js](https://nextjs.org) — React framework
+- [Tailwind CSS](https://tailwindcss.com) — Utility-first CSS framework
+- [Prisma](https://prisma.io) — Database ORM
+- [Vitest](https://vitest.dev) — Testing framework
+- [Freighter](https://freighter.app) — Stellar wallet browser extension
+- [Vercel](https://vercel.com) — Hosting & deployment
+
+Special thanks to the Stellar Development Foundation for their excellent documentation and SDKs.
+
+---
+
 **OphirPay** — Financial operations for the Stellar ecosystem.
