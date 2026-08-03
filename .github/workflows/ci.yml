@@ -27,9 +27,6 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-
       - name: Lint
         run: npx next lint --max-warnings 0
 
@@ -38,3 +35,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
