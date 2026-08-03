@@ -1,7 +1,9 @@
 import {
   Contract,
   scValToNative,
+  nativeToScVal,
   TransactionBuilder,
+  type xdr,
 } from "@stellar/stellar-sdk";
 import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
@@ -147,7 +149,8 @@ export async function simulateContractCall(
 export async function invokeContractFunction(
   contractId: string,
   functionName: string,
-  sourcePublicKey: string
+  sourcePublicKey: string,
+  args: xdr.ScVal[] = []
 ): Promise<InvokeResult> {
   const server = getSorobanServer();
 
@@ -163,7 +166,7 @@ export async function invokeContractFunction(
         maxTime: Math.floor(Date.now() / 1000) + 300,
       },
     })
-      .addOperation(contract.call(functionName))
+      .addOperation(contract.call(functionName, ...args))
       .build();
 
     const prepared = await server.prepareTransaction(tx);
@@ -207,4 +210,176 @@ export async function submitContractInvocation(signedXdr: string): Promise<{
   } catch (err) {
     throw classifyContractError(err);
   }
+}
+
+// ── On-Chain Payment Recording ─────────────────────────────────
+
+export interface RecordOnChainResult {
+  status: "RECORDED" | "FAILED";
+  txHash?: string;
+  error?: string;
+}
+
+/**
+ * Record a completed XLM payment on-chain via `OphirPayContract.create_payment`.
+ *
+ * Best-effort by design: a failure here does NOT throw — the Horizon payment is
+ * already settled, so the UI can show a non-blocking warning instead. The caller
+ * provides a `signTransaction` function (e.g. Freighter) to sign the Soroban TX.
+ *
+ * Amount is expressed in stroops (1 XLM = 10,000,000 stroops) to match the
+ * contract's u64 representation.
+ */
+export async function recordPaymentOnChain(params: {
+  payer: string;
+  payee: string;
+  amountStroops: number;
+  txHash: string;
+  signTransaction: (
+    xdr: string,
+    opts?: { network?: string; networkPassphrase?: string }
+  ) => Promise<string>;
+  network?: string;
+  networkPassphrase?: string;
+}): Promise<RecordOnChainResult> {
+  const {
+    payer,
+    payee,
+    amountStroops,
+    txHash,
+    signTransaction,
+    network = "TESTNET",
+    networkPassphrase,
+  } = params;
+
+  try {
+    const args: xdr.ScVal[] = [
+      nativeToScVal(payer, { type: "string" }),
+      nativeToScVal(payee, { type: "string" }),
+      nativeToScVal(amountStroops, { type: "u64" }),
+      nativeToScVal(txHash, { type: "string" }),
+    ];
+
+    const txInfo = await invokeContractFunction(
+      DEFAULT_CONTRACT_ID,
+      "create_payment",
+      payer,
+      args
+    );
+
+    if (txInfo.status !== "AWAITING_SIGNATURE" || !txInfo.xdr) {
+      return {
+        status: "FAILED",
+        error: "Failed to build the on-chain payment record.",
+      };
+    }
+
+    const signedXdr = await signTransaction(txInfo.xdr, {
+      network,
+      networkPassphrase,
+    });
+
+    const result = await submitContractInvocation(signedXdr);
+
+    if (result.status !== "SUCCESS") {
+      return {
+        status: "FAILED",
+        txHash: result.txHash,
+        error: `On-chain record transaction was not confirmed (${result.status}).`,
+      };
+    }
+
+    return { status: "RECORDED", txHash: result.txHash };
+  } catch (err) {
+    const contractError = classifyContractError(err);
+    return { status: "FAILED", error: contractError.message };
+  }
+}
+
+// ── On-Chain Reads (Public) ────────────────────────────────────
+
+/** Well-known testnet address used as the simulation source for public chain reads. */
+export const CHAIN_READ_SOURCE =
+  process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE ||
+  "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U";
+
+export interface OnChainPayment {
+  id: number;
+  payer: string;
+  payee: string;
+  amountStroops: number;
+  txHash: string;
+}
+
+/**
+ * Read the most recent on-chain payment records from OphirPayContract.
+ * Public chain data — reads via Soroban simulation, no wallet signature required.
+ */
+export async function fetchOnChainPayments(
+  limit = 20,
+  sourcePublicKey = CHAIN_READ_SOURCE
+): Promise<{ payments: OnChainPayment[]; total: number }> {
+  const server = getSorobanServer();
+  const contract = new Contract(DEFAULT_CONTRACT_ID);
+  const account = await server.getAccount(sourcePublicKey);
+
+  const readCount = async (): Promise<number> => {
+    const tx = new TransactionBuilder(account, {
+      fee: "100000",
+      networkPassphrase: NETWORK_PASSPHRASE,
+      timebounds: { minTime: 0, maxTime: 0 },
+    })
+      .addOperation(contract.call("get_payment_count"))
+      .build();
+    const sim = await server.simulateTransaction(tx);
+    if ("error" in sim && sim.error) return 0;
+    if ("result" in sim && sim.result) {
+      const val = scValToNative(sim.result.retval);
+      return typeof val === "number" ? val : Number(val);
+    }
+    return 0;
+  };
+
+  const total = await readCount();
+  const payments: OnChainPayment[] = [];
+  const start = Math.max(1, total - limit + 1);
+  const ids = Array.from({ length: total - start + 1 }, (_, i) => start + i);
+
+  const readPayment = async (id: number): Promise<OnChainPayment | null> => {
+    const tx = new TransactionBuilder(account, {
+      fee: "100000",
+      networkPassphrase: NETWORK_PASSPHRASE,
+      timebounds: { minTime: 0, maxTime: 0 },
+    })
+      .addOperation(
+        contract.call("get_payment", nativeToScVal(id, { type: "u64" }))
+      )
+      .build();
+
+    const sim = await server.simulateTransaction(tx);
+    if ("error" in sim && sim.error) return null;
+    if ("result" in sim && sim.result) {
+      const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+      return {
+        id: Number(raw.id),
+        payer: String(raw.payer ?? ""),
+        payee: String(raw.payee ?? ""),
+        amountStroops: Number(raw.amount ?? 0),
+        txHash: String(raw.tx_hash ?? ""),
+      };
+    }
+    return null;
+  };
+
+  // Fetch records in parallel batches of 10 to stay within RPC rate limits
+  // while avoiding one slow sequential round-trip per record.
+  for (let i = 0; i < ids.length; i += 10) {
+    const chunk = ids.slice(i, i + 10);
+    const results = await Promise.all(chunk.map(readPayment));
+    for (const p of results) {
+      if (p) payments.push(p);
+    }
+  }
+
+  return { payments: payments.reverse(), total };
 }
