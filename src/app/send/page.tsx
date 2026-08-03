@@ -23,7 +23,7 @@ type TxResult =
 // ── Page ──────────────────────────────────────────────────────
 
 export default function SendPage() {
-  const { wallet } = useWallet();
+  const { wallet, fetchBalance } = useWallet();
 
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
@@ -110,6 +110,9 @@ export default function SendPage() {
         amount,
         destination: destination.trim(),
       });
+
+      // Refresh balance after successful transaction
+      fetchBalance();
     } catch (err) {
       setStep("done");
       const message =
