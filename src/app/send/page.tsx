@@ -8,15 +8,33 @@ import {
   submitSignedTx,
   getStellarExplorerUrl,
   NETWORK_PASSPHRASE,
+  XLM_STROOPS,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { recordPaymentOnChain } from "@/lib/contracts";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
 
-type TxStep = "idle" | "building" | "signing" | "submitting" | "done";
+type TxStep =
+  | "idle"
+  | "building"
+  | "signing"
+  | "submitting"
+  | "recording"
+  | "done";
 type TxResult =
-  | { type: "success"; txHash: string; amount: string; destination: string }
+  | {
+      type: "success";
+      txHash: string;
+      amount: string;
+      destination: string;
+      onChain?: {
+        status: "RECORDED" | "FAILED";
+        txHash?: string;
+        error?: string;
+      };
+    }
   | { type: "error"; message: string }
   | null;
 
@@ -102,13 +120,28 @@ export default function SendPage() {
       setStep("submitting");
       const response = await submitSignedTx(signedXdr);
 
-      // 4. Success!
+      // 4. Record the payment on-chain via the Soroban contract.
+      //    Best-effort: the Horizon payment is already settled, so a failure
+      //    here is surfaced as a non-blocking warning on the success screen.
+      setStep("recording");
+      const onChain = await recordPaymentOnChain({
+        payer: wallet.publicKey,
+        payee: destination.trim(),
+        amountStroops: Math.round(parseFloat(amount) * XLM_STROOPS),
+        txHash: response.hash,
+        signTransaction: (xdr, opts) => freighter.signTransaction(xdr, opts),
+        network: "TESTNET",
+        networkPassphrase: NETWORK_PASSPHRASE,
+      });
+
+      // 5. Success!
       setStep("done");
       setResult({
         type: "success",
         txHash: response.hash,
         amount,
         destination: destination.trim(),
+        onChain,
       });
 
       // Refresh balance after successful transaction
@@ -225,7 +258,43 @@ export default function SendPage() {
                 {shortenAddress(result.txHash, 8)}
               </a>
             </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500 dark:text-gray-400">On-chain record</span>
+              {result.onChain?.status === "RECORDED" ? (
+                <a
+                  href={
+                    result.onChain.txHash
+                      ? getStellarExplorerUrl(result.onChain.txHash)
+                      : undefined
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-mono text-green-600 dark:text-green-400 hover:underline"
+                >
+                  ✓ Recorded
+                  {result.onChain.txHash
+                    ? ` · ${shortenAddress(result.onChain.txHash, 6)}`
+                    : ""}
+                </a>
+              ) : (
+                <span
+                  className="text-sm text-amber-600 dark:text-amber-400"
+                  title={result.onChain?.error ?? "On-chain record not created"}
+                >
+                  ⚠ Pending
+                </span>
+              )}
+            </div>
           </div>
+
+          {result.onChain?.status === "FAILED" && (
+            <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                The payment was sent, but the on-chain record could not be
+                created{result.onChain.error ? ` (${result.onChain.error})` : ""}.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 justify-center">
             <button
@@ -430,7 +499,9 @@ export default function SendPage() {
                 ? "Building transaction..."
                 : step === "signing"
                   ? "Waiting for signature..."
-                  : "Submitting to Stellar..."}
+                  : step === "recording"
+                    ? "Recording on-chain (sign to confirm)..."
+                    : "Submitting to Stellar..."}
             </>
           ) : (
             <>
@@ -459,7 +530,9 @@ export default function SendPage() {
               ? "Check your Freighter wallet to approve the transaction..."
               : step === "submitting"
                 ? "Sending to the Stellar testnet..."
-                : ""}
+                : step === "recording"
+                  ? "Confirming the on-chain payment record..."
+                  : ""}
           </p>
         )}
       </div>
