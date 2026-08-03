@@ -16,6 +16,11 @@ export interface BatchRecipientInput {
   memo?: string;
 }
 
+// ── Units ──────────────────────────────────────────────────────
+
+/** Stroops per XLM — Stellar's smallest unit (1 XLM = 10,000,000 stroops). */
+export const XLM_STROOPS = 1e7;
+
 // ── Stellar Network Configuration ──────────────────────────────
 
 export const STELLAR_NETWORK: "TESTNET" | "PUBLIC" =
