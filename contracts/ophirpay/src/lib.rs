@@ -122,3 +122,155 @@ impl OphirPayContract {
             .unwrap_or_else(|| panic!("Emitter not configured"))
     }
 }
+
+// ── Tests ─────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_init_sets_owner_and_count() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        let result = client.init(&String::from_str(&env, "GOWNER"), &emitter);
+        assert_eq!(result, 0u32);
+        assert_eq!(client.get_owner(), String::from_str(&env, "GOWNER"));
+        assert_eq!(client.get_payment_count(), 0u64);
+    }
+
+    #[test]
+    #[should_panic(expected = "Contract already initialized")]
+    fn test_init_twice_panics() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        client.init(&String::from_str(&env, "GOWNER"), &emitter);
+        client.init(&String::from_str(&env, "GOWNER2"), &emitter);
+    }
+
+    #[test]
+    fn test_create_payment_stores_and_increments() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        // Register a mock emitter first
+        let emitter_id = env.register(PaymentEventEmitterMock, ());
+        let emitter_addr = Address::from_contract_id(&env, &emitter_id);
+
+        client.init(&String::from_str(&env, "GOWNER"), &emitter_addr);
+
+        let pay_id = client.create_payment(
+            &String::from_str(&env, "GPAYER"),
+            &String::from_str(&env, "GPAYEE"),
+            &1000u64,
+            &String::from_str(&env, "tx_hash_1"),
+        );
+        assert_eq!(pay_id, 1u64);
+        assert_eq!(client.get_payment_count(), 1u64);
+
+        let payment = client.get_payment(&1u64);
+        assert_eq!(payment.id, 1u64);
+        assert_eq!(payment.amount, 1000u64);
+
+        // Second payment
+        let pay_id2 = client.create_payment(
+            &String::from_str(&env, "GPAYER2"),
+            &String::from_str(&env, "GPAYEE2"),
+            &500u64,
+            &String::from_str(&env, "tx_hash_2"),
+        );
+        assert_eq!(pay_id2, 2u64);
+        assert_eq!(client.get_payment_count(), 2u64);
+    }
+
+    #[test]
+    #[should_panic(expected = "Emitter not configured")]
+    fn test_emitter_not_configured_panics() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        // Don't call init — emitter not stored
+        client.create_payment(
+            &String::from_str(&env, "GPAYER"),
+            &String::from_str(&env, "GPAYEE"),
+            &100u64,
+            &String::from_str(&env, "tx"),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Payment not found")]
+    fn test_get_payment_not_found_panics() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        client.init(&String::from_str(&env, "GOWNER"), &emitter);
+        client.get_payment(&999u64);
+    }
+
+    #[test]
+    fn test_get_owner_after_init() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        client.init(&String::from_str(&env, "GACZ7ZELCUC5"), &emitter);
+        let owner = client.get_owner();
+        assert_eq!(owner, String::from_str(&env, "GACZ7ZELCUC5"));
+    }
+
+    #[test]
+    fn test_get_emitter_returns_correct_address() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        client.init(&String::from_str(&env, "GOWNER"), &emitter);
+        let stored_emitter = client.get_emitter();
+        assert_eq!(stored_emitter, emitter);
+    }
+
+    #[test]
+    fn test_get_payment_count_starts_at_zero() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let emitter = Address::generate(&env);
+
+        client.init(&String::from_str(&env, "GOWNER"), &emitter);
+        assert_eq!(client.get_payment_count(), 0u64);
+    }
+
+    // ── Mock emitter contract for testing cross-contract calls ─
+
+    #[contract]
+    pub struct PaymentEventEmitterMock;
+
+    #[contractimpl]
+    impl PaymentEventEmitterMock {
+        pub fn emit_payment(
+            _env: Env,
+            _emitter: String,
+            _payer: String,
+            _payee: String,
+            _amount: u64,
+            _tx_hash: String,
+        ) -> u64 {
+            // Simple mock: always return event ID 1
+            1u64
+        }
+    }
+}
