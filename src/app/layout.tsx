@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: "OphirPay — Stellar Payment Orchestration",
   description:
     "OphirPay is a Stellar-native payment orchestration platform for individuals, businesses, nonprofits, and DAOs.",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({
