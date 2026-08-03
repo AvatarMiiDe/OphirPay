@@ -1,74 +1,48 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useFreighter";
+import { shortenAddress, formatAmount } from "@/lib/utils";
+import { getAccountExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import {
-  shortenAddress,
-  formatAmount,
-  timeAgo,
-  getStatusColor,
-} from "@/lib/utils";
-import { getAccountExplorerUrl } from "@/lib/stellar";
+  fetchOnChainPayments,
+  type OnChainPayment,
+} from "@/lib/contracts";
 import Link from "next/link";
 
-// ── Mock data ─────────────────────────────────────────────────
-
-const mockAccounts = [
-  { name: "Main Treasury", publicKey: "GBD4R...7KLMN", balance: 12500.5 },
-  { name: "Operations", publicKey: "GA24L...9PQRS", balance: 3450.25 },
-  { name: "Grants Fund", publicKey: "GC78X...3TUVW", balance: 89000.0 },
-];
-
-const mockRecentPayments = [
-  {
-    id: "1",
-    description: "Vendor payment - Cloud Services",
-    amount: 2500,
-    assetCode: "XLM",
-    status: "COMPLETED" as const,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    transactionHash: "abc123def456abc123def456abc123def456abc123def456",
-  },
-  {
-    id: "2",
-    description: "Contributor reward - Oct",
-    amount: 5000,
-    assetCode: "XLM",
-    status: "COMPLETED" as const,
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    transactionHash: "ghi789jkl012ghi789jkl012ghi789jkl012ghi789jkl012",
-  },
-  {
-    id: "3",
-    description: "Operational transfer",
-    amount: 1000,
-    assetCode: "XLM",
-    status: "PENDING" as const,
-    createdAt: new Date(Date.now() - 120000).toISOString(),
-  },
-  {
-    id: "4",
-    description: "Refund - Invoice #452",
-    amount: 350.75,
-    assetCode: "XLM",
-    status: "FAILED" as const,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    transactionHash: "mno345pqr678mno345pqr678mno345pqr678mno345pqr678",
-  },
-];
-
-const mockStats = {
-  monthlyVolume: 142500,
-  totalPayments: 234,
-  pendingPayments: 12,
-  successRate: 97.4,
-};
-
-// ── Dashboard Component ───────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────
 
 export default function TreasuryDashboard() {
   const { wallet, fetchBalance } = useWallet();
 
+  const [payments, setPayments] = useState<OnChainPayment[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadOnChain = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchOnChainPayments(20);
+      setPayments(result.payments);
+      setTotalCount(result.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load on-chain data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOnChain();
+  }, [loadOnChain]);
+
   const totalBalance = wallet.balance ? parseFloat(wallet.balance) : 0;
+
+  // On-chain stats (computed from the fetched records)
+  const volume = payments.reduce((sum, p) => sum + p.amountStroops / XLM_STROOPS, 0);
+  const avgPayment = payments.length > 0 ? volume / payments.length : 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -141,25 +115,22 @@ export default function TreasuryDashboard() {
           />
         )}
         <StatCard
-          title="Monthly Volume"
-          value={formatAmount(mockStats.monthlyVolume)}
-          icon="📊"
-          trend="+12.5%"
-          trendUp
-        />
-        <StatCard
           title="Total Payments"
-          value={mockStats.totalPayments.toString()}
+          value={loading ? "…" : totalCount.toString()}
           icon="💳"
-          trend="+8.2%"
-          trendUp
+          trend="On-chain"
         />
         <StatCard
-          title="Success Rate"
-          value={`${mockStats.successRate}%`}
+          title="Recorded Volume"
+          value={loading ? "…" : formatAmount(volume, "XLM")}
+          icon="📊"
+          trend={`Last ${payments.length} records`}
+        />
+        <StatCard
+          title="Avg Payment"
+          value={loading ? "…" : formatAmount(avgPayment, "XLM")}
           icon="✅"
-          trend="+0.3%"
-          trendUp
+          trend="On-chain"
         />
       </div>
 
@@ -172,43 +143,38 @@ export default function TreasuryDashboard() {
           </h2>
           <div className="space-y-3">
             {wallet.connected && wallet.publicKey ? (
-              <>
-                <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/20 border border-ophir-200 dark:border-ophir-800">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-ophir-700 dark:text-ophir-400">
-                      Connected Wallet
-                    </p>
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-                    </span>
-                  </div>
-                  <p className="text-xs font-mono text-gray-500 dark:text-gray-400">
-                    {shortenAddress(wallet.publicKey, 6)}
+              <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/20 border border-ophir-200 dark:border-ophir-800">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-ophir-700 dark:text-ophir-400">
+                    Connected Wallet
                   </p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      XLM Balance
-                    </span>
-                    <span className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
-                      {wallet.balanceLoading
-                        ? "Loading..."
-                        : formatAmount(parseFloat(wallet.balance ?? "0"), "XLM")}
-                    </span>
-                  </div>
-                  <a
-                    href={getAccountExplorerUrl(wallet.publicKey)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
-                  >
-                    View on Explorer ↗
-                  </a>
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                  </span>
                 </div>
-                {mockAccounts.map((acct, i) => (
-                  <AccountRow key={i} {...acct} />
-                ))}
-              </>
+                <p className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                  {shortenAddress(wallet.publicKey, 6)}
+                </p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    XLM Balance
+                  </span>
+                  <span className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
+                    {wallet.balanceLoading
+                      ? "Loading..."
+                      : formatAmount(parseFloat(wallet.balance ?? "0"), "XLM")}
+                  </span>
+                </div>
+                <a
+                  href={getAccountExplorerUrl(wallet.publicKey)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+                >
+                  View on Explorer ↗
+                </a>
+              </div>
             ) : (
               <div className="text-center py-8">
                 <div className="h-12 w-12 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
@@ -242,7 +208,7 @@ export default function TreasuryDashboard() {
         <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Recent Payments
+              Recent On-Chain Payments
             </h2>
             <Link
               href="/payments"
@@ -251,56 +217,79 @@ export default function TreasuryDashboard() {
               View all →
             </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
-                  <th className="pb-3 font-medium">Description</th>
-                  <th className="pb-3 font-medium">Amount</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockRecentPayments.map((payment) => {
-                  const statusColor = getStatusColor(payment.status);
-                  return (
+
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 mb-3">
+              <p className="text-sm text-red-700 dark:text-red-400">
+                Failed to load on-chain data: {error}
+              </p>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No on-chain payments yet — send one from the Send page.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
+                    <th className="pb-3 font-medium">Payment</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
                     <tr
                       key={payment.id}
                       className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                     >
                       <td className="py-3 pr-4">
                         <p className="font-medium text-gray-900 dark:text-white">
-                          {payment.description}
+                          #{payment.id}
                         </p>
-                        {payment.transactionHash && (
+                        <p className="text-xs text-gray-400 font-mono mt-0.5">
+                          {shortenAddress(payment.payer, 6)} →{" "}
+                          {shortenAddress(payment.payee, 6)}
+                        </p>
+                        {payment.txHash && (
                           <p className="text-xs text-gray-400 font-mono mt-0.5">
-                            {shortenAddress(payment.transactionHash)}
+                            {shortenAddress(payment.txHash)}
                           </p>
                         )}
                       </td>
                       <td className="py-3 pr-4 text-gray-700 dark:text-gray-300 font-mono">
-                        {formatAmount(payment.amount, payment.assetCode)}
+                        {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
                       </td>
                       <td className="py-3 pr-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor.bg} ${statusColor.text}`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`}
-                          />
-                          {payment.status}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                          RECORDED
                         </span>
                       </td>
-                      <td className="py-3 text-gray-500 dark:text-gray-400 text-xs">
-                        {timeAgo(payment.createdAt)}
+                      <td
+                        className="py-3 text-gray-500 dark:text-gray-400 text-xs"
+                        title="The contract does not store timestamps"
+                      >
+                        —
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -373,32 +362,6 @@ function StatCard({
         {value}
       </p>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{title}</p>
-    </div>
-  );
-}
-
-function AccountRow({
-  name,
-  publicKey,
-  balance,
-}: {
-  name: string;
-  publicKey: string;
-  balance: number;
-}) {
-  return (
-    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-900 dark:text-white">
-            {name}
-          </p>
-          <p className="text-xs font-mono text-gray-400 mt-0.5">{publicKey}</p>
-        </div>
-        <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
-          {formatAmount(balance)}
-        </p>
-      </div>
     </div>
   );
 }
