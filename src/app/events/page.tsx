@@ -24,7 +24,7 @@ export default function EventsPage() {
       setConnected(true);
     });
 
-    eventSource.addEventListener("heartbeat", (e) => {
+    eventSource.addEventListener("heartbeat", () => {
       // Keep-alive, no action needed
     });
 

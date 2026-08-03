@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   createContext,
   useContext,
 } from "react";
@@ -45,11 +46,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if already connected on mount
-  useEffect(() => {
-    checkExistingConnection();
-  }, []);
-
   const loadBalance = useCallback(async (publicKey: string) => {
     setWallet((prev) => ({ ...prev, balanceLoading: true }));
     try {
@@ -60,29 +56,38 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const checkExistingConnection = async () => {
-    try {
-      const freighter = getFreighter();
-      if (!freighter) return;
+  // Stable ref to loadBalance for the mount effect
+  const loadBalanceRef = useRef(loadBalance);
+  loadBalanceRef.current = loadBalance;
 
-      const connected = await freighter.isConnected();
-      if (connected) {
-        const publicKey = await freighter.getAddress();
-        const network = await freighter.getNetwork();
-        setWallet((prev) => ({
-          ...prev,
-          connected: true,
-          publicKey,
-          network,
-        }));
-        if (publicKey) {
-          loadBalance(publicKey);
+  // Check if already connected on mount
+  useEffect(() => {
+    const checkExistingConnection = async () => {
+      try {
+        const freighter = getFreighter();
+        if (!freighter) return;
+
+        const connected = await freighter.isConnected();
+        if (connected) {
+          const publicKey = await freighter.getAddress();
+          const network = await freighter.getNetwork();
+          setWallet((prev) => ({
+            ...prev,
+            connected: true,
+            publicKey,
+            network,
+          }));
+          if (publicKey) {
+            loadBalanceRef.current(publicKey);
+          }
         }
+      } catch {
+        // Freighter not available or user rejected
       }
-    } catch {
-      // Freighter not available or user rejected
-    }
-  };
+    };
+
+    checkExistingConnection();
+  }, []);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);

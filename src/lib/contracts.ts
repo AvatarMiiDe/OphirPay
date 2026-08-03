@@ -1,7 +1,5 @@
 import {
-  rpc,
   Contract,
-  nativeToScVal,
   scValToNative,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
