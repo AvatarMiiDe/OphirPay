@@ -4,64 +4,211 @@
  * GET /api/events — subscribe to live payment events
  *
  * Events emitted:
- * - payment:created — new payment workflow created
- * - payment:submitted — transaction submitted to Stellar
- * - payment:completed — transaction confirmed on-chain
- * - payment:failed — transaction failed
+ * - connected — stream established
  * - heartbeat — keep-alive ping every 15 seconds
+ * - payment:created — new payment event detected from emitter contract
+ *
+ * This endpoint polls the PaymentEventEmitter contract on Stellar Testnet
+ * every 10 seconds to detect new payment events in real-time.
  */
 
+import {
+  rpc,
+  Contract,
+  TransactionBuilder,
+  scValToNative,
+  nativeToScVal,
+} from "@stellar/stellar-sdk";
+
 export const dynamic = "force-dynamic";
+
+const SOROBAN_RPC_URL =
+  process.env.NEXT_PUBLIC_STELLAR_RPC_URL ||
+  "https://soroban-testnet.stellar.org:443";
+
+const NETWORK_PASSPHRASE =
+  process.env.STELLAR_NETWORK_PASSPHRASE ||
+  "Test SDF Network ; September 2015";
+
+const EMITTER_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID ||
+  "CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4";
+
+/**
+ * Read a u64 value from the emitter contract using Soroban simulation.
+ */
+async function readEmitterU64(
+  server: rpc.Server,
+  contractId: string,
+  functionName: string,
+  sourcePublicKey: string,
+): Promise<number> {
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(sourcePublicKey);
+
+  const tx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+    timebounds: { minTime: 0, maxTime: 0 },
+  })
+    .addOperation(contract.call(functionName))
+    .build();
+
+  const simResponse = await server.simulateTransaction(tx);
+
+  if ("error" in simResponse && simResponse.error) {
+    return 0;
+  }
+
+  if ("result" in simResponse && simResponse.result) {
+    const val = scValToNative(simResponse.result.retval);
+    return typeof val === "number" ? val : Number(val);
+  }
+
+  return 0;
+}
+
+/**
+ * Read a PaymentEvent from the emitter contract by ID.
+ */
+async function readEmitterEvent(
+  server: rpc.Server,
+  contractId: string,
+  eventId: number,
+  sourcePublicKey: string,
+): Promise<Record<string, unknown> | null> {
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(sourcePublicKey);
+
+  const tx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+    timebounds: { minTime: 0, maxTime: 0 },
+  })
+    .addOperation(contract.call("get_event", nativeToScVal(eventId)))
+    .build();
+
+  const simResponse = await server.simulateTransaction(tx);
+
+  if ("error" in simResponse && simResponse.error) {
+    return null;
+  }
+
+  if ("result" in simResponse && simResponse.result) {
+    try {
+      const native = scValToNative(simResponse.result.retval);
+      return native as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
 
 export async function GET() {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       let closed = false;
+      let lastKnownCount = 0;
+      const server = new rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
+
+      // Use a well-known testnet address as the source for simulation
+      const sourcePublicKey =
+        "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U";
 
       // Heartbeat every 15s to keep connection alive
       const heartbeat = setInterval(() => {
         if (closed) return;
         controller.enqueue(
-          encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`)
+          encoder.encode(
+            `event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`,
+          ),
         );
       }, 15000);
 
-      // Simulate a payment event on connection (demo purposes)
-      const simulateEvent = (eventType: string, delay: number) => {
-        setTimeout(() => {
-          if (closed) return;
-          const payload = {
-            event: eventType,
-            timestamp: new Date().toISOString(),
-            paymentId: `pay_${Date.now().toString(36)}`,
-            status: eventType === "payment:completed"
-              ? "COMPLETED"
-              : eventType === "payment:failed"
-                ? "FAILED"
-                : "PROCESSING",
-          };
-          controller.enqueue(
-            encoder.encode(`event: ${eventType}\ndata: ${JSON.stringify(payload)}\n\n`)
+      // Poll emitter contract every 10 seconds for new events
+      const pollEmitter = async () => {
+        if (closed) return;
+        try {
+          const currentCount = await readEmitterU64(
+            server,
+            EMITTER_CONTRACT_ID,
+            "get_event_count",
+            sourcePublicKey,
           );
-        }, delay);
+
+          // Fetch any new events since last poll
+          let lastFetched = lastKnownCount;
+          for (let id = lastKnownCount + 1; id <= currentCount; id++) {
+            const event = await readEmitterEvent(
+              server,
+              EMITTER_CONTRACT_ID,
+              id,
+              sourcePublicKey,
+            );
+
+            if (event) {
+              const payload = {
+                event: "payment:created",
+                timestamp: new Date().toISOString(),
+                paymentId: `evt_${event.id || id}`,
+                status: "COMPLETED",
+                emitter: event.emitter || "OphirPay",
+                payer: event.payer || "",
+                payee: event.payee || "",
+                amount: event.amount || "0",
+                txHash: event.tx_hash || "",
+              };
+              controller.enqueue(
+                encoder.encode(
+                  `event: payment:created\ndata: ${JSON.stringify(payload)}\n\n`,
+                ),
+              );
+              lastFetched = id;
+            } else {
+              // Stop on first failure — retry next poll cycle
+              break;
+            }
+          }
+
+          lastKnownCount = lastFetched;
+        } catch {
+          // Polling failed — silently retry next cycle
+        }
       };
 
       // Initial connected event
       controller.enqueue(
-        encoder.encode(`event: connected\ndata: ${JSON.stringify({ message: "SSE stream connected" })}\n\n`)
+        encoder.encode(
+          `event: connected\ndata: ${JSON.stringify({ message: "SSE stream connected to emitter contract" })}\n\n`,
+        ),
       );
 
-      // Demo events
-      simulateEvent("payment:created", 2000);
-      simulateEvent("payment:submitted", 5000);
-      simulateEvent("payment:completed", 10000);
+      // Get starting count
+      try {
+        lastKnownCount = await readEmitterU64(
+          server,
+          EMITTER_CONTRACT_ID,
+          "get_event_count",
+          sourcePublicKey,
+        );
+      } catch {
+        lastKnownCount = 0;
+      }
+
+      // Start polling
+      const pollInterval = setInterval(pollEmitter, 10000);
+      // Run immediately too
+      pollEmitter();
 
       // Cleanup
       return () => {
         closed = true;
         clearInterval(heartbeat);
+        clearInterval(pollInterval);
       };
     },
   });
