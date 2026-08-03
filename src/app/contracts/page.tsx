@@ -27,9 +27,9 @@ type TxRecord = {
 };
 
 const FUNCTIONS = [
-  { name: "get_payment_count", label: "Get Payment Count" },
-  { name: "get_owner", label: "Get Contract Owner" },
-  { name: "get_payment", label: "Get Payment #1", args: "1" },
+  { name: "get_payment_count", label: "Get Payment Count", readOnly: true },
+  { name: "get_owner", label: "Get Contract Owner", readOnly: true },
+  { name: "get_payment", label: "Get Payment #1", args: "1", readOnly: true },
 ];
 
 // ── Page ──────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ export default function ContractsPage() {
 
   const [contractId] = useState(DEFAULT_CONTRACT_ID);
   const [functionName, setFunctionName] = useState("get_payment_count");
+  const selectedFn = FUNCTIONS.find((f) => f.name === functionName) || FUNCTIONS[0];
   const [isLoading, setIsLoading] = useState(false);
   const [simResult, setSimResult] = useState<SimulateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -223,11 +224,17 @@ export default function ContractsPage() {
           <button
             onClick={handleInvoke}
             disabled={isLoading}
+            title={selectedFn.readOnly ? "Read-only functions can be queried via Simulate without signing a transaction" : "Sign and submit a transaction to the Stellar network"}
             className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-ophir-600 to-stellar-dark text-white font-medium text-sm hover:from-ophir-700 hover:to-stellar disabled:opacity-50 transition-all shadow-lg shadow-ophir-500/25"
           >
             {isLoading ? "Submitting..." : `Invoke ${functionName}()`}
           </button>
         </div>
+        {selectedFn.readOnly && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            ℹ️ <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{functionName}()</code> is read-only — no transaction signature required.
+          </p>
+        )}
       </div>
 
       {/* Error Display — 3 types */}
