@@ -109,7 +109,11 @@ function ToastViewport({
   if (typeof document === "undefined" || toasts.length === 0) return null;
 
   return createPortal(
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+    <div
+      aria-live="polite"
+      aria-atomic="false"
+      className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none"
+    >
       {toasts.map((t) => {
         const styles = variantStyles[t.variant];
         return (

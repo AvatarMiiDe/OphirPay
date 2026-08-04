@@ -20,9 +20,12 @@ const sizeClasses = {
   lg: "max-w-2xl",
 };
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
 /**
  * Accessible modal dialog — ESC to close, backdrop click to close,
- * body scroll lock, and initial focus on the dialog.
+ * body scroll lock, focus trap, and focus restore on close.
  */
 export function Modal({
   open,
@@ -35,12 +38,34 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // ESC to close + body scroll lock
+  // ESC to close + focus trap + body scroll lock + focus restore
   useEffect(() => {
     if (!open) return;
 
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+
+      // Cycle Tab within the dialog
+      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+        FOCUSABLE_SELECTOR
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
 
@@ -53,10 +78,13 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
+      // Restore focus to the element that opened the dialog
+      previouslyFocused?.focus();
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Guard against SSR — createPortal needs the client-side `document`
+  if (!open || typeof document === "undefined") return null;
 
   return createPortal(
     <div

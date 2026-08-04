@@ -1,8 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { cn } from "@/lib/utils";
-import { getStatusColor } from "@/lib/utils";
+import { cn, getStatusColor } from "@/lib/utils";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 

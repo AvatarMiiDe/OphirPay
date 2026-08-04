@@ -2,6 +2,7 @@
 
 import {
   forwardRef,
+  useId,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
   type SelectHTMLAttributes,
@@ -12,6 +13,7 @@ import { cn } from "@/lib/utils";
 // ── Shared field wrapper ───────────────────────────────────────
 
 interface FieldProps {
+  id?: string;
   label?: string;
   error?: string | null;
   hint?: string;
@@ -21,6 +23,7 @@ interface FieldProps {
 }
 
 function FieldShell({
+  id,
   label,
   error,
   hint,
@@ -32,7 +35,10 @@ function FieldShell({
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+        <label
+          htmlFor={id}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+        >
           {label}
           {required && <span className="text-red-500 ml-0.5">*</span>}
         </label>
@@ -51,9 +57,17 @@ function FieldShell({
         )}
       </div>
       {error ? (
-        <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>
+        <p
+          id={id ? `${id}-error` : undefined}
+          role="alert"
+          className="mt-1.5 text-xs text-red-600 dark:text-red-400"
+        >
+          {error}
+        </p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
+        <p id={id ? `${id}-hint` : undefined} className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -72,16 +86,23 @@ const inputBaseClasses = cn(
 interface InputProps extends InputHTMLAttributes<HTMLInputElement>, FieldProps {}
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, hint, required, leftIcon, rightIcon, className, ...rest },
+  { id, label, error, hint, required, leftIcon, rightIcon, className, ...rest },
   ref
 ) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  const describedBy =
+    error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
+
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} leftIcon={leftIcon} rightIcon={rightIcon}>
+    <FieldShell id={fieldId} label={label} error={error} hint={hint} required={required} leftIcon={leftIcon} rightIcon={rightIcon}>
       <input
         ref={ref}
+        id={fieldId}
         required={required}
         aria-invalid={!!error}
-        className={cn(inputBaseClasses, leftIcon && "pl-9", rightIcon && "pr-9", error && "border-red-500 focus:border-red-500 focus:ring-red-500/30", className)}
+        aria-describedby={describedBy}
+        className={cn(inputBaseClasses, leftIcon ? "pl-9" : undefined, rightIcon ? "pr-9" : undefined, error ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : undefined, className)}
         {...rest}
       />
     </FieldShell>
@@ -95,14 +116,21 @@ interface TextareaProps
     FieldProps {}
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  function Textarea({ label, error, hint, required, className, ...rest }, ref) {
+  function Textarea({ id, label, error, hint, required, className, ...rest }, ref) {
+    const autoId = useId();
+    const fieldId = id ?? autoId;
+    const describedBy =
+      error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
+
     return (
-      <FieldShell label={label} error={error} hint={hint} required={required}>
+      <FieldShell id={fieldId} label={label} error={error} hint={hint} required={required}>
         <textarea
           ref={ref}
+          id={fieldId}
           required={required}
           aria-invalid={!!error}
-          className={cn(inputBaseClasses, "min-h-[96px] resize-y", error && "border-red-500 focus:border-red-500 focus:ring-red-500/30", className)}
+          aria-describedby={describedBy}
+          className={cn(inputBaseClasses, "min-h-[96px] resize-y", error ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : undefined, className)}
           {...rest}
         />
       </FieldShell>
@@ -120,16 +148,23 @@ interface SelectProps
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, error, hint, required, options, placeholder, className, ...rest },
+  { id, label, error, hint, required, options, placeholder, className, ...rest },
   ref
 ) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  const describedBy =
+    error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
+
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required}>
+    <FieldShell id={fieldId} label={label} error={error} hint={hint} required={required}>
       <select
         ref={ref}
+        id={fieldId}
         required={required}
         aria-invalid={!!error}
-        className={cn(inputBaseClasses, "appearance-none pr-8 bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem] [background-image:url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3e%3c/svg%3e\")]", error && "border-red-500 focus:border-red-500 focus:ring-red-500/30", className)}
+        aria-describedby={describedBy}
+        className={cn(inputBaseClasses, "appearance-none pr-8 bg-no-repeat bg-[right_0.75rem_center] bg-[length:1rem] [background-image:url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3e%3c/svg%3e\")]", error ? "border-red-500 focus:border-red-500 focus:ring-red-500/30" : undefined, className)}
         {...rest}
       >
         {placeholder && (

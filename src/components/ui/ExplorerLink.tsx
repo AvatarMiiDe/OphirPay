@@ -1,7 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { shortenAddress } from "@/lib/utils";
+import { cn, shortenAddress } from "@/lib/utils";
 import {
   getStellarExplorerUrl,
   getAccountExplorerUrl,
