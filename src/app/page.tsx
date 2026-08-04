@@ -8,6 +8,9 @@ import {
   fetchOnChainPayments,
   type OnChainPayment,
 } from "@/lib/contracts";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
 import Link from "next/link";
 
 // ── Page ───────────────────────────────────────────────────────
@@ -57,31 +60,27 @@ export default function TreasuryDashboard() {
           </p>
         </div>
         {wallet.connected && (
-          <Link
-            href="/send"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full
-              bg-gradient-to-r from-ophir-600 to-stellar-dark
-              text-white font-medium text-sm
-              hover:from-ophir-700 hover:to-stellar
-              transition-all duration-300
-              shadow-lg shadow-ophir-500/25 hover:shadow-ophir-500/40
-              active:scale-95"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-5 h-5"
+          <Link href="/send">
+            <Button
+              leftIcon={
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
+                  />
+                </svg>
+              }
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-              />
-            </svg>
-            Send Payment
+              Send Payment
+            </Button>
           </Link>
         )}
       </div>
@@ -137,10 +136,11 @@ export default function TreasuryDashboard() {
       {/* ── Accounts & Activity ────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Accounts */}
-        <div className="lg:col-span-1 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Your Accounts
-          </h2>
+        <Card
+          title="Your Accounts"
+          className="lg:col-span-1"
+          padding="md"
+        >
           <div className="space-y-3">
             {wallet.connected && wallet.publicKey ? (
               <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/20 border border-ophir-200 dark:border-ophir-800">
@@ -202,21 +202,21 @@ export default function TreasuryDashboard() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Recent Payments */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Recent On-Chain Payments
-            </h2>
+        <Card
+          title="Recent On-Chain Payments"
+          className="lg:col-span-2"
+          actions={
             <Link
               href="/payments"
               className="text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 transition-colors font-medium"
             >
               View all →
             </Link>
-          </div>
+          }
+        >
 
           {error && (
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 mb-3">
@@ -273,10 +273,9 @@ export default function TreasuryDashboard() {
                         {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
                       </td>
                       <td className="py-3 pr-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                        <Badge variant="success" dot>
                           RECORDED
-                        </span>
+                        </Badge>
                       </td>
                       <td
                         className="py-3 text-gray-500 dark:text-gray-400 text-xs"
@@ -290,14 +289,11 @@ export default function TreasuryDashboard() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* ── Quick Actions ──────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Quick Actions
-        </h2>
+      <Card title="Quick Actions">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <QuickActionButton
             href="/send"
@@ -320,7 +316,7 @@ export default function TreasuryDashboard() {
             icon="🔄"
           />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -341,7 +337,7 @@ function StatCard({
   trendUp?: boolean;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 hover:shadow-md transition-shadow duration-200">
+    <Card className="hover:shadow-md transition-shadow duration-200">
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xl">{icon}</span>
         {typeof trend === "string" ? (
@@ -362,7 +358,7 @@ function StatCard({
         {value}
       </p>
       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{title}</p>
-    </div>
+    </Card>
   );
 }
 

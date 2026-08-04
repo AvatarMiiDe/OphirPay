@@ -2,6 +2,7 @@
 
 import { useWallet } from "@/hooks/useFreighter";
 import { shortenAddress, formatAmount } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
 
 export function WalletButton() {
   const { wallet, connect, disconnect, fetchBalance, isConnecting, error } =
@@ -98,62 +99,28 @@ export function WalletButton() {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
         onClick={connect}
-        disabled={isConnecting}
-        className="relative inline-flex items-center gap-2 px-5 py-2.5 rounded-full
-          bg-gradient-to-r from-ophir-600 to-stellar-dark
-          text-white font-medium text-sm
-          hover:from-ophir-700 hover:to-stellar
-          disabled:opacity-50 disabled:cursor-not-allowed
-          transition-all duration-300
-          shadow-lg shadow-ophir-500/25 hover:shadow-ophir-500/40
-          active:scale-95"
+        loading={isConnecting}
+        leftIcon={
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="w-5 h-5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
+            />
+          </svg>
+        }
       >
-        {isConnecting ? (
-          <>
-            <svg
-              className="animate-spin h-4 w-4"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            Connecting...
-          </>
-        ) : (
-          <>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
-              />
-            </svg>
-            Connect Freighter
-          </>
-        )}
-      </button>
+        {isConnecting ? "Connecting..." : "Connect Freighter"}
+      </Button>
       {error && (
         <p className="text-xs text-red-500 dark:text-red-400 max-w-[200px] text-right">
           {error}
