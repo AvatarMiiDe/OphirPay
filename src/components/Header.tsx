@@ -4,7 +4,8 @@ import { WalletButton } from "./WalletButton";
 import { useTheme } from "@/hooks/useTheme";
 
 export function Header() {
-  const { toggle, isDark } = useTheme();
+  const { toggle, resolved } = useTheme();
+  const isDark = resolved === "dark";
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
