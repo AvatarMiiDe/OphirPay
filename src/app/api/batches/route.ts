@@ -1,23 +1,46 @@
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { PaymentStatus } from "@prisma/client";
+import { createBatchSchema } from "@/lib/validations";
+import { successResponse, serverError, validationError } from "@/lib/api-response";
 
-// ── GET /api/batches — List all batches ─────────────────────
+// ── GET /api/batches — List batches with pagination ──────────
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const batches = await prisma.batch.findMany({
-      include: {
-        payments: true,
-      },
-      orderBy: { createdAt: "desc" },
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
+    const status = searchParams.get("status");
+    const search = searchParams.get("search");
+
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
+
+    const [batches, total] = await Promise.all([
+      prisma.batch.findMany({
+        where,
+        include: { payments: true },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.batch.count({ where }),
+    ]);
+
+    return successResponse(batches, {
+      page,
+      limit,
+      total,
+      timestamp: new Date().toISOString(),
     });
-    return NextResponse.json(batches);
   } catch {
-    return NextResponse.json(
-      { error: "Failed to fetch batches" },
-      { status: 500 }
-    );
+    return serverError("Failed to fetch batches");
   }
 }
 
@@ -27,29 +50,18 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { name, description, userId, payments } = body as {
-      name: string;
-      description?: string;
-      userId: string;
-      payments: {
-        amount: number;
-        assetCode?: string;
-        description?: string;
-        memo?: string;
-        destAddress: string;
-        transactionHash?: string;
-        status?: string;
-      }[];
-    };
-
-    if (!name || !userId || !payments?.length) {
-      return NextResponse.json(
-        { error: "name, userId, and payments are required" },
-        { status: 400 }
-      );
+    // Validate with Zod
+    const parsed = createBatchSchema.safeParse(body);
+    if (!parsed.success) {
+      return validationError(parsed.error);
     }
 
-    // Create the batch first
+    const { name, description, recipients: payments } = parsed.data;
+
+    // TODO: Get userId from authenticated session
+    const userId = body.userId || "default";
+
+    // Create the batch
     const batch = await prisma.batch.create({
       data: {
         name,
@@ -63,10 +75,8 @@ export async function POST(request: Request) {
       data: payments.map((p) => ({
         amount: p.amount,
         assetCode: p.assetCode || "XLM",
-        description: p.description || "",
         memo: p.memo || "",
-        transactionHash: p.transactionHash,
-        status: (p.status as PaymentStatus) || "COMPLETED",
+        status: "COMPLETED" as PaymentStatus,
         userId,
         batchId: batch.id,
       })),
@@ -78,10 +88,10 @@ export async function POST(request: Request) {
       include: { payments: true },
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return successResponse(result, { timestamp: new Date().toISOString() }, 201);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to create batch";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverError(message);
   }
 }
