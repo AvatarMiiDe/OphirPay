@@ -14,10 +14,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OphirPay — Stellar Payment Orchestration",
+  title: {
+    default: "OphirPay — Stellar Payment Orchestration",
+    template: "%s | OphirPay",
+  },
   description:
     "OphirPay is a Stellar-native payment orchestration platform for individuals, businesses, nonprofits, and DAOs.",
   icons: { icon: "/icon.svg" },
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "OphirPay — Stellar Payment Orchestration",
+    description: "Open-source payment orchestration layer for Stellar. Send, batch, schedule, and track payments.",
+    type: "website",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
