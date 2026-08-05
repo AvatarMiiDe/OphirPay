@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Power web vitals with edge performance metrics
+  poweredByHeader: false,
+
   // Compress responses for better performance
   compress: true,
 
