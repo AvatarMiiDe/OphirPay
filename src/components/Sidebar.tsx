@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,20 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Keyboard navigation: Ctrl+1..9 for nav items
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const num = parseInt(e.key);
+    if ((e.ctrlKey || e.metaKey) && num >= 1 && num <= navItems.length) {
+      e.preventDefault();
+      window.location.href = navItems[num - 1].href;
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown as EventListener);
+    return () => window.removeEventListener("keydown", handleKeyDown as EventListener);
+  }, []);
 
   const links = navItems.map((item) => {
     const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
