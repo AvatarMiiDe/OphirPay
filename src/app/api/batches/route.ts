@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import type { PaymentStatus } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError } from "@/lib/api-response";
+import { requireAuth } from "@/lib/auth-middleware";
 
 // ── GET /api/batches — List batches with pagination ──────────
 
@@ -58,8 +59,17 @@ export async function POST(request: Request) {
 
     const { name, description, recipients: payments } = parsed.data;
 
-    // TODO: Get userId from authenticated session
-    const userId = body.userId || "default";
+    // Authenticate via API key or wallet session
+    const auth = await requireAuth(request);
+    // If auth returned a Response (error), return it immediately in production
+    if (!("userId" in auth)) {
+      if (process.env.NODE_ENV === "production") {
+        return auth;
+      }
+      // Dev: fall through with body-provided userId
+    }
+
+    const userId = ("userId" in auth) ? auth.userId : (body.userId || "dev-user");
 
     // Create the batch
     const batch = await prisma.batch.create({
