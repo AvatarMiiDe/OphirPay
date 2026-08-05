@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-// In-memory rate limit store (resets on cold start — sufficient for dev, replace with Redis in prod)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+import { getRateLimitStore } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 120; // requests per window per IP
@@ -15,47 +13,65 @@ function getClientIp(request: NextRequest): string {
   );
 }
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+function generateRequestId(): string {
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
-  // Only rate-limit API routes
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const requestId = generateRequestId();
+
+  // Only apply API-specific logic to API routes
   if (!pathname.startsWith("/api/")) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set("X-Request-Id", requestId);
+    return response;
   }
 
   const ip = getClientIp(request);
-  const now = Date.now();
+  const store = getRateLimitStore();
+  const { count, resetAt } = await store.increment(ip, RATE_LIMIT_WINDOW_MS);
 
-  let entry = rateLimitMap.get(ip);
-  if (!entry || entry.resetAt < now) {
-    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-    rateLimitMap.set(ip, entry);
+  // Rate limit exceeded
+  if (count > RATE_LIMIT_MAX) {
+    const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
+    return NextResponse.json(
+      {
+        success: false,
+        error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later." },
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfter),
+          "X-Request-Id": requestId,
+        },
+      }
+    );
   }
-
-  entry.count++;
 
   const response = NextResponse.next();
 
-  // Add security and CORS headers for API routes
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // Security, CORS, and observability headers
+  response.headers.set("X-Request-Id", requestId);
   response.headers.set("X-Api-Version", "1.0.0");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-RateLimit-Limit", String(RATE_LIMIT_MAX));
-  response.headers.set("X-RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX - entry.count)));
+  response.headers.set("X-RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX - count)));
+  response.headers.set("X-RateLimit-Reset", String(Math.ceil(resetAt / 1000)));
 
-  if (entry.count > RATE_LIMIT_MAX) {
-    return NextResponse.json(
-      { success: false, error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later." } },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil((entry.resetAt - now) / 1000)) },
-      }
-    );
+  // Production CORS — restrict origins in production
+  const origin = request.headers.get("origin") || "";
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  ].filter(Boolean);
+  if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+    response.headers.set("Access-Control-Allow-Origin", origin || "*");
   }
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   return response;
 }
