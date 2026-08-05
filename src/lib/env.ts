@@ -16,6 +16,8 @@ const envSchema = z.object({
   RATE_LIMIT_RPM: z.coerce.number().positive().default(120),
   NEXT_PUBLIC_FEATURE_MULTI_ASSET: z.string().optional(),
   NEXT_PUBLIC_FEATURE_WEBHOOKS: z.string().optional(),
+  NEXT_PUBLIC_APP_VERSION: z.string().optional(),
+  DIRECT_DATABASE_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -38,6 +40,8 @@ export function validateEnv(): Env {
       RATE_LIMIT_RPM: process.env.RATE_LIMIT_RPM,
       NEXT_PUBLIC_FEATURE_MULTI_ASSET: process.env.NEXT_PUBLIC_FEATURE_MULTI_ASSET,
       NEXT_PUBLIC_FEATURE_WEBHOOKS: process.env.NEXT_PUBLIC_FEATURE_WEBHOOKS,
+      NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+      DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
