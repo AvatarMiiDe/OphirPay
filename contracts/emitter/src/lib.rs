@@ -18,6 +18,16 @@ pub struct PaymentEvent {
     pub payee: String,
     pub amount: u64,
     pub tx_hash: String,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub enum EmitterError {
+    NotInitialized,
+    AlreadyInitialized,
+    EventNotFound,
+    Unauthorized,
 }
 
 // ── Contract ───────────────────────────────────────────────────
@@ -28,14 +38,14 @@ pub struct PaymentEventEmitter;
 #[contractimpl]
 impl PaymentEventEmitter {
     /// Initialize the emitter contract
-    pub fn init(env: Env, owner: String) -> u32 {
+    pub fn init(env: Env, owner: String) -> Result<u32, EmitterError> {
         if env.storage().instance().has(&EMITTER_OWNER) {
-            panic!("Emitter already initialized");
+            return Err(EmitterError::AlreadyInitialized);
         }
         env.storage().instance().set(&EMITTER_OWNER, &owner);
         env.storage().instance().set(&EVENT_COUNT, &0u64);
-        env.storage().instance().extend_ttl(10000, 10000);
-        0
+        env.storage().instance().extend_ttl(50000, 50000);
+        Ok(0)
     }
 
     /// Emit a payment event (called by the OphirPay main contract)
@@ -57,23 +67,24 @@ impl PaymentEventEmitter {
             payee,
             amount,
             tx_hash,
+            timestamp: env.ledger().timestamp(),
         };
 
         env.storage().persistent().set(&count, &event);
-        env.storage().persistent().extend_ttl(&count, 10000, 10000);
+        env.storage().persistent().extend_ttl(&count, 50000, 50000);
 
         env.storage().instance().set(&EVENT_COUNT, &count);
-        env.storage().instance().extend_ttl(10000, 10000);
+        env.storage().instance().extend_ttl(50000, 50000);
 
         count
     }
 
     /// Get an event by ID
-    pub fn get_event(env: Env, event_id: u64) -> PaymentEvent {
+    pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
         env.storage()
             .persistent()
             .get(&event_id)
-            .unwrap_or_else(|| panic!("Event not found"))
+            .ok_or(EmitterError::EventNotFound)
     }
 
     /// Get total emitted events
@@ -82,11 +93,30 @@ impl PaymentEventEmitter {
     }
 
     /// Get emitter owner
-    pub fn get_owner(env: Env) -> String {
+    pub fn get_owner(env: Env) -> Result<String, EmitterError> {
         env.storage()
             .instance()
             .get(&EMITTER_OWNER)
-            .unwrap_or_else(|| panic!("Emitter not initialized"))
+            .ok_or(EmitterError::NotInitialized)
+    }
+
+    /// Transfer ownership
+    pub fn transfer_ownership(
+        env: Env,
+        caller: String,
+        new_owner: String,
+    ) -> Result<(), EmitterError> {
+        let owner: String = env
+            .storage()
+            .instance()
+            .get(&EMITTER_OWNER)
+            .ok_or(EmitterError::NotInitialized)?;
+        if caller != owner {
+            return Err(EmitterError::Unauthorized);
+        }
+        env.storage().instance().set(&EMITTER_OWNER, &new_owner);
+        env.storage().instance().extend_ttl(50000, 50000);
+        Ok(())
     }
 }
 
@@ -103,29 +133,28 @@ mod tests {
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
         let result = client.init(&String::from_str(&env, "GOWNER"));
-        assert_eq!(result, 0u32);
-        assert_eq!(client.get_owner(), String::from_str(&env, "GOWNER"));
+        assert!(result.is_ok());
+        assert_eq!(client.get_owner(), Ok(String::from_str(&env, "GOWNER")));
         assert_eq!(client.get_event_count(), 0u64);
     }
 
     #[test]
-    #[should_panic(expected = "Emitter already initialized")]
-    fn test_emitter_init_twice_panics() {
+    fn test_emitter_init_twice_fails() {
         let env = Env::default();
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.init(&String::from_str(&env, "GOWNER"));
-        client.init(&String::from_str(&env, "GOWNER2"));
+        let _ = client.init(&String::from_str(&env, "GOWNER"));
+        assert!(client.init(&String::from_str(&env, "GOWNER2")).is_err());
     }
 
     #[test]
-    fn test_emit_payment_stores_event() {
+    fn test_emit_payment_stores_event_with_timestamp() {
         let env = Env::default();
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.init(&String::from_str(&env, "GADMIN"));
+        let _ = client.init(&String::from_str(&env, "GADMIN"));
 
         let event_id = client.emit_payment(
             &String::from_str(&env, "OphirPay"),
@@ -138,13 +167,14 @@ mod tests {
         assert_eq!(event_id, 1u64);
         assert_eq!(client.get_event_count(), 1u64);
 
-        let event = client.get_event(&1u64);
+        let event = client.get_event(&1u64).unwrap();
         assert_eq!(event.id, 1u64);
         assert_eq!(event.emitter, String::from_str(&env, "OphirPay"));
         assert_eq!(event.payer, String::from_str(&env, "GPAYER"));
         assert_eq!(event.payee, String::from_str(&env, "GPAYEE"));
         assert_eq!(event.amount, 2500u64);
         assert_eq!(event.tx_hash, String::from_str(&env, "abc123def456"));
+        assert!(event.timestamp > 0u64);
     }
 
     #[test]
@@ -153,42 +183,29 @@ mod tests {
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.init(&String::from_str(&env, "GADMIN"));
+        let _ = client.init(&String::from_str(&env, "GADMIN"));
 
-        client.emit_payment(
-            &String::from_str(&env, "OphirPay"),
-            &String::from_str(&env, "GA"),
-            &String::from_str(&env, "GB"),
-            &100u64,
-            &String::from_str(&env, "tx1"),
-        );
-        client.emit_payment(
-            &String::from_str(&env, "OphirPay"),
-            &String::from_str(&env, "GC"),
-            &String::from_str(&env, "GD"),
-            &200u64,
-            &String::from_str(&env, "tx2"),
-        );
-        client.emit_payment(
-            &String::from_str(&env, "OphirPay"),
-            &String::from_str(&env, "GE"),
-            &String::from_str(&env, "GF"),
-            &300u64,
-            &String::from_str(&env, "tx3"),
-        );
+        for i in 0..3 {
+            client.emit_payment(
+                &String::from_str(&env, "OphirPay"),
+                &String::from_str(&env, "GA"),
+                &String::from_str(&env, "GB"),
+                &((i + 1) * 100),
+                &String::from_str(&env, "tx"),
+            );
+        }
 
         assert_eq!(client.get_event_count(), 3u64);
     }
 
     #[test]
-    #[should_panic(expected = "Event not found")]
-    fn test_get_event_not_found_panics() {
+    fn test_get_event_not_found_returns_error() {
         let env = Env::default();
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.init(&String::from_str(&env, "GADMIN"));
-        client.get_event(&999u64);
+        let _ = client.init(&String::from_str(&env, "GADMIN"));
+        assert!(client.get_event(&999u64).is_err());
     }
 
     #[test]
@@ -197,17 +214,31 @@ mod tests {
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.init(&String::from_str(&env, "GADMIN"));
+        let _ = client.init(&String::from_str(&env, "GADMIN"));
         assert_eq!(client.get_event_count(), 0u64);
     }
 
     #[test]
-    #[should_panic(expected = "Emitter not initialized")]
-    fn test_get_owner_before_init_panics() {
+    fn test_get_owner_before_init_returns_error() {
         let env = Env::default();
         let contract_id = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &contract_id);
 
-        client.get_owner();
+        assert!(client.get_owner().is_err());
+    }
+
+    #[test]
+    fn test_transfer_ownership() {
+        let env = Env::default();
+        let contract_id = env.register(PaymentEventEmitter, ());
+        let client = PaymentEventEmitterClient::new(&env, &contract_id);
+
+        let _ = client.init(&String::from_str(&env, "GOWNER"));
+        let result = client.transfer_ownership(
+            &String::from_str(&env, "GOWNER"),
+            &String::from_str(&env, "GNEW"),
+        );
+        assert!(result.is_ok());
+        assert_eq!(client.get_owner(), Ok(String::from_str(&env, "GNEW")));
     }
 }
