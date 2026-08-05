@@ -30,8 +30,13 @@ jobs:
       - name: Lint
         run: npx next lint --max-warnings 0
 
-      - name: Run tests
+      - name: Run TypeScript tests
         run: npx vitest run --reporter=verbose
+
+      - name: Run Rust contract tests
+        run: |
+          cd contracts/ophirpay && cargo test
+          cd ../emitter && cargo test
 
       - name: Build
         run: npm run build
