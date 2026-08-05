@@ -10,7 +10,7 @@ interface ApiSuccess<T> {
     page?: number;
     limit?: number;
     total?: number;
-    timestamp: string;
+    timestamp?: string;
   };
 }
 
