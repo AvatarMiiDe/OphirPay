@@ -238,9 +238,15 @@ export default function TreasuryDashboard() {
 
           {error && (
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 mb-3">
-              <p className="text-sm text-red-700 dark:text-red-400">
+              <p className="text-sm text-red-700 dark:text-red-400 mb-2">
                 Failed to load on-chain data: {error}
               </p>
+              <button
+                onClick={loadOnChain}
+                className="text-sm text-red-600 dark:text-red-400 underline hover:no-underline font-medium"
+              >
+                Retry
+              </button>
             </div>
           )}
 
