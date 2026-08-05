@@ -686,7 +686,6 @@ mod tests {
     fn test_init_and_owner() {
         let env = Env::default();
         env.mock_all_auths();
-        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
