@@ -22,6 +22,10 @@ const envSchema = z.object({
 
   // Chain read source (public testnet account for simulation)
   NEXT_PUBLIC_CHAIN_READ_SOURCE: z.string().optional(),
+
+  // Monitoring
+  NEXT_PUBLIC_GA_ID: z.string().optional(),
+  NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -30,6 +34,9 @@ export type Env = z.infer<typeof envSchema>;
  * Parse and validate environment variables at startup.
  * Call this once in a server-side context (e.g., next.config, instrumentation).
  * Returns the parsed config or throws on invalid configuration.
+ *
+ * @throws {Error} When required env vars are missing or invalid
+ * @returns {Env} Validated environment configuration
  */
 export function validateEnv(): Env {
   try {
@@ -44,6 +51,8 @@ export function validateEnv(): Env {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
       NODE_ENV: process.env.NODE_ENV,
       NEXT_PUBLIC_CHAIN_READ_SOURCE: process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE,
+      NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
+      NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -52,4 +61,19 @@ export function validateEnv(): Env {
     }
     throw error;
   }
+}
+
+/**
+ * Check if running in production mode.
+ */
+export function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+/**
+ * Get the public app URL, with trailing slash removed.
+ */
+export function getAppUrl(): string {
+  const url = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return url.endsWith("/") ? url.slice(0, -1) : url;
 }
