@@ -51,4 +51,14 @@ export const logger = {
   request: (method: string, path: string, status: number, durationMs: number) => {
     log("info", `${method} ${path} ${status}`, { method, path, status, durationMs });
   },
+
+  /** Track a metric with a name and value for monitoring */
+  metric: (name: string, value: number, tags?: Record<string, string>) => {
+    log("debug", `metric:${name}`, { name, value, ...tags });
+  },
+
+  /** Log a performance timing */
+  timing: (label: string, durationMs: number) => {
+    log("debug", `timing:${label}`, { label, durationMs });
+  },
 };
