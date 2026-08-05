@@ -1,14 +1,12 @@
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://ophirpay.vercel.app";
-
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/*.json$"],
+      disallow: "/api/",
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: "https://ophirpay.com/sitemap.xml",
   };
 }
