@@ -12,6 +12,7 @@ import {
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
+import { useToast } from "@/components/ui/Toast";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ type TxResult =
 
 export default function SendPage() {
   const { wallet, fetchBalance } = useWallet();
+  const toast = useToast();
 
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
@@ -146,11 +148,13 @@ export default function SendPage() {
 
       // Refresh balance after successful transaction
       fetchBalance();
+      toast.success("Payment sent!", `${formatAmount(parseFloat(amount), "XLM")} to ${shortenAddress(destination.trim(), 6)}`);
     } catch (err) {
       setStep("done");
       const message =
         err instanceof Error ? err.message : "Transaction failed. Please try again.";
       setResult({ type: "error", message });
+      toast.error("Transaction failed", message);
     }
   };
 
