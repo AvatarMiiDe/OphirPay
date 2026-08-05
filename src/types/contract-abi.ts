@@ -1,60 +1,120 @@
 /**
- * Contract ABI type definitions for OphirPay and Emitter Soroban contracts.
- * Maps the Rust contract interfaces to TypeScript types for client-side usage.
+ * Contract ABI type definitions for OphirPay Soroban contracts v2.
+ * Matches the contracts/ophirpay/src/lib.rs and contracts/emitter/src/lib.rs interfaces.
+ *
+ * Key features added in v2:
+ * - Escrow: lock funds with deadline, owner release, beneficiary claim
+ * - Payment Streaming: linear vesting over time
+ * - Batch Payments: atomic multi-recipient recording
+ * - SAC Token Support: works with any Stellar Asset Contract
+ * - Native Soroban Events: env.events().publish() instead of cross-contract calls
  */
 
 /** Supported Stellar asset types */
 export type AssetType = "native" | "credit_alphanum4" | "credit_alphanum12";
 
-/** A payment instruction for batch processing */
-export interface ContractPayment {
-  destination: string;
-  amount: string;
-  memo?: string;
-}
+// ── Payment Record ──────────────────────────────────────────
 
-/** Configuration parameters for a payment stream */
-export interface StreamConfig {
-  recipient: string;
-  amount_per_interval: string;
-  interval_seconds: number;
-  total_intervals: number;
-  asset: string; // contract address of the SAC token
-}
-
-/** Event emitted by the Emitter contract on payment */
-export interface PaymentEvent {
+export interface OnChainPayment {
+  id: number;
   payer: string;
   payee: string;
-  amount: string;
+  amount: bigint;
+  asset: string;
+  tx_hash: string;
   timestamp: number;
-  memo: string;
+  metadata: string;
 }
 
-/** Event emitted by OphirPay on batch completion */
-export interface BatchCompletedEvent {
-  batch_id: string;
-  total_payments: number;
-  total_amount: string;
-  executed_at: number;
+// ── Escrow ──────────────────────────────────────────────────
+
+export interface EscrowData {
+  id: number;
+  depositor: string;
+  beneficiary: string;
+  amount: bigint;
+  asset: string;
+  deadline: number;
+  released: boolean;
+  claimed: boolean;
+  metadata: string;
 }
 
-/** Event emitted by OphirPay on stream creation */
-export interface StreamCreatedEvent {
-  stream_id: string;
+// ── Payment Stream ──────────────────────────────────────────
+
+export interface StreamData {
+  id: number;
   creator: string;
   recipient: string;
-  amount_per_interval: string;
-  interval_seconds: number;
-  total_intervals: number;
+  total_amount: bigint;
+  claimed_amount: bigint;
+  asset: string;
+  start_time: number;
+  end_time: number;
+  cancelled: boolean;
+  metadata: string;
 }
 
-/** Raw contract event with decoded topic and data */
-export interface DecodedContractEvent {
-  type: string;
-  topics: string[];
-  data: Record<string, string | number>;
-  ledger: number;
+// ── Batch ───────────────────────────────────────────────────
+
+export interface BatchData {
+  id: number;
+  creator: string;
+  total_recipients: number;
+  total_amount: bigint;
+  asset: string;
   timestamp: number;
-  txHash: string;
+  tx_hash: string;
 }
+
+// ── Payment Event (Emitter Contract) ────────────────────────
+
+export interface PaymentEvent {
+  id: number;
+  source: string;
+  payer: string;
+  payee: string;
+  amount: bigint;
+  tx_hash: string;
+  timestamp: number;
+}
+
+// ── Contract Errors ─────────────────────────────────────────
+
+export enum PaymentErrorCode {
+  NotInitialized = 1,
+  AlreadyInitialized = 2,
+  PaymentNotFound = 3,
+  Unauthorized = 4,
+  InvalidAmount = 5,
+  EscrowNotDue = 6,
+  EscrowAlreadyReleased = 7,
+  EscrowNotFound = 8,
+  StreamNotStarted = 9,
+  StreamAlreadyCancelled = 10,
+  StreamNotFound = 11,
+  StreamFullyClaimed = 12,
+  BatchTooLarge = 13,
+  BatchEmpty = 14,
+  TokenTransferFailed = 15,
+  InsufficientBalance = 16,
+}
+
+export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
+  1: "Contract not initialized",
+  2: "Contract already initialized",
+  3: "Payment record not found",
+  4: "Unauthorized caller",
+  5: "Invalid payment amount",
+  6: "Escrow not yet due for claiming",
+  7: "Escrow already released",
+  8: "Escrow not found",
+  9: "Payment stream has not started yet",
+  10: "Payment stream is already cancelled",
+  11: "Payment stream not found",
+  12: "All tokens already claimed from stream",
+  13: "Batch exceeds maximum of 100 recipients",
+  14: "Batch is empty",
+  15: "Token transfer failed",
+  16: "Insufficient balance",
+};
