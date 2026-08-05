@@ -123,12 +123,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsConnecting(false);
     }
-  }, [loadBalance]);
-
-  const disconnect = useCallback(() => {
+  }, [loadBalance]);   const disconnect = useCallback(() => {
     setWallet(initialWalletState);
     setError(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ophirpay-wallet-connected");
+    }
   }, []);
+
+  // Auto-refresh balance every 30 seconds when connected
+  useEffect(() => {
+    if (!wallet.connected || !wallet.publicKey) return;
+    const interval = setInterval(() => {
+      loadBalance(wallet.publicKey!);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [wallet.connected, wallet.publicKey, loadBalance]);
 
   const fetchBalance = useCallback(async () => {
     if (!wallet.publicKey) return;
