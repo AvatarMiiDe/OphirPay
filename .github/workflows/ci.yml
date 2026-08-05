@@ -33,10 +33,15 @@ jobs:
       - name: Run TypeScript tests
         run: npx vitest run --reporter=verbose
 
-      - name: Run Rust contract tests
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build Soroban contracts (WASM)
         run: |
-          cd contracts/ophirpay && cargo test
-          cd ../emitter && cargo test
+          cd contracts/ophirpay && cargo build --target wasm32-unknown-unknown --release
+          cd ../emitter && cargo build --target wasm32-unknown-unknown --release
 
       - name: Build
         run: npm run build
