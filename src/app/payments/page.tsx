@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatAmount, shortenAddress } from "@/lib/utils";
+import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
 import {
   fetchOnChainPayments,
   type OnChainPayment,
 } from "@/lib/contracts";
 import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
+import { exportToCsv } from "@/lib/csv";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { useDebounce } from "@/hooks/useDebounce";
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -16,6 +20,8 @@ export default function PaymentsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,10 +41,36 @@ export default function PaymentsPage() {
     load();
   }, [load]);
 
+  // Client-side search/filter
+  const filtered = useMemo(() => {
+    if (!debouncedSearch) return payments;
+    const q = debouncedSearch.toLowerCase();
+    return payments.filter(
+      (p) =>
+        p.payer.toLowerCase().includes(q) ||
+        p.payee.toLowerCase().includes(q) ||
+        p.txHash.toLowerCase().includes(q) ||
+        String(p.id).includes(q)
+    );
+  }, [payments, debouncedSearch]);
+
+  const handleExport = () => {
+    exportToCsv(filtered, [
+      { key: "id", header: "Payment ID" },
+      { key: "payer", header: "Payer" },
+      { key: "payee", header: "Payee" },
+      { key: "amountStroops", header: "Amount (Stroops)" },
+      { key: "txHash", header: "Tx Hash" },
+    ], { filename: `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv` });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: "Payments" }]} />
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Payments
@@ -48,6 +80,17 @@ export default function PaymentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={payments.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            title="Export CSV"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            CSV
+          </button>
           <button
             onClick={load}
             disabled={loading}
@@ -61,11 +104,7 @@ export default function PaymentsPage() {
               stroke="currentColor"
               className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
             </svg>
             Refresh
           </button>
@@ -73,19 +112,26 @@ export default function PaymentsPage() {
             href="/send"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors shadow-lg shadow-ophir-500/25 active:scale-95"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-4 h-4"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Send Payment
+            Send
           </Link>
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative max-w-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by address, hash, or ID..."
+          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent"
+        />
       </div>
 
       {/* Chain record count */}
@@ -94,9 +140,9 @@ export default function PaymentsPage() {
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
           {total} on-chain {total === 1 ? "record" : "records"}
         </span>
-        {!loading && payments.length > 0 && (
+        {!loading && filtered.length !== payments.length && (
           <span className="text-xs text-gray-400 dark:text-gray-500">
-            showing newest {payments.length}
+            filtered: {filtered.length} of {payments.length}
           </span>
         )}
       </div>
@@ -107,10 +153,7 @@ export default function PaymentsPage() {
           <p className="text-sm text-red-700 dark:text-red-400">
             Failed to load on-chain payments: {error}
           </p>
-          <button
-            onClick={load}
-            className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
-          >
+          <button onClick={load} className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline">
             Try again
           </button>
         </div>
@@ -130,38 +173,34 @@ export default function PaymentsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading &&
-                Array.from({ length: 3 }).map((_, i) => (
-                  <tr key={i} className="border-b border-gray-100 dark:border-gray-800/50">
-                    <td className="py-4 px-4" colSpan={5}>
-                      <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded animate-pulse w-3/4" />
-                    </td>
-                  </tr>
-                ))}
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="py-4 px-4">
+                    <LoadingSkeleton variant="table" lines={5} />
+                  </td>
+                </tr>
+              )}
 
-              {!loading && payments.length === 0 && !error && (
+              {!loading && filtered.length === 0 && !error && (
                 <tr>
                   <td colSpan={5} className="py-12 text-center">
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      No on-chain payments yet — send one from the Send page.
+                      {search ? "No payments match your search." : "No on-chain payments yet — send one from the Send page."}
                     </p>
                   </td>
                 </tr>
               )}
 
               {!loading &&
-                payments.map((payment) => (
+                filtered.map((payment) => (
                   <tr
                     key={payment.id}
                     className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        #{payment.id}
-                      </p>
+                      <p className="font-medium text-gray-900 dark:text-white">#{payment.id}</p>
                       <p className="text-xs text-gray-400 font-mono mt-0.5">
-                        {shortenAddress(payment.payer, 6)} →{" "}
-                        {shortenAddress(payment.payee, 6)}
+                        {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
                       </p>
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-gray-300 font-mono">
@@ -170,14 +209,13 @@ export default function PaymentsPage() {
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        RECORDED
+                        {payment.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED"}
                       </span>
                     </td>
-                    <td
-                      className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs"
-                      title="The contract does not store timestamps"
-                    >
-                      —
+                    <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs">
+                      {payment.timestamp
+                        ? timeAgo(new Date(payment.timestamp * 1000).toISOString())
+                        : "—"}
                     </td>
                     <td className="py-3 px-4">
                       {payment.txHash ? (
@@ -199,11 +237,10 @@ export default function PaymentsPage() {
           </table>
         </div>
 
-        {/* Footer */}
         {!loading && total > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-800">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Showing <span className="font-medium">{payments.length}</span> of{" "}
+              Showing <span className="font-medium">{filtered.length}</span> of{" "}
               <span className="font-medium">{total}</span> on-chain records
             </p>
           </div>
