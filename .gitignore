@@ -44,9 +44,15 @@ prisma/dev.db-journal
 
 # contracts (keep compiled WASM for deployment)
 contracts/**/target/debug/
+contracts/**/target/release/
 contracts/**/target/wasm32-unknown-unknown/debug/
+contracts/**/target/wasm32-unknown-unknown/release/.fingerprint/
+contracts/**/target/wasm32-unknown-unknown/release/deps/
+contracts/**/target/wasm32-unknown-unknown/release/.cargo-*
+contracts/**/target/wasm32-unknown-unknown/release/*.d
 contracts/**/target/.rustc_info.json
 contracts/**/target/CACHEDIR.TAG
+contracts/**/Cargo.lock
 
 # Soroban
 .soroban/

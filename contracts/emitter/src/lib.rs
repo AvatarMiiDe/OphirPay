@@ -138,33 +138,39 @@ impl PaymentEventEmitter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::testutils::Address as _;
 
     #[test]
     fn test_init() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
 
-        assert!(client.init(&owner).is_ok());
-        assert_eq!(client.get_owner(), Ok(owner));
+        let version = client.init(&owner);
+        assert_eq!(version, 0);
+        assert_eq!(client.get_owner(), owner);
         assert_eq!(client.get_event_count(), 0);
     }
 
     #[test]
+    #[should_panic]
     fn test_init_twice_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
 
         let _ = client.init(&owner);
-        assert!(client.init(&owner).is_err());
+        let _ = client.init(&owner);
     }
 
     #[test]
     fn test_emit_payment() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
@@ -183,7 +189,7 @@ mod tests {
         assert_eq!(id, 1);
         assert_eq!(client.get_event_count(), 1);
 
-        let event = client.get_event(&1).unwrap();
+        let event = client.get_event(&1);
         assert_eq!(event.id, 1);
         assert_eq!(event.payer, payer);
         assert_eq!(event.payee, payee);
@@ -195,6 +201,7 @@ mod tests {
     #[test]
     fn test_multiple_events() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
@@ -216,26 +223,29 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_not_found() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
 
         let _ = client.init(&owner);
-        assert!(client.get_event(&999).is_err());
+        let _ = client.get_event(&999);
     }
 
     #[test]
     fn test_transfer_ownership() {
         let env = Env::default();
+        env.mock_all_auths();
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
         let new_owner = Address::generate(&env);
 
         let _ = client.init(&owner);
-        assert!(client.transfer_ownership(&owner, &new_owner).is_ok());
-        assert_eq!(client.get_owner(), Ok(new_owner));
+        client.transfer_ownership(&owner, &new_owner);
+        assert_eq!(client.get_owner(), new_owner);
     }
 }

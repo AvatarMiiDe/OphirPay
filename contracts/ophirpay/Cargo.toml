@@ -11,7 +11,6 @@ soroban-sdk = "22.0.0"
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
-ed25519-dalek = "=2.1.1"
 
 [profile.release]
 opt-level = "z"
@@ -19,3 +18,4 @@ lto = true
 strip = true
 codegen-units = 1
 panic = "abort"
+

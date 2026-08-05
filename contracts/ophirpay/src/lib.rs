@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, token, vec, Address, Env,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, String,
+    Symbol, Vec,
 };
 
 // ── Storage Keys ───────────────────────────────────────────────
@@ -674,6 +674,7 @@ impl OphirPayContract {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
 
     fn create_token_contract(e: &Env, admin: &Address) -> Address {
         e.register_stellar_asset_contract(admin.clone())
@@ -684,6 +685,8 @@ mod tests {
     #[test]
     fn test_init_and_owner() {
         let env = Env::default();
+        env.mock_all_auths();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -698,6 +701,7 @@ mod tests {
     #[should_panic(expected = "AlreadyInitialized")]
     fn test_init_twice_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -709,6 +713,7 @@ mod tests {
     #[test]
     fn test_transfer_ownership() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -723,6 +728,7 @@ mod tests {
     #[should_panic]
     fn test_unauthorized_transfer_ownership_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -737,6 +743,7 @@ mod tests {
     #[test]
     fn test_record_payment() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -769,6 +776,7 @@ mod tests {
     #[should_panic(expected = "InvalidAmount")]
     fn test_record_payment_zero_amount_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -790,6 +798,7 @@ mod tests {
     #[test]
     fn test_cancel_payment_by_owner() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -817,6 +826,7 @@ mod tests {
     #[test]
     fn test_create_and_release_escrow() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -855,6 +865,7 @@ mod tests {
     #[test]
     fn test_claim_escrow_after_deadline() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -887,6 +898,7 @@ mod tests {
     #[should_panic]
     fn test_claim_escrow_before_deadline_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -916,6 +928,7 @@ mod tests {
     #[test]
     fn test_create_and_claim_stream() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -961,6 +974,7 @@ mod tests {
     #[test]
     fn test_cancel_stream_returns_unvested() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -996,6 +1010,7 @@ mod tests {
     #[test]
     fn test_create_batch() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -1031,6 +1046,7 @@ mod tests {
     #[should_panic]
     fn test_empty_batch_fails() {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
