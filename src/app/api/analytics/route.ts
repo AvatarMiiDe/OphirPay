@@ -1,54 +1,59 @@
 import prisma from "@/lib/prisma";
 import { successResponse, serverError } from "@/lib/api-response";
 
-export const dynamic = "force-dynamic";
-
+/**
+ * GET /api/analytics — Aggregated payment metrics
+ */
 export async function GET() {
   try {
-    const [totalPayments, statusAggregation] = await Promise.all([
-      prisma.payment.count(),
-      prisma.payment.groupBy({
-        by: ["status"],
-        _count: { status: true },
-        _sum: { amount: true },
-      }),
-    ]);
+    const [totalPayments, completedPayments, failedPayments, volumeResult] =
+      await Promise.all([
+        prisma.payment.count(),
+        prisma.payment.count({ where: { status: "COMPLETED" } }),
+        prisma.payment.count({ where: { status: "FAILED" } }),
+        prisma.payment.aggregate({
+          _sum: { amount: true },
+          _avg: { amount: true },
+          where: { status: "COMPLETED" },
+        }),
+      ]);
 
-    const successful = statusAggregation.find((s) => s.status === "COMPLETED")?._count.status ?? 0;
-    const failed = statusAggregation.find((s) => s.status === "FAILED")?._count.status ?? 0;
-    const totalVolume = statusAggregation.reduce((sum, s) => sum + (s._sum.amount ?? 0), 0);
-
-    // Volume by day (last 30 days)
+    // Daily volume breakdown (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentPayments = await prisma.payment.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      select: { amount: true, createdAt: true },
+    const dailyPayments = await prisma.payment.groupBy({
+      by: ["createdAt"],
+      _count: { id: true },
+      _sum: { amount: true },
+      where: {
+        createdAt: { gte: thirtyDaysAgo },
+        status: "COMPLETED",
+      },
       orderBy: { createdAt: "asc" },
     });
 
-    const volumeByDay: Record<string, { volume: number; count: number }> = {};
-    for (const p of recentPayments) {
-      const day = p.createdAt.toISOString().split("T")[0];
-      if (!volumeByDay[day]) volumeByDay[day] = { volume: 0, count: 0 };
-      volumeByDay[day].volume += p.amount;
-      volumeByDay[day].count += 1;
-    }
+    const volumeByDay = dailyPayments.map((d) => ({
+      date: d.createdAt.toISOString().split("T")[0],
+      volume: d._sum.amount ?? 0,
+      count: d._count.id,
+    }));
 
     return successResponse({
       totalPayments,
-      totalVolume,
-      successfulPayments: successful,
-      failedPayments: failed,
-      averageAmount: totalPayments > 0 ? totalVolume / totalPayments : 0,
-      volumeByDay: Object.entries(volumeByDay).map(([date, v]) => ({
-        date,
-        volume: v.volume,
-        count: v.count,
-      })),
+      completedPayments,
+      failedPayments,
+      totalVolume: volumeResult._sum.amount ?? 0,
+      averageAmount: volumeResult._avg.amount ?? 0,
+      successRate:
+        totalPayments > 0
+          ? Math.round((completedPayments / totalPayments) * 100)
+          : 0,
+      volumeByDay,
     });
-  } catch {
-    return serverError("Failed to compute analytics");
+  } catch (err) {
+    return serverError(
+      err instanceof Error ? err.message : "Failed to fetch analytics"
+    );
   }
 }
