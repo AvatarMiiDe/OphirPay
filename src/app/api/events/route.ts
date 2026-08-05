@@ -19,20 +19,10 @@ import {
   scValToNative,
   nativeToScVal,
 } from "@stellar/stellar-sdk";
+import { EMITTER_CONTRACT_ID } from "@/lib/contracts";
+import { SOROBAN_RPC_URL, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 export const dynamic = "force-dynamic";
-
-const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_STELLAR_RPC_URL ||
-  "https://soroban-testnet.stellar.org:443";
-
-const NETWORK_PASSPHRASE =
-  process.env.STELLAR_NETWORK_PASSPHRASE ||
-  "Test SDF Network ; September 2015";
-
-const EMITTER_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID ||
-  "CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4";
 
 /**
  * Read a u64 value from the emitter contract using Soroban simulation.
