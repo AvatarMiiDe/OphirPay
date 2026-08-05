@@ -43,14 +43,13 @@ export async function simulatePayment(params: {
       )
       .build();
 
-    // Simulate the transaction to validate without signing
-    try {
-      await server.simulateTransaction(tx);
-    } catch (simErr) {
+    // Validate the transaction can be built and fee estimated
+    // Full simulation requires Soroban RPC (use simulateTransaction from @/lib/contracts for Soroban txns)
+    if (!tx) {
       return {
         success: false,
         fee: baseFee.toString(),
-        error: simErr instanceof Error ? simErr.message : "Simulation failed",
+        error: "Failed to build transaction",
         operations: 1,
       };
     }

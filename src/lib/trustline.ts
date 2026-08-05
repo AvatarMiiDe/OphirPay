@@ -27,8 +27,9 @@ export async function checkTrustline(
     const account = await server.loadAccount(publicKey);
 
     const trustline = account.balances.find(
-      (b) =>
+      (b): b is Extract<typeof b, { asset_code: string; asset_issuer: string }> =>
         b.asset_type !== "native" &&
+        "asset_code" in b && "asset_issuer" in b &&
         b.asset_code === assetCode &&
         b.asset_issuer === assetIssuer
     );
