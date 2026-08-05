@@ -18,7 +18,7 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-23%20passed-brightgreen.svg" alt="23 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-68%20passed-brightgreen.svg" alt="68 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -148,6 +148,23 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  │  └──────────┘  └──────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ⚡ Hackathon Quickstart (60 seconds)
+
+```bash
+git clone https://github.com/OphirPay/OphirPay.git && cd OphirPay
+npm install && npx prisma db push && npx prisma generate
+cp .env.example .env && npm run dev
+```
+
+**That's it!** Open http://localhost:3000, connect Freighter, and you're live on Stellar Testnet.
+
+Run the pre-demo smoke test to verify everything works:
+```bash
+bash scripts/demo-test.sh
 ```
 
 ---
