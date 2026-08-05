@@ -29,9 +29,10 @@ interface ApiError {
 export function successResponse<T>(
   data: T,
   meta?: ApiSuccess<T>["meta"],
-  status = 200
+  status = 200,
+  cacheHeader?: string
 ) {
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       success: true,
       data,
@@ -39,6 +40,10 @@ export function successResponse<T>(
     } satisfies ApiSuccess<T>,
     { status }
   );
+  if (cacheHeader) {
+    response.headers.set("Cache-Control", cacheHeader);
+  }
+  return response;
 }
 
 export function errorResponse(
@@ -80,4 +85,12 @@ export function unauthorizedError(message = "Unauthorized") {
 
 export function rateLimitError(message = "Too many requests") {
   return errorResponse("RATE_LIMITED", message, 429);
+}
+
+export function conflictError(message: string) {
+  return errorResponse("CONFLICT", message, 409);
+}
+
+export function badRequestError(message: string) {
+  return errorResponse("BAD_REQUEST", message, 400);
 }
