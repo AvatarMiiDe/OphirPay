@@ -62,7 +62,7 @@
   </g>
 
   <!-- Text content -->
-  <text x="280" y="155" font-family="system-ui,-apple-system,sans-serif" font-size="52" font-weight="800" letter-spacing="-1" fill="white">Ophir<span fill="#7B68EE">Pay</span></text>
+  <text x="280" y="155" font-family="system-ui,-apple-system,sans-serif" font-size="52" font-weight="800" letter-spacing="-1" fill="white">OphirPay</text>
 
   <text x="280" y="200" font-family="system-ui,-apple-system,sans-serif" font-size="20" font-weight="400" fill="#a5a5c8" letter-spacing="1">
     The Open-Source Payment Orchestration Layer for Stellar
