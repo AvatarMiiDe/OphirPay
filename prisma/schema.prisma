@@ -91,6 +91,7 @@ model Payment {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   completedAt       DateTime?
+  deletedAt         DateTime?
 
   user              User      @relation(fields: [userId], references: [id])
   sourceAccount     Account?  @relation("PaymentSourceAccount", fields: [sourceAccountId], references: [id])
