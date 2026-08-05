@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // Compress responses for better performance
   compress: true,
 
+  // Production source maps disabled for security
+  productionBrowserSourceMaps: false,
+
   // Security headers applied to all responses
   headers: async () => [
     {
