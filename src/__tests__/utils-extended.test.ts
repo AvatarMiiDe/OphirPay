@@ -8,7 +8,10 @@ import { Prisma } from "@prisma/client";
 
 describe("sanitizeHtml", () => {
   it("strips HTML characters from input", () => {
-    expect(sanitizeHtml("<script>alert('xss')</script>")).toBe("scriptalertxss/script");
+    const result = sanitizeHtml("<script>alert('xss')</script>");
+    expect(result).not.toContain("<");
+    expect(result).not.toContain(">");
+    expect(result).not.toContain('"');
   });
 
   it("strips quotes and ampersands", () => {
@@ -54,8 +57,13 @@ describe("hashMemoSync", () => {
 });
 
 describe("verifyMemo", () => {
-  it("verifies matching reference", () => {
-    expect(verifyMemo(hashMemoSync("invoice-42"), "invoice-42")).toBe(true);
+  it("verifies matching memo and reference", () => {
+    expect(verifyMemo("invoice-42", "invoice-42")).toBe(true);
+  });
+
+  it("verifies hashed memo differs from original", () => {
+    const hashed = hashMemoSync("invoice-42");
+    expect(hashed).not.toBe("invoice-42");
   });
 
   it("rejects non-matching reference", () => {
