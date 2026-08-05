@@ -235,6 +235,7 @@ export async function recordPaymentOnChain(params: {
   payee: string;
   amountStroops: number;
   txHash: string;
+  metadata?: string;
   signTransaction: (
     xdr: string,
     opts?: { network?: string; networkPassphrase?: string }
@@ -247,6 +248,7 @@ export async function recordPaymentOnChain(params: {
     payee,
     amountStroops,
     txHash,
+    metadata = "",
     signTransaction,
     network = "TESTNET",
     networkPassphrase,
@@ -254,10 +256,12 @@ export async function recordPaymentOnChain(params: {
 
   try {
     const args: xdr.ScVal[] = [
-      nativeToScVal(payer, { type: "string" }),
-      nativeToScVal(payee, { type: "string" }),
+      nativeToScVal(payer, { type: "string" }), // caller
+      nativeToScVal(payer, { type: "string" }), // payer
+      nativeToScVal(payee, { type: "string" }), // payee
       nativeToScVal(amountStroops, { type: "u64" }),
       nativeToScVal(txHash, { type: "string" }),
+      nativeToScVal(metadata, { type: "string" }),
     ];
 
     const txInfo = await invokeContractFunction(
@@ -309,6 +313,8 @@ export interface OnChainPayment {
   payee: string;
   amountStroops: number;
   txHash: string;
+  timestamp?: number;
+  metadata?: string;
 }
 
 /**
@@ -359,13 +365,15 @@ export async function fetchOnChainPayments(
     const sim = await server.simulateTransaction(tx);
     if ("error" in sim && sim.error) return null;
     if ("result" in sim && sim.result) {
-      const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+      let raw = scValToNative(sim.result.retval);
       return {
         id: Number(raw.id),
         payer: String(raw.payer ?? ""),
         payee: String(raw.payee ?? ""),
         amountStroops: Number(raw.amount ?? 0),
         txHash: String(raw.tx_hash ?? ""),
+        timestamp: raw.timestamp ? Number(raw.timestamp) : undefined,
+        metadata: raw.metadata ? String(raw.metadata) : undefined,
       };
     }
     return null;
