@@ -24,12 +24,18 @@ export const metadata: Metadata = {
     "OphirPay is a Stellar-native payment orchestration platform for individuals, businesses, nonprofits, and DAOs.",
   icons: { icon: "/icon.svg" },
   manifest: "/manifest.json",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://ophirpay.vercel.app"),
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "OphirPay — Stellar Payment Orchestration",
     description: "Open-source payment orchestration layer for Stellar. Send, batch, schedule, and track payments.",
     type: "website",
+    siteName: "OphirPay",
   },
   robots: { index: true, follow: true },
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({
