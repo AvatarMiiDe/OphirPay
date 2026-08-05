@@ -23,7 +23,7 @@ const positionClasses = {
  */
 export function Tooltip({ content, children, position = "top", delay = 400 }: TooltipProps) {
   const [visible, setVisible] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const show = () => {
     timerRef.current = setTimeout(() => setVisible(true), delay);
