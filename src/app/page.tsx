@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useFreighter";
-import { shortenAddress, formatAmount } from "@/lib/utils";
-import { getAccountExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
+import { shortenAddress, formatAmount, timeAgo } from "@/lib/utils";
+import { getAccountExplorerUrl, XLM_STROOPS, STELLAR_NETWORK } from "@/lib/stellar";
 import {
   fetchOnChainPayments,
   type OnChainPayment,
@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import Link from "next/link";
 
 // ── Page ───────────────────────────────────────────────────────
@@ -49,15 +51,27 @@ export default function TreasuryDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* ── Breadcrumb ───────────────────────────────────── */}
+      <Breadcrumb items={[{ label: "Treasury" }]} />
+
       {/* ── Welcome ────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Treasury Dashboard
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Monitor your financial operations and payment activity
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-gray-500 dark:text-gray-400">
+              Monitor your financial operations and payment activity
+            </p>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+              </span>
+              {STELLAR_NETWORK}
+            </span>
+          </div>
         </div>
         {wallet.connected && (
           <Link href="/send">
@@ -227,11 +241,7 @@ export default function TreasuryDashboard() {
           )}
 
           {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
-              ))}
-            </div>
+            <LoadingSkeleton variant="table" lines={5} />
           ) : payments.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-gray-500 dark:text-gray-400">
