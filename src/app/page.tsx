@@ -100,52 +100,56 @@ export default function TreasuryDashboard() {
       </div>
 
       {/* ── Stats Cards ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {wallet.connected && wallet.publicKey ? (
+      {loading && !error ? (
+        <LoadingSkeleton variant="stats" />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {wallet.connected && wallet.publicKey ? (
+            <StatCard
+              title="Your XLM Balance"
+              value={
+                wallet.balanceLoading
+                  ? "Loading..."
+                  : formatAmount(totalBalance, "XLM")
+              }
+              icon="⭐"
+              trend={
+                <button
+                  onClick={fetchBalance}
+                  className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+                >
+                  Refresh
+                </button>
+              }
+            />
+          ) : (
+            <StatCard
+              title="Your XLM Balance"
+              value="—"
+              icon="⭐"
+              trend="Connect wallet"
+            />
+          )}
           <StatCard
-            title="Your XLM Balance"
-            value={
-              wallet.balanceLoading
-                ? "Loading..."
-                : formatAmount(totalBalance, "XLM")
-            }
-            icon="⭐"
-            trend={
-              <button
-                onClick={fetchBalance}
-                className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
-              >
-                Refresh
-              </button>
-            }
+            title="Total Payments"
+            value={totalCount.toString()}
+            icon="💳"
+            trend="On-chain"
           />
-        ) : (
           <StatCard
-            title="Your XLM Balance"
-            value="—"
-            icon="⭐"
-            trend="Connect wallet"
+            title="Recorded Volume"
+            value={formatAmount(volume, "XLM")}
+            icon="📊"
+            trend={`Last ${payments.length} records`}
           />
-        )}
-        <StatCard
-          title="Total Payments"
-          value={loading ? "…" : totalCount.toString()}
-          icon="💳"
-          trend="On-chain"
-        />
-        <StatCard
-          title="Recorded Volume"
-          value={loading ? "…" : formatAmount(volume, "XLM")}
-          icon="📊"
-          trend={`Last ${payments.length} records`}
-        />
-        <StatCard
-          title="Avg Payment"
-          value={loading ? "…" : formatAmount(avgPayment, "XLM")}
-          icon="✅"
-          trend="On-chain"
-        />
-      </div>
+          <StatCard
+            title="Avg Payment"
+            value={formatAmount(avgPayment, "XLM")}
+            icon="✅"
+            trend="On-chain"
+          />
+        </div>
+      )}
 
       {/* ── Accounts & Activity ────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -283,15 +287,14 @@ export default function TreasuryDashboard() {
                         {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
                       </td>
                       <td className="py-3 pr-4">
-                        <Badge variant="success" dot>
-                          RECORDED
+                        <Badge variant={payment.metadata === "CANCELLED" ? "danger" : "success"} dot>
+                          {payment.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED"}
                         </Badge>
                       </td>
-                      <td
-                        className="py-3 text-gray-500 dark:text-gray-400 text-xs"
-                        title="The contract does not store timestamps"
-                      >
-                        —
+                      <td className="py-3 text-gray-500 dark:text-gray-400 text-xs">
+                        {payment.timestamp
+                          ? timeAgo(new Date(payment.timestamp * 1000).toISOString())
+                          : "—"}
                       </td>
                     </tr>
                   ))}
