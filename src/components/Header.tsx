@@ -9,7 +9,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
-      <div className="flex items-center justify-between h-full px-6">
+      <div className="flex items-center justify-between h-full px-4 md:px-6">
         {/* Left: Page title / breadcrumb area */}
         <div className="flex items-center gap-4">
           <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 hidden md:block">
@@ -18,11 +18,12 @@ export function Header() {
         </div>
 
         {/* Right: Theme toggle + Wallet button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           {/* Dark mode toggle */}
           <button
             onClick={toggle}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             {isDark ? (
