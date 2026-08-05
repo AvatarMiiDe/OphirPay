@@ -36,11 +36,14 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next();
 
-  // Add CORS headers for API routes
+  // Add security and CORS headers for API routes
   response.headers.set("Access-Control-Allow-Origin", "*");
   response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   response.headers.set("X-Api-Version", "1.0.0");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-RateLimit-Limit", String(RATE_LIMIT_MAX));
   response.headers.set("X-RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX - entry.count)));
 
