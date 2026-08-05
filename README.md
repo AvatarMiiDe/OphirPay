@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/ophirpay-banner.png" alt="OphirPay Banner" width="100%" onerror="this.style.display='none'" />
+  <img src="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/ophirpay-banner.svg" alt="OphirPay Banner" width="100%" />
 
   <h1>🏦 OphirPay</h1>
 
