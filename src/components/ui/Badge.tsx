@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 import { cn, getStatusColor } from "@/lib/utils";
 
-type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
+type BadgeVariant = "default" | "success" | "warning" | "danger" | "info" | "pending";
 
 interface BadgeProps {
   children: ReactNode;
@@ -21,6 +21,8 @@ const variantClasses: Record<BadgeVariant, string> = {
     "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
   danger: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
   info: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+  pending:
+    "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400",
 };
 
 const dotClasses: Record<BadgeVariant, string> = {
@@ -29,11 +31,10 @@ const dotClasses: Record<BadgeVariant, string> = {
   warning: "bg-yellow-500",
   danger: "bg-red-500",
   info: "bg-blue-500",
+  pending: "bg-purple-500",
 };
 
-/**
- * Small pill badge for tags, statuses and labels.
- */
+/** Small pill badge for tags, statuses and labels. */
 export function Badge({
   children,
   variant = "default",
@@ -56,10 +57,7 @@ export function Badge({
   );
 }
 
-/**
- * Status badge that derives its colors from a payment/batch status string.
- * Reuses the canonical `getStatusColor` mapping from lib/utils.
- */
+/** Status badge that derives its colors from a payment/batch status string. */
 export function StatusBadge({
   status,
   className,
