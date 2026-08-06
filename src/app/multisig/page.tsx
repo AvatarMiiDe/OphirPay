@@ -1,0 +1,361 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { Badge } from "@/components/ui/Badge";
+import { Card } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/Toast";
+import { useWallet } from "@/hooks/useFreighter";
+
+interface MultisigConfig {
+  threshold: number;
+  signers: string[];
+  enabled: boolean;
+}
+
+interface ApprovalRequest {
+  id: number;
+  proposer: string;
+  payee: string;
+  amount: string;
+  threshold_met?: boolean;
+  approvals_count?: number;
+  executed: boolean;
+}
+
+export default function MultisigPage() {
+  const toast = useToast();
+  const { wallet } = useWallet();
+  const [config, setConfig] = useState<MultisigConfig | null>(null);
+  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showPropose, setShowPropose] = useState(false);
+
+  const [formThreshold, setFormThreshold] = useState(2);
+  const [formSigners, setFormSigners] = useState("");
+  const [formEnabled, setFormEnabled] = useState(true);
+
+  const [proposePayee, setProposePayee] = useState("");
+  const [proposeAmount, setProposeAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [cfgRes, reqRes] = await Promise.all([
+        fetch("/api/multisig"),
+        fetch("/api/multisig/requests"),
+      ]);
+      if (cfgRes.ok) setConfig((await cfgRes.json()).data ?? null);
+      if (reqRes.ok) setRequests((await reqRes.json()).data ?? []);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleConfigSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/multisig", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          threshold: formThreshold,
+          signers: formSigners.split(",").map((s) => s.trim()).filter(Boolean),
+          enabled: formEnabled,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Multisig configuration updated");
+        setShowConfig(false);
+        fetchData();
+      } else {
+        toast.error("Failed to update configuration");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePropose = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/multisig/propose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payee: proposePayee,
+          amount: proposeAmount,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Payment proposed for multisig approval");
+        setShowPropose(false);
+        setProposePayee("");
+        setProposeAmount("");
+        fetchData();
+      } else {
+        toast.error("Failed to propose payment");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleApprove = async (requestId: number) => {
+    try {
+      const res = await fetch(`/api/multisig/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+      if (res.ok) {
+        toast.success("Approval submitted");
+        fetchData();
+      } else {
+        toast.error("Approval failed");
+      }
+    } catch {
+      toast.error("Network error");
+    }
+  };
+
+  const handleExecute = async (requestId: number) => {
+    try {
+      const res = await fetch(`/api/multisig/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+      if (res.ok) {
+        toast.success("Payment executed");
+        fetchData();
+      } else {
+        toast.error("Execution failed — threshold may not be met");
+      }
+    } catch {
+      toast.error("Network error");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+        <div className="grid gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const threshold = config?.threshold ?? 0;
+  const signerCount = config?.signers?.length ?? 0;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Multisig Approvals
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            N-of-M signer approval workflow for high-value payments
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowConfig(true)} variant="secondary">
+            ⚙ Configure
+          </Button>
+          <Button onClick={() => setShowPropose(true)} disabled={!config?.enabled}>
+            + Propose Payment
+          </Button>
+        </div>
+      </div>
+
+      {/* Config Summary */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {config?.enabled
+                ? `${threshold}/${signerCount} threshold`
+                : "Multisig not configured"}
+            </span>
+          </div>
+          <Badge variant={config?.enabled ? "success" : "warning"}>
+            {config?.enabled ? "Active" : "Inactive"}
+          </Badge>
+        </div>
+        {config?.enabled && config.signers.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {config.signers.map((s, i) => (
+              <code key={i} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded font-mono truncate max-w-[200px]">
+                {s.slice(0, 8)}...{s.slice(-4)}
+              </code>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Approval Requests */}
+      {requests.length === 0 ? (
+        <EmptyState
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+            </svg>
+          }
+          title="No Pending Approvals"
+          description="Propose a payment to begin the multisig approval workflow."
+          actionLabel="Propose Payment"
+        />
+      ) : (
+        <div className="space-y-3">
+          {requests.map((req) => (
+            <Card key={req.id} className="p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={req.executed ? "success" : "info"}>
+                      {req.executed ? "Executed" : "Pending"}
+                    </Badge>
+                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">
+                      ID: {req.id}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    To: <code className="text-xs">{req.payee?.slice(0, 12)}...</code>
+                  </p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {req.amount} XLM
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full flex-1 max-w-[200px]">
+                      <div
+                        className="h-2 bg-green-500 rounded-full transition-all"
+                        style={{
+                          width: `${((req.approvals_count ?? 0) / Math.max(threshold, 1)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {req.approvals_count ?? 0}/{threshold}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {!req.executed && !req.threshold_met && (
+                    <Button size="sm" onClick={() => handleApprove(req.id)}>
+                      ✓ Approve
+                    </Button>
+                  )}
+                  {!req.executed && req.threshold_met && (
+                    <Button size="sm" variant="primary" onClick={() => handleExecute(req.id)}>
+                      Execute
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Config Modal */}
+      <Modal
+        open={showConfig}
+        onClose={() => setShowConfig(false)}
+        title="Configure Multisig"
+        description="Set the threshold and authorized signers for multisig approvals."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Threshold (N of M)
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={formThreshold}
+              onChange={(e) => setFormThreshold(Number(e.target.value))}
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Signer Addresses (comma-separated)
+            </label>
+            <textarea
+              value={formSigners}
+              onChange={(e) => setFormSigners(e.target.value)}
+              rows={3}
+              placeholder="GABC..., GDEF..., GHIJ..."
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 font-mono text-xs"
+            />
+          </div>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formEnabled}
+              onChange={(e) => setFormEnabled(e.target.checked)}
+            />
+            <span className="text-sm text-gray-700 dark:text-gray-300">Enable multisig</span>
+          </label>
+          <Button onClick={handleConfigSubmit} loading={submitting} className="w-full">
+            Save Configuration
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Propose Modal */}
+      <Modal
+        open={showPropose}
+        onClose={() => setShowPropose(false)}
+        title="Propose Payment"
+        description="Create a payment that requires multisig approval."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Recipient Address
+            </label>
+            <input
+              value={proposePayee}
+              onChange={(e) => setProposePayee(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 font-mono text-xs"
+              placeholder="GABC..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Amount (XLM)
+            </label>
+            <input
+              type="number"
+              value={proposeAmount}
+              onChange={(e) => setProposeAmount(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
+              placeholder="100.00"
+            />
+          </div>
+          <Button onClick={handlePropose} loading={submitting} className="w-full">
+            Propose Payment
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
