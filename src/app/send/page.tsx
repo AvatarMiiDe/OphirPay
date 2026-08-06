@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
+import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
@@ -50,11 +51,19 @@ export default function SendPage() {
 
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
+  const [feeEstimate, setFeeEstimate] = useState<{ baseFee: string; congestion: string } | null>(null);
   const [memo, setMemo] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<AssetInfo>(XLM_ASSET);
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Fetch live fee estimate on mount
+  useEffect(() => {
+    estimateTransactionFee(1)
+      .then((fee) => setFeeEstimate({ baseFee: fee.baseFee, congestion: fee.networkCongestion }))
+      .catch(() => {});
+  }, []);
 
   // ── Validation ───────────────────────────────────────────
 
@@ -482,6 +491,20 @@ export default function SendPage() {
               {selectedAsset.code}
             </span>
           </div>
+          {feeEstimate && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <span className="text-gray-500 dark:text-gray-400">
+                Network fee: ~{feeEstimate.baseFee} stroops
+              </span>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                feeEstimate.congestion === "low" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                feeEstimate.congestion === "medium" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              }`}>
+                {feeEstimate.congestion}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Memo */}
