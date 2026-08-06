@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <WalletProvider>
         <ToastProvider>
           <OfflineBanner />
+          <InstallPrompt />
           <div className="flex min-h-screen">
             <Sidebar />
             <div className="flex-1 lg:ml-64">
