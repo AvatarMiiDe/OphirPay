@@ -82,7 +82,14 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Classified error handling** (3 types) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
 | **PostgreSQL + SQLite** (provider switching) | ✅ | ⚠️ |
-| **Full CI/CD + 68 tests** | ✅ | ⚠️ |
+| **Multisig approvals** (N-of-M signers) | ✅ | ❌ |
+| **Spending limits + escalation tiers** | ✅ | ❌ |
+| **RBAC** (Admin/Operator/Auditor roles) | ✅ | ❌ |
+| **On-chain audit log** (immutable trail) | ✅ | ❌ |
+| **Fee configuration** (per-operation bps) | ✅ | ❌ |
+| **Timelocked admin actions** (24h delay) | ✅ | ❌ |
+| **DAO governance** (propose→vote→execute) | ✅ | ❌ |
+| **Full CI/CD + 107 tests** | ✅ | ⚠️ |
 
 ---
 
@@ -471,7 +478,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | Step | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites |
+| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites + 39 contract tests |
 | Build | `next build` | Generates `.next/` + `.next/types/` |
 | TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
 
@@ -506,7 +513,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 <img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
 
 ### Test Suite
-*68 tests, 7 suites, all green*
+*107 tests (68 frontend + 35 contract), all green*
 <img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
 
 </div>
@@ -576,15 +583,22 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 68 tests | **Done** |
+| ✅ CI/CD pipeline + 107 tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
 | ✅ Webhook delivery for payment events (HMAC signed, retries) | **Done** |
 | ✅ PostgreSQL support (provider switching, migrations) | **Done** |
 | ✅ PWA / mobile app (offline support, install prompt) | **Done** |
+| ✅ Multisig approvals (N-of-M signers) | **Done** |
+| ✅ Spending limits + escalation tiers | **Done** |
+| ✅ RBAC (Admin/Operator/Auditor roles) | **Done** |
+| ✅ On-chain immutable audit log | **Done** |
+| ✅ Recurring payment scheduler (Daily/Weekly/Monthly) | **Done** |
+| ✅ Fee configuration per operation | **Done** |
+| ✅ Timelocked admin actions (24h delay) | **Done** |
+| ✅ DAO governance (propose→vote→execute) | **Done** |
 | 🔜 Mainnet deployment | Planned |
-| 🔜 Ledger hardware wallet (WebUSB/HID connector) | Planned |
 
 ---
 
