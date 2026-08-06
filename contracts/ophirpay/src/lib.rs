@@ -80,6 +80,17 @@ pub struct BatchPayment {
     pub payment_ids: Vec<u64>,
 }
 
+/// Result of a batch creation with success/failure counts.
+#[contracttype]
+#[derive(Clone)]
+pub struct BatchCreateResult {
+    pub batch_id: u64,
+    pub total_requests: u32,
+    pub successful: u32,
+    pub failed: u32,
+    pub total_amount: i128,
+}
+
 #[contracterror]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -758,8 +769,10 @@ impl OphirPayContract {
     //  BATCH PAYMENTS — Record multiple payments atomically
     // ═══════════════════════════════════════════════════════════
 
-    /// Record a batch of payments in a single transaction.
-    /// Does NOT move tokens — token transfers should happen before calling this.
+    /// Record a batch of payments with partial failure support.
+    /// Valid entries are processed; invalid (zero amount, out-of-range index)
+    /// entries are skipped and counted as failures. The batch succeeds as
+    /// long as at least one payment was recorded.
     pub fn create_batch(
         env: Env,
         creator: Address,
@@ -767,7 +780,7 @@ impl OphirPayContract {
         amounts: Vec<i128>,
         asset: Address,
         tx_hash: String,
-    ) -> Result<u64, PaymentError> {
+    ) -> Result<BatchCreateResult, PaymentError> {
         creator.require_auth();
         require_not_paused(&env)?;
 
@@ -778,18 +791,24 @@ impl OphirPayContract {
         if len > 100 {
             return Err(PaymentError::BatchTooLarge);
         }
-        if amounts.len() != len {
-            return Err(PaymentError::InvalidAmount);
-        }
 
         let mut total_amount: i128 = 0;
         let mut pay_count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         let mut payment_ids: Vec<u64> = Vec::new(&env);
         let mut actual_recipients: u32 = 0;
+        let successful: u32;
+        let failed: u32;
 
+        // Two-pass: collect valid entries, then execute
         for i in 0..len {
-            let amount = amounts.get(i).unwrap_or(0);
-            let payee = payees.get(i).unwrap();
+            let amount = if i < amounts.len() as u32 {
+                amounts.get(i).unwrap_or(0)
+            } else {
+                0 // out-of-range → skip
+            };
+            let payee = payees.get(i);
+
+            // Skip invalid entries (zero/negative amount or missing payee)
             if amount <= 0 {
                 continue;
             }
@@ -816,6 +835,14 @@ impl OphirPayContract {
             emit_payment_event(&env, &creator, &payee, &amount);
         }
 
+        successful = actual_recipients;
+        failed = len - successful;
+
+        // Fail only if zero payments were recorded
+        if successful == 0 {
+            return Err(PaymentError::BatchEmpty);
+        }
+
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -838,7 +865,13 @@ impl OphirPayContract {
         env.storage().instance().set(&BATCH_COUNT, &batch_count);
         env.storage().instance().extend_ttl(5000, 50000);
 
-        Ok(batch_count)
+        Ok(BatchCreateResult {
+            batch_id: batch_count,
+            total_requests: len,
+            successful,
+            failed,
+            total_amount,
+        })
     }
 
     /// Get a batch by ID
@@ -1228,16 +1261,18 @@ mod tests {
         let payees = vec![&env, p1.clone(), p2.clone(), p3.clone()];
         let amounts = vec![&env, 100i128, 200i128, 300i128];
 
-        let batch_id = client.create_batch(
+        let result = client.create_batch(
             &creator,
             &payees,
             &amounts,
             &sac,
             &String::from_str(&env, "batch_tx_hash"),
         );
-        assert_eq!(batch_id, 1);
+        assert_eq!(result.batch_id, 1);
         assert_eq!(client.get_batch_count(), 1);
         assert_eq!(client.get_payment_count(), 3);
+        assert_eq!(result.successful, 3);
+        assert_eq!(result.failed, 0);
 
         let batch = client.get_batch(&1);
         assert_eq!(batch.total_amount, 600);
