@@ -701,6 +701,7 @@ impl OphirPayContract {
         let mut total_amount: i128 = 0;
         let mut pay_count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         let mut payment_ids: Vec<u64> = Vec::new(&env);
+        let mut actual_recipients: u32 = 0;
 
         for i in 0..len {
             let amount = amounts.get(i).unwrap_or(0);
@@ -710,6 +711,7 @@ impl OphirPayContract {
             }
             total_amount += amount;
             pay_count += 1;
+            actual_recipients += 1;
             payment_ids.push_back(pay_count);
 
             let payment = Payment {
@@ -739,7 +741,7 @@ impl OphirPayContract {
         let batch = BatchPayment {
             id: batch_count,
             creator,
-            total_recipients: len as u32,
+            total_recipients: actual_recipients,
             total_amount,
             asset,
             timestamp: env.ledger().timestamp(),
