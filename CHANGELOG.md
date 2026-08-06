@@ -2,6 +2,76 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased] — 2026-08-06
+
+### Added — Smart Contracts
+- **Structured refund system**: `RefundReasonCode` enum (6 variant codes), `RefundStatus` lifecycle (Requested→Approved→Rejected→Processed), `request_refund`/`approve_refund`/`process_refund` with SAC token transfers, `get_reason_code_analytics()` for on-chain analytics
+- **Cross-contract orchestration**: Emitter contract `pause`/`unpause`/`is_paused`, OphirPay `set_emitter`/`get_emitter`, `emergency_pause_all()` and `emergency_unpause_all()` atomically pause both contracts via `env.invoke_contract()`
+- **On-chain notification hooks**: `NotificationHook` struct, `register_hook`/`unregister_hook`, `get_hooks_by_event` (off-chain relayer queryable), `get_subscriber_hooks`, per-subscriber indexing
+- **Policy versioning**: `FeeConfigVersion` and `MultisigVersion` immutable snapshots, `get_fee_config_history`/`get_multisig_config_history`, `get_fee_config_at_version` for rollback support
+- **Two-step admin rotation**: 24h timelock on ownership transfer, `accept_ownership` by new owner, `cancel_ownership_transfer` by current owner, applied to both OphirPay and Emitter
+- **Atomic check-and-spend**: `SpendingLimit.expires_at` field, `atomic_spend()` validates limit+expiry then records payment in one Soroban call, error code 46: `SpendingLimitExpired`
+- **Multisig approvals**: N-of-M signer configuration, payment proposal → approve → execute workflow, threshold validation
+- **Spending limits + escalation**: Per-user daily/monthly caps, auto-reset, escalation tiers (small/medium/large), `SpendCheckResult` enum
+- **Role-based access control**: Admin/Operator/Auditor roles, `grant_role`/`revoke_role`, `require_role` guard on all writes
+- **On-chain audit log**: `AuditEntry` struct, `get_audit_log_range` with pagination, immutable trail for every state change
+- **Recurring payment scheduler**: `RecurringPayment` with Daily/Weekly/Monthly schedules, auto-execution after `next_execution`, cancel with remaining payments tracking
+- **Fee configuration**: `FeeConfig` per-operation basis points, `calculate_fee`, owner-configurable caps (max 10%)
+- **Timelocked admin actions**: 24h delay on sensitive ops, `propose_timelocked_action` → `execute_timelocked_action` → `cancel_timelocked_action`
+- **DAO governance**: `GovernanceConfig`, proposal creation with min deposit, yes/no voting, quorum enforcement, `execute_proposal`
+- **Emergency withdraw**: Owner can rescue accidentally sent tokens without affecting active escrows/streams
+- **50 error codes**: Granular typed errors from `NotInitialized=1` to `RefundWindowExpired=50`
+
+### Added — Frontend
+- **15-page UI**: Dashboard, Send, Payments, Batches, Requests, Webhooks, Analytics, Events, Contracts, Recurring, Multisig, Governance, Audit Log, Refunds, Notification Hooks
+- **Refunds page**: Request→Approve→Process lifecycle, reason code analytics bar chart, status badges, Freighter signing
+- **Notification hooks page**: Register/deactivate on-chain hooks, 9 event type selector, active/inactive badges
+- **Demo mode**: `NEXT_PUBLIC_DEMO_MODE=true` enables simulated TXs, demo wallet with 10K XLM, pre-generated data — no real funds needed
+- **Fee estimator**: Live network fee display + congestion badge (low/medium/high) on send page
+- **Polished SSE feed**: Auto-scroll, scroll-aware pause, Explorer link badges, connection pulse indicator
+- **Mobile UX**: 48px touch targets, `inputMode=decimal`, safe-area insets, swipe-to-dismiss, pull-to-refresh, bottom-sheet modals
+
+### Added — Backend & API
+- **API key authentication**: DB-backed key validation with SHA-256 hashing, `withApiAuth` wrapper, protected `/api/keys` and `/api/webhooks`
+- **Prisma models**: `Refund`, `NotificationHook` with indexes on userId/status/eventType, reverse relations on `User`
+- **Webhook relayer**: `scripts/relayer.ts` — dual-source polling (Prisma + Soroban audit log), event matching, HMAC-SHA256 delivery
+- **Prometheus `/api/metrics`**: 8 counters (HTTP requests, payments created/failed, batches, webhooks, DB latency)
+- **SSE audit log streaming**: `/api/audit-log/sse` with Soroban contract polling every 15s, new entry diff and push
+
+### Added — DevOps & CI
+- **15-job CI/CD pipeline**: Lint, TypeCheck, Unit Tests, Coverage, Contract WASM, Next.js Build, E2E Chromium, E2E Firefox, Prisma Validate, Docker Build, K8s Validate, Helm Lint, Secret Scan (Gitleaks), npm Audit, PR Auto-Label
+- **Kubernetes manifests**: Namespace, Deployment (2 replicas, RollingUpdate, resource limits, probes), Service, Ingress (TLS), HPA, PDB, NetworkPolicy, ConfigMap, Secret
+- **Helm chart**: `Chart.yaml`, `values.yaml` (100+ values), 7 templates, Prometheus scrape annotations
+- **Disaster recovery**: Nightly DB backup to S3 (30d retention), restore drill script with row-count assertions
+- **Grafana dashboard**: 6-panel JSON (Platform Health, HTTP Rate, Payment Volume, Webhook Health, DB Latency, Batches)
+- **Mainnet deployment guide**: 10-section doc covering config, contract deployment, DB setup, Helm, monitoring, DNS, rollback
+- **One-click demo seed**: `scripts/demo-seed.sh` provisions DB, creates `.env.local` with demo mode, starts dev server in <60s
+
+### Added — Testing
+- **46 Rust contract tests**: Refund lifecycle (5), emergency_pause_all (2), notification hooks (2), policy versioning (2), two-step ownership (3), plus existing tests for payments, escrows, streams, batches, multisig, spending limits, RBAC, audit log, recurring, fees, timelock, governance
+- **15 Playwright E2E tests**: Dashboard smoke, all 13 pages navigation, multisig modal interactions, governance proposal forms
+- **Demo mode tests**: Simulated TXs, demo wallet, pre-generated data validation
+
+### Added — Community Infrastructure
+- **Contributor Covenant Code of Conduct v2.1**
+- **Issue templates**: Bug report (environment fields, component checklist), Feature request (affected area checklist)
+- **SUPPORT.md**: Where to get help, security disclosures, community links
+- **FUNDING.yml**: GitHub Sponsors + custom donation link
+- **Pull request template**: 8-type checklist, verification steps
+- **CODEOWNERS**: 50+ path rules across 6 teams (core-contracts, frontend, backend, devops, docs, security)
+- **PR auto-labeler**: 13 label rules + branch-name auto-detection
+- **Dependabot**: npm (weekly), cargo (weekly for both contracts), GitHub Actions (monthly)
+- **Gitleaks secret scanning**: Full-history scan on every PR
+
+### Changed
+- Contract error codes expanded from 21 → 50
+- Contract test count: 33 → 46
+- Frontend test count: 68 across 7 suites
+- Total test count: 114 (68 + 46)
+- `transfer_ownership` now two-step with 24h timelock (breaking change)
+- `set_fee_config` and `set_multisig_config` now archive immutable version history
+- Sidebar expanded to 13 nav items with keyboard shortcuts (Ctrl+1..13)
+
 ## [0.1.0] — 2026-08-05
 
 ### Added
