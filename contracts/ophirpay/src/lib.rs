@@ -148,7 +148,7 @@ pub struct ApprovalRequest {
     pub created_at: u64,
 }
 
-/// Per-user spending limit configuration.
+/// Per-user spending limit configuration with optional expiry.
 #[contracttype]
 #[derive(Clone)]
 pub struct SpendingLimit {
@@ -159,6 +159,9 @@ pub struct SpendingLimit {
     pub last_reset_day: u64,
     pub last_reset_month: u64,
     pub is_active: bool,
+    /// Ledger timestamp when this limit self-destructs (0 = never).
+    /// After expiry, all spends are rejected. Useful for temporary vendor access.
+    pub expires_at: u64,
 }
 
 /// Escalation rules for spending enforcement.
@@ -331,6 +334,7 @@ pub enum PaymentError {
     QuorumNotMet = 43,
     ProposalDefeated = 44,
     DepositTooLow = 45,
+    SpendingLimitExpired = 46,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -1139,6 +1143,7 @@ impl OphirPayContract {
         user: Address,
         daily_limit: i128,
         monthly_limit: i128,
+        expires_at: u64,
         is_active: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
@@ -1157,6 +1162,7 @@ impl OphirPayContract {
             current_monthly_spend: 0,
             last_reset_day: env.ledger().timestamp(),
             last_reset_month: env.ledger().timestamp(),
+            expires_at,
             is_active,
         };
         let key = (SPEND_LIMIT_KEY, user);
@@ -1260,6 +1266,90 @@ impl OphirPayContract {
         }
 
         SpendCheckResult::Approved
+    }
+
+    /// Atomic check-and-spend: validate spending limit, then record payment.
+    /// If the limit check fails or the allowance is expired, the entire
+    /// call reverts — no partial state. Inspired by AgentPay's DelegationManager.
+    pub fn atomic_spend(
+        env: Env,
+        payer: Address,
+        payee: Address,
+        amount: i128,
+        asset: Address,
+        tx_hash: String,
+        metadata: String,
+    ) -> Result<u64, PaymentError> {
+        payer.require_auth();
+        require_not_paused(&env)?;
+        if amount <= 0 {
+            return Err(PaymentError::InvalidAmount);
+        }
+
+        // Check spending limits with expiry enforcement
+        let key = (SPEND_LIMIT_KEY, payer.clone());
+        if let Some(mut limit) = env.storage().persistent().get::<SpendingLimit>(&key) {
+            if !limit.is_active {
+                return Err(PaymentError::SpendingLimitExpired);
+            }
+
+            // Check expiry
+            let now = env.ledger().timestamp();
+            if limit.expires_at > 0 && now >= limit.expires_at {
+                limit.is_active = false;
+                env.storage().persistent().set(&key, &limit);
+                env.storage().persistent().extend_ttl(&key, 5000, 50000);
+                return Err(PaymentError::SpendingLimitExpired);
+            }
+
+            let day_seconds: u64 = 86400;
+            let month_seconds: u64 = 30 * 86400;
+            if now.saturating_sub(limit.last_reset_day) >= day_seconds {
+                limit.current_daily_spend = 0;
+                limit.last_reset_day = now;
+            }
+            if now.saturating_sub(limit.last_reset_month) >= month_seconds {
+                limit.current_monthly_spend = 0;
+                limit.last_reset_month = now;
+            }
+            if limit.current_daily_spend.saturating_add(amount) > limit.daily_limit {
+                return Err(PaymentError::SpendingLimitExpired);
+            }
+            if limit.current_monthly_spend.saturating_add(amount) > limit.monthly_limit {
+                return Err(PaymentError::SpendingLimitExpired);
+            }
+            limit.current_daily_spend = limit.current_daily_spend.saturating_add(amount);
+            limit.current_monthly_spend = limit.current_monthly_spend.saturating_add(amount);
+            env.storage().persistent().set(&key, &limit);
+            env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        }
+
+        // Record payment atomically (only after limit check passes)
+        let mut count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
+        count = count.saturating_add(1);
+
+        let payment = Payment {
+            id: count,
+            payer: payer.clone(),
+            payee: payee.clone(),
+            amount,
+            asset,
+            tx_hash: tx_hash.clone(),
+            timestamp: env.ledger().timestamp(),
+            metadata,
+            cancelled: false,
+        };
+
+        env.storage().persistent().set(&count, &payment);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().instance().set(&PAYMENT_COUNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        emit_payment_event(&env, &payer, &payee, &amount);
+        inc_stat_u64(&env, |s| s.total_payments_recorded, |s, v| s.total_payments_recorded = v);
+        record_audit(&env, "atomic_spend", &payer, count, "Atomic check-and-spend payment");
+
+        Ok(count)
     }
 
     // ═══════════════════════════════════════════════════════════

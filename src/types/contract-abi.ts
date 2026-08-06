@@ -133,6 +133,7 @@ export interface SpendingLimit {
   last_reset_day: number;
   last_reset_month: number;
   is_active: boolean;
+  expires_at: number;
 }
 
 export interface EscalationRules {
@@ -284,6 +285,7 @@ export enum PaymentErrorCode {
   QuorumNotMet = 43,
   ProposalDefeated = 44,
   DepositTooLow = 45,
+  SpendingLimitExpired = 46,
 }
 
 export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
@@ -332,4 +334,6 @@ export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
   43: "Quorum not met",
   44: "Proposal was defeated (no > yes)",
   45: "Deposit too low to create a proposal",
+  46: "Spending limit expired or exceeded — atomic check-and-spend rejected",
+  // placeholder to create a proposal",
 };
