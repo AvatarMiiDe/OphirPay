@@ -16,7 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "ci": "npm run typecheck && npm run lint -- --max-warnings 0 || true && npm test && npm run build"
+    "ci": "npm run typecheck && npm run lint -- --max-warnings 0 || true && npm test && npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
