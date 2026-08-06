@@ -16,6 +16,8 @@ const VERSION: Symbol = symbol_short!("VERSION");
 const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
 const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 const STATS: Symbol = symbol_short!("STATS");
+const MULTISIG_CONFIG: Symbol = symbol_short!("MULTI_CF");
+const APPROVAL_COUNT: Symbol = symbol_short!("APPR_CNT");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -111,6 +113,30 @@ pub struct ContractStats {
     pub total_amount_batched: i128,
 }
 
+/// Multisig configuration for high-value payment approvals.
+#[contracttype]
+#[derive(Clone)]
+pub struct MultisigConfig {
+    pub threshold: u32,
+    pub signers: Vec<Address>,
+    pub enabled: bool,
+}
+
+/// A payment proposal awaiting multisig approval.
+#[contracttype]
+#[derive(Clone)]
+pub struct ApprovalRequest {
+    pub id: u64,
+    pub proposer: Address,
+    pub payee: Address,
+    pub amount: i128,
+    pub asset: Address,
+    pub tx_hash: String,
+    pub approvals: Vec<Address>,
+    pub executed: bool,
+    pub created_at: u64,
+}
+
 #[contracterror]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -136,6 +162,11 @@ pub enum PaymentError {
     NoTokensToWithdraw = 19,
     UpgradeNotProposed = 20,
     UpgradeTimelockActive = 21,
+    MultisigNotConfigured = 22,
+    NotASigner = 23,
+    AlreadyApproved = 24,
+    ThresholdNotMet = 25,
+    AlreadyExecuted = 26,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -286,6 +317,209 @@ impl OphirPayContract {
                 total_amount_streamed: 0,
                 total_amount_batched: 0,
             })
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  MULTISIG APPROVALS — N-of-M signers for large payments
+    // ═══════════════════════════════════════════════════════════
+
+    /// Configure multisig (owner only). Set threshold and signer list.
+    pub fn set_multisig_config(
+        env: Env,
+        caller: Address,
+        threshold: u32,
+        signers: Vec<Address>,
+        enabled: bool,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        if threshold == 0 || threshold > signers.len() as u32 {
+            return Err(PaymentError::InvalidAmount);
+        }
+        let config = MultisigConfig { threshold, signers, enabled };
+        env.storage().instance().set(&MULTISIG_CONFIG, &config);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Get current multisig config.
+    pub fn get_multisig_config(env: Env) -> Option<MultisigConfig> {
+        env.storage().instance().get(&MULTISIG_CONFIG)
+    }
+
+    /// Propose a payment that requires multisig approval.
+    pub fn propose_payment(
+        env: Env,
+        proposer: Address,
+        payee: Address,
+        amount: i128,
+        asset: Address,
+        tx_hash: String,
+    ) -> Result<u64, PaymentError> {
+        proposer.require_auth();
+        require_not_paused(&env)?;
+
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&MULTISIG_CONFIG)
+            .ok_or(PaymentError::MultisigNotConfigured)?;
+        if !config.enabled {
+            return Err(PaymentError::MultisigNotConfigured);
+        }
+
+        let mut count: u64 = env.storage().instance().get(&APPROVAL_COUNT).unwrap_or(0);
+        count += 1;
+
+        let approvals: Vec<Address> = Vec::new(&env);
+        let request = ApprovalRequest {
+            id: count,
+            proposer,
+            payee,
+            amount,
+            asset,
+            tx_hash,
+            approvals,
+            executed: false,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&count, &request);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().instance().set(&APPROVAL_COUNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "approval"), Symbol::new(&env, "proposed")),
+            count,
+        );
+
+        Ok(count)
+    }
+
+    /// Signer approves a pending payment proposal.
+    pub fn approve_payment(
+        env: Env,
+        signer: Address,
+        request_id: u64,
+    ) -> Result<bool, PaymentError> {
+        signer.require_auth();
+        require_not_paused(&env)?;
+
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&MULTISIG_CONFIG)
+            .ok_or(PaymentError::MultisigNotConfigured)?;
+
+        // Verify signer is in the list
+        let is_signer = config.signers.iter().any(|s| *s == signer);
+        if !is_signer {
+            return Err(PaymentError::NotASigner);
+        }
+
+        let mut request: ApprovalRequest = env
+            .storage()
+            .persistent()
+            .get(&request_id)
+            .ok_or(PaymentError::PaymentNotFound)?;
+
+        if request.executed {
+            return Err(PaymentError::AlreadyExecuted);
+        }
+
+        // Check for duplicate approval
+        if request.approvals.iter().any(|a| *a == signer) {
+            return Err(PaymentError::AlreadyApproved);
+        }
+
+        request.approvals.push_back(signer.clone());
+        env.storage().persistent().set(&request_id, &request);
+        env.storage().persistent().extend_ttl(&request_id, 5000, 50000);
+
+        let threshold_met = request.approvals.len() >= config.threshold as u32;
+
+        env.events().publish(
+            (Symbol::new(&env, "approval"), Symbol::new(&env, "approved")),
+            (request_id, signer),
+        );
+
+        Ok(threshold_met)
+    }
+
+    /// Execute a fully-approved payment (any signer can trigger).
+    pub fn execute_approved_payment(
+        env: Env,
+        caller: Address,
+        request_id: u64,
+    ) -> Result<u64, PaymentError> {
+        caller.require_auth();
+        require_not_paused(&env)?;
+
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&MULTISIG_CONFIG)
+            .ok_or(PaymentError::MultisigNotConfigured)?;
+
+        let mut request: ApprovalRequest = env
+            .storage()
+            .persistent()
+            .get(&request_id)
+            .ok_or(PaymentError::PaymentNotFound)?;
+
+        if request.executed {
+            return Err(PaymentError::AlreadyExecuted);
+        }
+        if (request.approvals.len() as u32) < config.threshold {
+            return Err(PaymentError::ThresholdNotMet);
+        }
+
+        // Record the payment
+        let mut pay_count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
+        pay_count += 1;
+
+        let payment = Payment {
+            id: pay_count,
+            payer: request.proposer.clone(),
+            payee: request.payee.clone(),
+            amount: request.amount,
+            asset: request.asset.clone(),
+            tx_hash: request.tx_hash.clone(),
+            timestamp: env.ledger().timestamp(),
+            metadata: String::from_str(&env, "multisig"),
+            cancelled: false,
+        };
+
+        env.storage().persistent().set(&pay_count, &payment);
+        env.storage().persistent().extend_ttl(&pay_count, 5000, 50000);
+        env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        request.executed = true;
+        env.storage().persistent().set(&request_id, &request);
+        env.storage().persistent().extend_ttl(&request_id, 5000, 50000);
+
+        inc_stat_u64(&env, |s| s.total_payments_recorded, |s, v| s.total_payments_recorded = v);
+
+        env.events().publish(
+            (Symbol::new(&env, "approval"), Symbol::new(&env, "executed")),
+            (request_id, pay_count),
+        );
+
+        Ok(pay_count)
+    }
+
+    /// Get an approval request by ID.
+    pub fn get_approval_request(env: Env, request_id: u64) -> Option<ApprovalRequest> {
+        env.storage().persistent().get(&request_id)
     }
 
     /// Pause all state-changing operations (owner only).
