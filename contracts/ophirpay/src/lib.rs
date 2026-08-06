@@ -4004,4 +4004,350 @@ mod tests {
         let passed = client.execute_proposal(&1);
         assert!(passed);
     }
+    // ── Refund Tests ───────────────────────────────────────
+
+    #[test]
+    fn test_request_refund() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let pid = client.record_payment(
+            &payer,
+            &payee,
+            &1000i128,
+            &Address::generate(&env),
+            &String::from_str(&env, "tx_refund_test"),
+            &String::from_str(&env, "test"),
+        );
+
+        let rid = client.request_refund(
+            &payer,
+            &pid,
+            &1000i128,
+            &Address::generate(&env),
+            &String::from_str(&env, "Defective product"),
+            &RefundReasonCode::ProductDefect,
+        );
+        assert_eq!(rid, 1);
+        assert_eq!(client.get_refund_count(), 1);
+
+        let refund = client.get_refund(&1);
+        assert_eq!(refund.unwrap().reason_code, RefundReasonCode::ProductDefect);
+    }
+
+    #[test]
+    fn test_approve_and_process_refund() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        sac_client.mint(&owner, &10_000i128);
+
+        let _ = client.init(&owner);
+        let pid = client.record_payment(
+            &payer,
+            &payee,
+            &500i128,
+            &sac,
+            &String::from_str(&env, "tx_approve"),
+            &String::from_str(&env, "test"),
+        );
+
+        let rid = client.request_refund(
+            &payer,
+            &pid,
+            &500i128,
+            &sac,
+            &String::from_str(&env, "Never received"),
+            &RefundReasonCode::NonDelivery,
+        );
+
+        // Approve as owner
+        client.approve_refund(&owner, &rid);
+
+        let refund = client.get_refund(&rid).unwrap();
+        assert!(matches!(refund.status, RefundStatus::Approved));
+
+        // Transfer tokens to contract so process_refund can send them back
+        let contract_addr = env.current_contract_address();
+        sac_client.transfer(&owner, &contract_addr, &500i128);
+
+        // Process refund
+        client.process_refund(&rid);
+
+        let refund = client.get_refund(&rid).unwrap();
+        assert!(matches!(refund.status, RefundStatus::Processed));
+    }
+
+    #[test]
+    fn test_refund_not_found() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let result = client.get_refund(&999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_reason_code_analytics() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let pid = client.record_payment(
+            &payer,
+            &payee,
+            &100i128,
+            &Address::generate(&env),
+            &String::from_str(&env, "tx_analytics"),
+            &String::from_str(&env, "test"),
+        );
+
+        client.request_refund(
+            &payer,
+            &pid,
+            &100i128,
+            &Address::generate(&env),
+            &String::from_str(&env, "r1"),
+            &RefundReasonCode::DuplicateCharge,
+        );
+
+        let analytics = client.get_reason_code_analytics();
+        // 6 buckets (ProductDefect..Other), one should have 1
+        let mut found = false;
+        for (code, count) in analytics.iter() {
+            if count >= 1 {
+                found = true;
+            }
+        }
+        assert!(found);
+    }
+
+    // ── Orchestration Tests ────────────────────────────────
+
+    #[test]
+    fn test_emergency_pause_all() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+
+        // Pause all (even without emitter linked, pauses OphirPay)
+        client.emergency_pause_all(&owner);
+        assert!(client.is_paused());
+
+        // Unpause all
+        client.emergency_unpause_all(&owner);
+        assert!(!client.is_paused());
+    }
+
+    #[test]
+    fn test_set_and_get_emitter() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let emitter = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.set_emitter(&owner, &emitter);
+
+        let stored = client.get_emitter();
+        assert_eq!(stored.unwrap(), emitter);
+    }
+
+    // ── Notification Hook Tests ────────────────────────────
+
+    #[test]
+    fn test_register_and_unregister_hook() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let subscriber = Address::generate(&env);
+
+        let _ = client.init(&owner);
+
+        let hid = client.register_hook(
+            &subscriber,
+            &String::from_str(&env, "payment_recorded"),
+            &String::from_str(&env, "https://example.com/webhook"),
+        );
+        assert_eq!(hid, 1);
+        assert_eq!(client.get_hook_count(), 1);
+
+        // Get hooks by event type
+        let hooks = client.get_hooks_by_event(&String::from_str(&env, "payment_recorded"));
+        assert_eq!(hooks.len(), 1);
+
+        // Get subscriber hooks
+        let sub_hooks = client.get_subscriber_hooks(&subscriber);
+        assert_eq!(sub_hooks.len(), 1);
+        assert!(sub_hooks.get(0).unwrap().active);
+
+        // Unregister
+        client.unregister_hook(&subscriber, &1);
+
+        let sub_hooks = client.get_subscriber_hooks(&subscriber);
+        assert!(!sub_hooks.get(0).unwrap().active);
+    }
+
+    #[test]
+    fn test_get_hooks_by_event_empty() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let hooks = client.get_hooks_by_event(&String::from_str(&env, "nonexistent"));
+        assert_eq!(hooks.len(), 0);
+    }
+
+    // ── Policy Versioning Tests ────────────────────────────
+
+    #[test]
+    fn test_fee_config_versioning() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+
+        // Set config twice
+        client.set_fee_config(&owner, &100u32, &200u32, &300u32, &10i128, &1i128, &true);
+        client.set_fee_config(&owner, &150u32, &250u32, &350u32, &20i128, &2i128, &true);
+
+        // Check current config reflects latest
+        let current = client.get_fee_config().unwrap();
+        assert_eq!(current.payment_fee_bps, 150);
+
+        // Check version history
+        let history = client.get_fee_config_history();
+        assert_eq!(history.len(), 2);
+
+        // Check specific version
+        let v1 = client.get_fee_config_at_version(&1);
+        assert_eq!(v1.unwrap().config.payment_fee_bps, 100);
+    }
+
+    #[test]
+    fn test_multisig_config_versioning() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let s1 = Address::generate(&env);
+        let s2 = Address::generate(&env);
+        let s3 = Address::generate(&env);
+
+        let _ = client.init(&owner);
+
+        let signers_v1 = vec![&env, s1.clone(), s2.clone()];
+        client.set_multisig_config(&owner, &2u32, &signers_v1, &true);
+
+        let signers_v2 = vec![&env, s1.clone(), s2.clone(), s3.clone()];
+        client.set_multisig_config(&owner, &3u32, &signers_v2, &true);
+
+        let history = client.get_multisig_config_history();
+        assert_eq!(history.len(), 2);
+    }
+
+    // ── Two-Step Ownership Tests ───────────────────────────
+
+    #[test]
+    fn test_two_step_ownership_transfer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+
+        let now = env.ledger().timestamp();
+        let _ = client.init(&owner);
+
+        // Propose transfer
+        client.transfer_ownership(&owner, &new_owner);
+
+        // Check pending owner
+        let pending = client.get_pending_owner();
+        assert!(pending.is_some());
+
+        // Cannot accept before timelock
+        // (skip — this panics, test separately)
+
+        // Advance past 24h
+        env.ledger().set_timestamp(now + 86401);
+
+        // Accept
+        client.accept_ownership(&new_owner);
+
+        // Verify
+        assert_eq!(client.get_owner(), new_owner);
+        assert!(client.get_pending_owner().is_none());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_accept_ownership_before_timelock_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.transfer_ownership(&owner, &new_owner);
+        // Should panic — timelock hasn't elapsed
+        client.accept_ownership(&new_owner);
+    }
+
+    #[test]
+    fn test_cancel_ownership_transfer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.transfer_ownership(&owner, &new_owner);
+        assert!(client.get_pending_owner().is_some());
+
+        client.cancel_ownership_transfer(&owner);
+        assert!(client.get_pending_owner().is_none());
+    }
+
 }
