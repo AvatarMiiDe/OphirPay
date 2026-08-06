@@ -89,7 +89,12 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Fee configuration** (per-operation bps) | ✅ | ❌ |
 | **Timelocked admin actions** (24h delay) | ✅ | ❌ |
 | **DAO governance** (propose→vote→execute) | ✅ | ❌ |
-| **Full CI/CD + 107 tests** | ✅ | ⚠️ |
+| **Structured refund system** (6 reason codes, analytics) | ✅ | ❌ |
+| **On-chain notification hooks** (subscriber-indexed) | ✅ | ❌ |
+| **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
+| **Policy versioning** (immutable config history) | ✅ | ❌ |
+| **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
+| **Full CI/CD + 114 tests** | ✅ | ⚠️ |
 
 ---
 
@@ -478,7 +483,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | Step | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites + 39 contract tests |
+| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites + 46 contract tests |
 | Build | `next build` | Generates `.next/` + `.next/types/` |
 | TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
 
@@ -513,7 +518,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 <img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
 
 ### Test Suite
-*107 tests (68 frontend + 35 contract), all green*
+*114 tests (68 frontend + 46 contract), all green*
 <img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
 
 </div>
@@ -583,7 +588,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 107 tests | **Done** |
+| ✅ CI/CD pipeline + 114 tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
@@ -598,6 +603,11 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Fee configuration per operation | **Done** |
 | ✅ Timelocked admin actions (24h delay) | **Done** |
 | ✅ DAO governance (propose→vote→execute) | **Done** |
+| ✅ Structured refund system (6 reason codes, analytics) | **Done** |
+| ✅ On-chain notification hooks (subscriber-indexed) | **Done** |
+| ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
+| ✅ Policy versioning (immutable config history) | **Done** |
+| ✅ Two-step admin rotation (24h timelock) | **Done** |
 | 🔜 Mainnet deployment | Planned |
 
 ---
