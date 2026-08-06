@@ -2,6 +2,36 @@
   "name": "ophirpay",
   "version": "0.1.0",
   "private": true,
+  "description": "Open-source payment orchestration layer for Stellar — smart contracts, webhooks, batch payments, refunds, multisig, governance, and real-time event streaming",
+  "homepage": "https://ophirpay.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OphirPay/OphirPay"
+  },
+  "bugs": {
+    "url": "https://github.com/OphirPay/OphirPay/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "stellar",
+    "soroban",
+    "payments",
+    "blockchain",
+    "web3",
+    "crypto",
+    "smart-contracts",
+    "batch-payments",
+    "escrow",
+    "payment-streaming",
+    "multisig",
+    "governance",
+    "webhooks",
+    "refunds",
+    "open-source",
+    "tooling",
+    "fintech",
+    "defi"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
