@@ -17,6 +17,9 @@
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
+    <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
+      <img src="https://img.shields.io/badge/CI%20jobs-15-blue.svg?logo=githubactions" alt="15 CI Jobs" />
+    </a>
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-114%20passed-brightgreen.svg" alt="114 Tests Passing" />
     </a>
@@ -35,7 +38,28 @@
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
     </a>
-    <a href="#">
+  </p>
+
+  <p>
+    <sub>
+      <b>15 CI checks on every PR:</b>
+      <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
+      <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
+      <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
+      <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
+      <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
+      <img src="https://img.shields.io/badge/build-Next.js-black.svg?logo=nextdotjs" />
+      <img src="https://img.shields.io/badge/e2e-Chromium-4285F4.svg?logo=googlechrome" />
+      <img src="https://img.shields.io/badge/e2e-Firefox-FF7139.svg?logo=firefox" />
+      <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
+      <img src="https://img.shields.io/badge/container-Docker-2496ED.svg?logo=docker" />
+      <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
+      <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
+      <img src="https://img.shields.io/badge/secrets-Gitleaks-FFA500.svg?logo=github" />
+      <img src="https://img.shields.io/badge/audit-npm-CB3837.svg?logo=npm" />
+      <img src="https://img.shields.io/badge/labels-auto-lightgrey.svg?logo=github" />
+    </sub>
+  </p>
       <img src="https://img.shields.io/badge/version-0.1.0-orange.svg" alt="v0.1.0" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay">
