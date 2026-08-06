@@ -121,6 +121,26 @@ fn emit_stream_event(env: &Env, creator: &Address, recipient: &Address, amount: 
     );
 }
 
+/// Calculate linearly vested amount with overflow protection.
+fn compute_vested(total_amount: i128, start_time: u64, end_time: u64, now: u64) -> i128 {
+    if now >= end_time {
+        return total_amount;
+    }
+    if now <= start_time {
+        return 0;
+    }
+    let elapsed = (now - start_time) as i128;
+    let total_duration = (end_time - start_time) as i128;
+    if total_duration == 0 {
+        return total_amount;
+    }
+    // Checked multiply to prevent overflow; clamp to total_amount on overflow
+    total_amount
+        .checked_mul(elapsed)
+        .map(|product| product / total_duration)
+        .unwrap_or(total_amount)
+}
+
 // ── Contract ───────────────────────────────────────────────────
 
 #[contract]
@@ -492,14 +512,13 @@ impl OphirPayContract {
             return Err(PaymentError::StreamNotStarted);
         }
 
-        // Calculate vested amount linearly
-        let vested: i128 = if now >= stream.end_time {
-            stream.total_amount
-        } else {
-            let elapsed = (now - stream.start_time) as i128;
-            let total_duration = (stream.end_time - stream.start_time) as i128;
-            (stream.total_amount * elapsed) / total_duration
-        };
+        // Calculate vested amount linearly with overflow protection
+        let vested = compute_vested(
+            stream.total_amount,
+            stream.start_time,
+            stream.end_time,
+            now,
+        );
 
         let claimable = vested - stream.claimed_amount;
         if claimable <= 0 {
@@ -540,15 +559,12 @@ impl OphirPayContract {
         }
 
         let now = env.ledger().timestamp();
-        let vested: i128 = if now >= stream.end_time {
-            stream.total_amount
-        } else if now <= stream.start_time {
-            0
-        } else {
-            let elapsed = (now - stream.start_time) as i128;
-            let total_duration = (stream.end_time - stream.start_time) as i128;
-            (stream.total_amount * elapsed) / total_duration
-        };
+        let vested = compute_vested(
+            stream.total_amount,
+            stream.start_time,
+            stream.end_time,
+            now,
+        );
 
         let unvested = stream.total_amount - vested - stream.claimed_amount;
         let already_claimed = stream.claimed_amount;
