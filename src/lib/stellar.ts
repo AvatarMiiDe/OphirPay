@@ -74,6 +74,51 @@ export async function fetchXlmBalance(publicKey: string): Promise<string> {
   return xlmBalance ? xlmBalance.balance : "0";
 }
 
+export interface AssetBalance {
+  assetCode: string;
+  assetIssuer?: string;
+  balance: string;
+  type: "native" | "credit_alphanum4" | "credit_alphanum12";
+}
+
+/**
+ * Fetch all balances for an account (native + issued assets).
+ * Returns an array of { assetCode, balance, type } objects.
+ */
+export async function fetchAllBalances(publicKey: string): Promise<AssetBalance[]> {
+  const server = getHorizonServer();
+  const account = await server.loadAccount(publicKey);
+
+  return account.balances.map((b) => {
+    if (b.asset_type === "native") {
+      return { assetCode: "XLM", balance: b.balance, type: "native" as const };
+    }
+    return {
+      assetCode: "asset_code" in b ? (b.asset_code as string) : "UNKNOWN",
+      assetIssuer: "asset_issuer" in b ? (b.asset_issuer as string) : undefined,
+      balance: b.balance,
+      type: (b.asset_type === "credit_alphanum12"
+        ? "credit_alphanum12"
+        : "credit_alphanum4") as "credit_alphanum4" | "credit_alphanum12",
+    };
+  });
+}
+
+/**
+ * Fetch balance for a specific non-native asset.
+ */
+export async function fetchAssetBalance(
+  publicKey: string,
+  assetCode: string,
+  assetIssuer: string,
+): Promise<string> {
+  const balances = await fetchAllBalances(publicKey);
+  const found = balances.find(
+    (b) => b.assetCode === assetCode && b.assetIssuer === assetIssuer,
+  );
+  return found?.balance ?? "0";
+}
+
 // ── Types ─────────────────────────────────────────────────────
 
 export interface SubmitResult {
@@ -89,7 +134,7 @@ export interface BuildTxResult {
 }
 
 /**
- * Build an unsigned XLM payment transaction.
+ * Build an unsigned payment transaction (XLM or custom asset).
  * Returns the XDR string — the caller must sign it (e.g. via Freighter).
  * The transaction expires after 5 minutes.
  */
@@ -98,13 +143,27 @@ export async function buildPaymentTx(params: {
   destination: string;
   amount: string;
   memo?: string;
+  assetCode?: string;
+  assetIssuer?: string;
 }): Promise<BuildTxResult> {
-  const { sourcePublicKey, destination, amount, memo } = params;
+  const {
+    sourcePublicKey,
+    destination,
+    amount,
+    memo,
+    assetCode = "XLM",
+    assetIssuer,
+  } = params;
   const server = getHorizonServer();
 
   const sourceAccount = await server.loadAccount(sourcePublicKey);
 
   const now = Math.floor(Date.now() / 1000);
+
+  const paymentAsset =
+    assetCode === "XLM" || !assetIssuer
+      ? Asset.native()
+      : new Asset(assetCode, assetIssuer);
 
   let builder = new TransactionBuilder(sourceAccount, {
     fee: (await server.fetchBaseFee()).toString(),
@@ -116,7 +175,7 @@ export async function buildPaymentTx(params: {
   }).addOperation(
     Operation.payment({
       destination,
-      asset: Asset.native(),
+      asset: paymentAsset,
       amount,
     })
   );

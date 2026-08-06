@@ -13,6 +13,8 @@ import {
 import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { useToast } from "@/components/ui/Toast";
+import { AssetSelector } from "@/components/AssetSelector";
+import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ export default function SendPage() {
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
   const [memo, setMemo] = useState("");
+  const [selectedAsset, setSelectedAsset] = useState<AssetInfo>(XLM_ASSET);
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -74,11 +77,6 @@ export default function SendPage() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    const balanceNum = wallet.balance ? parseFloat(wallet.balance) : 0;
-    if (amountNum > balanceNum) {
-      setValidationError(`Insufficient balance. You have ${formatAmount(balanceNum, "XLM")}.`);
-      return false;
-    }
     if (memo.length > 28) {
       setValidationError("Memo must be 28 characters or fewer.");
       return false;
@@ -102,6 +100,8 @@ export default function SendPage() {
         destination: destination.trim(),
         amount,
         memo: memo.trim() || undefined,
+        assetCode: selectedAsset.code,
+        assetIssuer: selectedAsset.issuer,
       });
 
       // 2. Sign with Freighter
@@ -143,7 +143,8 @@ export default function SendPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: parseFloat(amount),
-            assetCode: "XLM",
+            assetCode: selectedAsset.code,
+            assetIssuer: selectedAsset.issuer,
             memo: memo.trim() || undefined,
             sourceAccountId: wallet.publicKey,
             destAddress: destination.trim(),
@@ -401,8 +402,14 @@ export default function SendPage() {
           Send Payment
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Send XLM on the Stellar Testnet
+          Send {selectedAsset.code} on the Stellar Testnet
         </p>
+        {selectedAsset.type !== "native" && selectedAsset.issuer && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            Non-native asset — recipient needs a trustline to{" "}
+            {selectedAsset.issuer.slice(0, 8)}...
+          </p>
+        )}
       </div>
 
       {/* Wallet info */}
@@ -442,10 +449,23 @@ export default function SendPage() {
           />
         </div>
 
+        {/* Asset Selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Asset
+          </label>
+          <AssetSelector
+            publicKey={wallet.publicKey}
+            selectedAsset={selectedAsset}
+            onSelect={setSelectedAsset}
+            disabled={isSubmitting}
+          />
+        </div>
+
         {/* Amount */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-            Amount (XLM)
+            Amount
           </label>
           <div className="relative">
             <input
@@ -459,7 +479,7 @@ export default function SendPage() {
               className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed pr-16"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
-              XLM
+              {selectedAsset.code}
             </span>
           </div>
         </div>
@@ -540,7 +560,7 @@ export default function SendPage() {
                   d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
                 />
               </svg>
-              Send XLM
+              {`Send ${selectedAsset.code}`}
             </>
           )}
         </button>

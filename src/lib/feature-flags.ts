@@ -5,7 +5,7 @@
 
 export const FEATURE_FLAGS = {
   /** Enable multi-asset support (USDC, custom tokens) */
-  MULTI_ASSET: process.env.NEXT_PUBLIC_FEATURE_MULTI_ASSET === "true",
+  MULTI_ASSET: process.env.NEXT_PUBLIC_FEATURE_MULTI_ASSET !== "false",
   /** Enable recurring payment scheduler */
   RECURRING_PAYMENTS: process.env.NEXT_PUBLIC_FEATURE_RECURRING !== "false",
   /** Enable webhook delivery */
