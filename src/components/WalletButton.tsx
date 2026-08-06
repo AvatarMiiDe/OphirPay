@@ -1,12 +1,33 @@
 "use client";
 
-import { useWallet } from "@/hooks/useFreighter";
+import { useState } from "react";
+import { useWallet } from "@/hooks/useMultiWallet";
 import { shortenAddress, formatAmount } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { WalletSelector } from "@/components/WalletSelector";
+import { WALLET_REGISTRY, type WalletId } from "@/lib/wallets";
 
 export function WalletButton() {
-  const { wallet, connect, disconnect, fetchBalance, isConnecting, error } =
+  const { wallet, connect, disconnect, fetchBalance, isConnecting, error, availableWallets } =
     useWallet();
+  const [showSelector, setShowSelector] = useState(false);
+  const [connectingWallet, setConnectingWallet] = useState<WalletId | null>(null);
+
+  const handleSelectWallet = async (walletId: WalletId) => {
+    setConnectingWallet(walletId);
+    try {
+      await connect(walletId);
+      setShowSelector(false);
+    } catch {
+      // Error is handled by the provider
+    } finally {
+      setConnectingWallet(null);
+    }
+  };
+
+  const activeWalletInfo = wallet.activeWalletId
+    ? WALLET_REGISTRY.find((w) => w.id === wallet.activeWalletId)
+    : null;
 
   if (wallet.connected && wallet.publicKey) {
     return (
@@ -62,11 +83,11 @@ export function WalletButton() {
           </span>
         </div>
 
-        {/* Address */}
+        {/* Address + wallet icon */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          <div className="h-6 w-6 rounded-full bg-gradient-to-br from-ophir-500 to-stellar flex items-center justify-center text-white text-xs font-bold">
-            {wallet.publicKey.charAt(0)}
-          </div>
+          <span className="text-sm" title={activeWalletInfo?.name}>
+            {activeWalletInfo?.icon || "🔑"}
+          </span>
           <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
             {shortenAddress(wallet.publicKey)}
           </span>
@@ -101,7 +122,7 @@ export function WalletButton() {
   return (
     <div className="flex flex-col items-end gap-1">
       <Button
-        onClick={connect}
+        onClick={() => setShowSelector(true)}
         loading={isConnecting}
         leftIcon={
           <svg
@@ -120,12 +141,23 @@ export function WalletButton() {
           </svg>
         }
       >
-        {isConnecting ? "Connecting..." : "Connect Freighter"}
+        {isConnecting ? "Connecting..." : "Connect Wallet"}
       </Button>
-      {error && (
+      {error && !showSelector && (
         <p className="text-xs text-red-500 dark:text-red-400 max-w-[200px] text-right">
           {error}
         </p>
+      )}
+
+      {showSelector && (
+        <WalletSelector
+          availableWallets={availableWallets}
+          onSelect={handleSelectWallet}
+          isConnecting={isConnecting}
+          connectingWallet={connectingWallet}
+          error={error}
+          onClose={() => setShowSelector(false)}
+        />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { getFreighter } from "@/hooks/useFreighter";
+import { getFreighter } from "@/hooks/useFreighter"; // Legacy Freighter-specific hook
 
 /**
  * Detects Freighter network changes (e.g., user switches from Testnet to Mainnet).

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { useWallet } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
 import {
   fetchOnChainPayments,
   type OnChainPayment,

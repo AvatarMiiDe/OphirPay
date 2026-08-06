@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { generatePaymentLink } from "@/lib/payment-link";
 import { formatAmount } from "@/lib/utils";
-import { useWallet } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
 
 interface RequestData {
   id: string;

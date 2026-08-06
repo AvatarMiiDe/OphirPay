@@ -1,6 +1,6 @@
 "use client";
 
-import { WalletProvider } from "@/hooks/useFreighter";
+import { MultiWalletProvider } from "@/hooks/useMultiWallet";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Sidebar } from "@/components/Sidebar";
@@ -11,7 +11,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <WalletProvider>
+      <MultiWalletProvider>
         <ToastProvider>
           <OfflineBanner />
           <InstallPrompt />
@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </ToastProvider>
-      </WalletProvider>
+      </MultiWalletProvider>
     </ThemeProvider>
   );
 }

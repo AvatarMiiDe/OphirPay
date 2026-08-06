@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet, getFreighter } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
+import { getWalletConnector } from "@/lib/wallets";
 import {
   isValidStellarAddress,
   buildBatchPaymentTx,
@@ -158,15 +159,15 @@ export default function NewBatchPage() {
         recipients: batchRecipients,
       });
 
-      // 2. Sign with Freighter
+      // 2. Sign with the active wallet connector
       setStep("signing");
 
-      const freighter = getFreighter();
-      if (!freighter) {
-        throw new Error("Freighter wallet not found. Please reconnect.");
+      if (!wallet.activeWalletId) {
+        throw new Error("No wallet connected. Please connect a wallet first.");
       }
 
-      const signedXdr = await freighter.signTransaction(xdr, {
+      const connector = getWalletConnector(wallet.activeWalletId);
+      const signedXdr = await connector.signTransaction(xdr, {
         network: "TESTNET",
         networkPassphrase: NETWORK_PASSPHRASE,
       });
@@ -234,7 +235,7 @@ export default function NewBatchPage() {
             Connect Your Wallet
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-            Connect your Freighter wallet to create batch payments.
+            Connect your Stellar wallet to create batch payments.
           </p>
           <Link
             href="/"
@@ -562,7 +563,7 @@ export default function NewBatchPage() {
         {isSubmitting && (
           <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
             {step === "signing"
-              ? "Check your Freighter wallet to approve..."
+              ? "Check your wallet to approve..."
               : step === "submitting"
                 ? `Sending ${recipients.length} payments to Stellar testnet...`
                 : ""}

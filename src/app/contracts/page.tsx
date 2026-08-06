@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet, getFreighter } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
+import { getWalletConnector } from "@/lib/wallets";
 import {
   DEFAULT_CONTRACT_ID,
   simulateContractCall,
@@ -85,12 +86,12 @@ export default function ContractsPage() {
       );
 
       if (txInfo.status === "AWAITING_SIGNATURE" && txInfo.xdr) {
-        const freighter = getFreighter();
-        if (!freighter) {
-          throw new Error("Freighter wallet not found. Please reconnect.");
+        if (!wallet.activeWalletId) {
+          throw new Error("No wallet connected. Please connect a wallet first.");
         }
 
-        const signedXdr = await freighter.signTransaction(txInfo.xdr, {
+        const connector = getWalletConnector(wallet.activeWalletId);
+        const signedXdr = await connector.signTransaction(txInfo.xdr, {
           network: "TESTNET",
           networkPassphrase: NETWORK_PASSPHRASE,
         });
@@ -166,7 +167,7 @@ export default function ContractsPage() {
             </svg>
           </div>
           <h2 className="text-lg font-semibold text-gray-700">Connect Your Wallet</h2>
-          <p className="text-sm text-gray-500 mt-1">Connect Freighter to interact with Soroban contracts.</p>
+          <p className="text-sm text-gray-500 mt-1">Connect a Stellar wallet to interact with Soroban contracts.</p>
           <Link href="/" className="text-sm text-ophir-600 hover:underline mt-4 inline-block">← Back to Dashboard</Link>
         </div>
       </div>

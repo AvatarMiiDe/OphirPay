@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useWallet, getFreighter } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
+import { getWalletConnector } from "@/lib/wallets";
 import {
   isValidStellarAddress,
   buildPaymentTx,
@@ -104,16 +105,15 @@ export default function SendPage() {
         assetIssuer: selectedAsset.issuer,
       });
 
-      // 2. Sign with Freighter
+      // 2. Sign with the active wallet connector
       setStep("signing");
 
-      const freighter = getFreighter();
-
-      if (!freighter) {
-        throw new Error("Freighter wallet not found. Please reconnect.");
+      if (!wallet.activeWalletId) {
+        throw new Error("No wallet connected. Please connect a wallet first.");
       }
 
-      const signedXdr = await freighter.signTransaction(xdr, {
+      const connector = getWalletConnector(wallet.activeWalletId);
+      const signedXdr = await connector.signTransaction(xdr, {
         network: "TESTNET",
         networkPassphrase: NETWORK_PASSPHRASE,
       });
@@ -131,7 +131,7 @@ export default function SendPage() {
         payee: destination.trim(),
         amountStroops: Math.round(parseFloat(amount) * XLM_STROOPS),
         txHash: response.hash,
-        signTransaction: (xdr, opts) => freighter.signTransaction(xdr, opts),
+        signTransaction: (xdr, opts) => connector.signTransaction(xdr, opts),
         network: "TESTNET",
         networkPassphrase: NETWORK_PASSPHRASE,
       });

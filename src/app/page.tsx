@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useWallet } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
 import { shortenAddress, formatAmount, timeAgo } from "@/lib/utils";
 import { getAccountExplorerUrl, XLM_STROOPS, STELLAR_NETWORK } from "@/lib/stellar";
 import {

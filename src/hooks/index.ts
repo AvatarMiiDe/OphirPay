@@ -1,4 +1,5 @@
-export { WalletProvider, useWallet, getFreighter } from "./useFreighter";
+export { MultiWalletProvider as WalletProvider, useWallet } from "./useMultiWallet";
+export { getFreighter as getFreighterLegacy } from "./useFreighter";
 export { useTheme } from "./useTheme";
 export { useDebounce } from "./useDebounce";
 export { usePagination } from "./usePagination";
