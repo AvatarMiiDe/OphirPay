@@ -16,6 +16,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_GA_ID: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   RATE_LIMIT_RPM: z.coerce.number().positive().default(120),
+  NEXT_PUBLIC_DEMO_MODE: z.string().optional(),
   NEXT_PUBLIC_FEATURE_MULTI_ASSET: z.string().optional(),
   NEXT_PUBLIC_FEATURE_WEBHOOKS: z.string().optional(),
   NEXT_PUBLIC_APP_VERSION: z.string().optional(),
