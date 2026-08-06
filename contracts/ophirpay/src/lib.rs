@@ -29,6 +29,7 @@ pub struct Payment {
     pub tx_hash: String,
     pub timestamp: u64,
     pub metadata: String,
+    pub cancelled: bool,
 }
 
 /// An escrow that locks funds until released by the owner or claimed after deadline.
@@ -95,6 +96,8 @@ pub enum PaymentError {
     BatchEmpty = 14,
     TokenTransferFailed = 15,
     InsufficientBalance = 16,
+    PaymentAlreadyCancelled = 17,
+    ContractPaused = 18,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -210,6 +213,7 @@ impl OphirPayContract {
             tx_hash: tx_hash.clone(),
             timestamp: env.ledger().timestamp(),
             metadata,
+            cancelled: false,
         };
 
         env.storage().persistent().set(&count, &payment);
@@ -247,7 +251,7 @@ impl OphirPayContract {
         payments
     }
 
-    /// Cancel a payment record
+    /// Cancel a payment record (owner only). Idempotent — re-cancelling is an error.
     pub fn cancel_payment(
         env: Env,
         caller: Address,
@@ -268,8 +272,12 @@ impl OphirPayContract {
             .persistent()
             .get(&payment_id)
             .ok_or(PaymentError::PaymentNotFound)?;
-        payment.amount = 0;
-        payment.metadata = String::from_str(&env, "CANCELLED");
+
+        if payment.cancelled {
+            return Err(PaymentError::PaymentAlreadyCancelled);
+        }
+
+        payment.cancelled = true;
         env.storage().persistent().set(&payment_id, &payment);
         env.storage().persistent().extend_ttl(&payment_id, 5000, 50000);
         Ok(())
@@ -623,6 +631,7 @@ impl OphirPayContract {
                 tx_hash: tx_hash.clone(),
                 timestamp: env.ledger().timestamp(),
                 metadata: String::from_str(&env, "batch"),
+                cancelled: false,
             };
 
             env.storage().persistent().set(&pay_count, &payment);
@@ -817,7 +826,8 @@ mod tests {
 
         client.cancel_payment(&owner, &1);
         let payment = client.get_payment(&1);
-        assert_eq!(payment.amount, 0);
+        assert!(payment.cancelled);
+        assert_eq!(payment.amount, 500); // amount is preserved, not zeroed
     }
 
     // ── Escrow Tests ────────────────────────────────────────
