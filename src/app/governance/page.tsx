@@ -7,6 +7,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
+import { useWallet } from "@/hooks/useFreighter";
+import {
+  createGovernanceProposal,
+  voteOnProposal,
+  executeGovernanceProposal,
+} from "@/lib/contract-advanced";
 
 interface Proposal {
   id: number;
@@ -21,6 +27,7 @@ interface Proposal {
 }
 
 export default function GovernancePage() {
+  const { wallet } = useWallet();
   const toast = useToast();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,30 +54,33 @@ export default function GovernancePage() {
   useEffect(() => { fetchProposals(); }, [fetchProposals]);
 
   const handleCreate = async () => {
+    if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     if (!formTitle || !formDesc) { toast.error("Title and description are required"); return; }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/governance/proposals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: formTitle,
-          description: formDesc,
-          actionType: formAction,
-          target: formTarget,
-          data: formData,
-        }),
-      });
-      if (res.ok) {
-        toast.success("Proposal created");
+      const result = await createGovernanceProposal(
+        wallet.publicKey, formTitle, formDesc, formAction, formTarget, formData,
+      );
+      if (result.success) {
+        toast.success("Proposal created on-chain");
         setShowCreate(false);
         setFormTitle("");
         setFormDesc("");
         setFormTarget("");
         setFormData("");
-        fetchProposals();
+        setProposals((prev) => [...prev, {
+          id: Date.now(),
+          title: formTitle,
+          description: formDesc,
+          action_type: formAction,
+          proposer: wallet.publicKey!,
+          yes_votes: 0,
+          no_votes: 0,
+          voting_ends_at: Math.floor(Date.now() / 1000) + 3600,
+          executed: false,
+        }]);
       } else {
-        toast.error("Failed to create proposal");
+        toast.error(result.error || "Failed to create proposal");
       }
     } catch {
       toast.error("Network error");
@@ -80,17 +90,18 @@ export default function GovernancePage() {
   };
 
   const handleVote = async (proposalId: number, support: boolean) => {
+    if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     try {
-      const res = await fetch("/api/governance/vote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposalId, support, weight: 1 }),
-      });
-      if (res.ok) {
-        toast.success(support ? "Voted YES" : "Voted NO");
-        fetchProposals();
+      const result = await voteOnProposal(wallet.publicKey, proposalId, support, 1);
+      if (result.success) {
+        toast.success(support ? "Voted YES on-chain" : "Voted NO on-chain");
+        setProposals((prev) => prev.map((p) =>
+          p.id === proposalId
+            ? { ...p, yes_votes: support ? p.yes_votes + 1 : p.yes_votes, no_votes: support ? p.no_votes : p.no_votes + 1 }
+            : p
+        ));
       } else {
-        toast.error("Vote failed");
+        toast.error(result.error || "Vote failed");
       }
     } catch {
       toast.error("Network error");
@@ -99,17 +110,14 @@ export default function GovernancePage() {
 
   const handleExecute = async (proposalId: number) => {
     try {
-      const res = await fetch(`/api/governance/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposalId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(data.passed ? "Proposal PASSED" : "Proposal DEFEATED");
-        fetchProposals();
+      const result = await executeGovernanceProposal(proposalId);
+      if (result.success) {
+        toast.success("Proposal executed on-chain");
+        setProposals((prev) => prev.map((p) =>
+          p.id === proposalId ? { ...p, executed: true } : p
+        ));
       } else {
-        toast.error("Execution failed");
+        toast.error(result.error || "Execution failed");
       }
     } catch {
       toast.error("Network error");
@@ -130,6 +138,8 @@ export default function GovernancePage() {
     };
   };
 
+  const showConnectBanner = !wallet.connected;
+
   if (loading) {
     return (
       <div className="animate-fade-in space-y-6">
@@ -145,6 +155,17 @@ export default function GovernancePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {showConnectBanner && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 flex items-center gap-3 animate-fade-in">
+          <span className="text-amber-500 text-lg">⚠️</span>
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Wallet not connected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Connect your wallet to create and vote on governance proposals.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

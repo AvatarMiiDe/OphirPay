@@ -7,6 +7,9 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
+import { useWallet } from "@/hooks/useFreighter";
+import { createRecurringPayment, cancelRecurringPayment } from "@/lib/contract-advanced";
+import { DEFAULT_CONTRACT_ID } from "@/lib/contracts";
 
 interface RecurringPayment {
   id: number;
@@ -20,6 +23,7 @@ interface RecurringPayment {
 }
 
 export default function RecurringPage() {
+  const { wallet } = useWallet();
   const toast = useToast();
   const [payments, setPayments] = useState<RecurringPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,28 +49,33 @@ export default function RecurringPage() {
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
   const handleCreate = async () => {
+    if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     if (!formPayee || !formAmount) { toast.error("Payee and amount are required"); return; }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/recurring", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payee: formPayee,
-          amount: formAmount,
-          schedule: formSchedule,
-          remaining: formRemaining || 0,
-        }),
-      });
-      if (res.ok) {
-        toast.success("Recurring payment created");
+      const amountStroops = Math.round(parseFloat(formAmount) * 10_000_000);
+      const result = await createRecurringPayment(
+        wallet.publicKey, formPayee, amountStroops, DEFAULT_CONTRACT_ID,
+        formSchedule, formRemaining || 0, `recurring-${formSchedule}`,
+      );
+      if (result.success) {
+        toast.success("Recurring payment created on-chain");
         setShowCreate(false);
         setFormPayee("");
         setFormAmount("");
         setFormRemaining(0);
-        fetchPayments();
+        setPayments((prev) => [...prev, {
+          id: Date.now(),
+          payee: formPayee,
+          amount: formAmount,
+          schedule: formSchedule as "Daily" | "Weekly" | "Monthly",
+          remaining: formRemaining || 0,
+          times_executed: 0,
+          next_execution: Math.floor(Date.now() / 1000) + 86400,
+          active: true,
+        }]);
       } else {
-        toast.error("Failed to create recurring payment");
+        toast.error(result.error || "Failed to create recurring payment");
       }
     } catch {
       toast.error("Network error");
@@ -76,13 +85,16 @@ export default function RecurringPage() {
   };
 
   const handleCancel = async (id: number) => {
+    if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     try {
-      const res = await fetch(`/api/recurring/${id}/cancel`, { method: "POST" });
-      if (res.ok) {
-        toast.success("Recurring payment cancelled");
-        fetchPayments();
+      const result = await cancelRecurringPayment(wallet.publicKey, id);
+      if (result.success) {
+        toast.success("Recurring payment cancelled on-chain");
+        setPayments((prev) => prev.map((p) =>
+          p.id === id ? { ...p, active: false } : p
+        ));
       } else {
-        toast.error("Cancel failed");
+        toast.error(result.error || "Cancel failed");
       }
     } catch {
       toast.error("Network error");
@@ -97,6 +109,8 @@ export default function RecurringPage() {
       default: return "⏰";
     }
   };
+
+  const showConnectBanner = !wallet.connected;
 
   if (loading) {
     return (
@@ -113,6 +127,17 @@ export default function RecurringPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {showConnectBanner && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 flex items-center gap-3 animate-fade-in">
+          <span className="text-amber-500 text-lg">⚠️</span>
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Wallet not connected</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Connect your wallet to create and manage recurring payments on-chain.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
