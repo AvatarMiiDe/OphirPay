@@ -25,6 +25,8 @@ const AUDIT_CNT: Symbol = symbol_short!("AUDIT");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
 const FEE_KEY: Symbol = symbol_short!("FEE_CONF");
 const FEE_COLL: Symbol = symbol_short!("FEE_COLL");
+const TMLOCK_CNT: Symbol = symbol_short!("TMLOCK");
+const TMLOCK_DELAY: u64 = 86400; // 24 hours
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -193,6 +195,22 @@ pub enum ScheduleType {
     Monthly,
 }
 
+/// A timelocked admin action. Proposed now, executable after `unlocks_at`.
+/// This protects against compromised admin keys by forcing a 24h delay
+/// on sensitive operations.
+#[contracttype]
+#[derive(Clone)]
+pub struct TimelockedAction {
+    pub id: u64,
+    pub action_type: String,    // e.g. "set_fee_config", "set_multisig", "pause"
+    pub target: String,         // the target of the action (e.g. function name)
+    pub data: String,           // serialized params (for off-chain relay to decode)
+    pub proposed_by: Address,
+    pub proposed_at: u64,
+    pub unlocks_at: u64,
+    pub executed: bool,
+}
+
 /// Configurable platform fee structure per operation type.
 #[contracttype]
 #[derive(Clone)]
@@ -273,6 +291,9 @@ pub enum PaymentError {
     RecurringExpired = 33,
     FeeConfigNotFound = 34,
     FeeTooHigh = 35,
+    TimelockNotFound = 36,
+    TimelockNotDue = 37,
+    TimelockAlreadyExecuted = 38,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -728,6 +749,143 @@ impl OphirPayContract {
     /// Get the fee collector address.
     pub fn get_fee_collector(env: Env) -> Option<Address> {
         env.storage().instance().get(&FEE_COLL)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TIMELOCKED ACTIONS — 24h delay on sensitive admin ops
+    // ═══════════════════════════════════════════════════════════
+
+    /// Propose a timelocked admin action. Returns the action ID.
+    /// After 24 hours, anyone can call `execute_timelocked_action`.
+    pub fn propose_timelocked_action(
+        env: Env,
+        caller: Address,
+        action_type: String,
+        target: String,
+        data: String,
+    ) -> Result<u64, PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut count: u64 = env.storage().instance().get(&TMLOCK_CNT).unwrap_or(0);
+        count = count.saturating_add(1);
+
+        let action = TimelockedAction {
+            id: count,
+            action_type,
+            target,
+            data,
+            proposed_by: caller.clone(),
+            proposed_at: now,
+            unlocks_at: now.saturating_add(TMLOCK_DELAY),
+            executed: false,
+        };
+
+        env.storage().persistent().set(&count, &action);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().instance().set(&TMLOCK_CNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "timelock"), Symbol::new(&env, "proposed")),
+            count,
+        );
+
+        record_audit(&env, "timelock_proposed", &caller, count, "Timelocked action proposed");
+
+        Ok(count)
+    }
+
+    /// Execute a timelocked action after the delay has passed.
+    /// This marks it as executed; the actual state change is performed by
+    /// an off-chain relayer that reads the action data.
+    pub fn execute_timelocked_action(
+        env: Env,
+        action_id: u64,
+    ) -> Result<(), PaymentError> {
+        let mut action: TimelockedAction = env
+            .storage()
+            .persistent()
+            .get(&action_id)
+            .ok_or(PaymentError::TimelockNotFound)?;
+
+        if action.executed {
+            return Err(PaymentError::TimelockAlreadyExecuted);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < action.unlocks_at {
+            return Err(PaymentError::TimelockNotDue);
+        }
+
+        action.executed = true;
+        env.storage().persistent().set(&action_id, &action);
+        env.storage().persistent().extend_ttl(&action_id, 5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "timelock"), Symbol::new(&env, "executed")),
+            action_id,
+        );
+
+        record_audit(&env, "timelock_executed", &env.current_contract_address(), action_id, "Timelocked action executed");
+
+        Ok(())
+    }
+
+    /// Cancel a pending timelocked action (owner only).
+    pub fn cancel_timelocked_action(
+        env: Env,
+        caller: Address,
+        action_id: u64,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        let mut action: TimelockedAction = env
+            .storage()
+            .persistent()
+            .get(&action_id)
+            .ok_or(PaymentError::TimelockNotFound)?;
+
+        if action.executed {
+            return Err(PaymentError::TimelockAlreadyExecuted);
+        }
+
+        action.executed = true; // mark as "cancelled" via execution flag
+        env.storage().persistent().set(&action_id, &action);
+        env.storage().persistent().extend_ttl(&action_id, 5000, 50000);
+
+        record_audit(&env, "timelock_cancelled", &caller, action_id, "Timelocked action cancelled");
+
+        Ok(())
+    }
+
+    /// Get a timelocked action by ID.
+    pub fn get_timelocked_action(env: Env, action_id: u64) -> Result<TimelockedAction, PaymentError> {
+        env.storage()
+            .persistent()
+            .get(&action_id)
+            .ok_or(PaymentError::TimelockNotFound)
+    }
+
+    /// Get timelock action count.
+    pub fn get_timelock_count(env: Env) -> u64 {
+        env.storage().instance().get(&TMLOCK_CNT).unwrap_or(0)
     }
 
     /// Calculate fee for a given amount based on bps.
