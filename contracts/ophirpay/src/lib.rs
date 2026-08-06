@@ -637,7 +637,11 @@ impl OphirPayContract {
             now,
         );
 
-        let unvested = stream.total_amount - vested - stream.claimed_amount;
+        // Use saturating_sub to prevent underflow panic if state is inconsistent
+        let unvested = stream
+            .total_amount
+            .saturating_sub(vested)
+            .saturating_sub(stream.claimed_amount);
 
         stream.cancelled = true;
         env.storage().persistent().set(&stream_id, &stream);
