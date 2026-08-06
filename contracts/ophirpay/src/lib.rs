@@ -15,6 +15,7 @@ const PAUSED: Symbol = symbol_short!("PAUSED");
 const VERSION: Symbol = symbol_short!("VERSION");
 const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
 const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
+const STATS: Symbol = symbol_short!("STATS");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -91,6 +92,23 @@ pub struct BatchCreateResult {
     pub total_amount: i128,
 }
 
+/// Aggregate statistics across all contract activity.
+#[contracttype]
+#[derive(Clone)]
+pub struct ContractStats {
+    pub total_payments_recorded: u64,
+    pub total_escrows_created: u64,
+    pub total_escrows_released: u64,
+    pub total_escrows_claimed: u64,
+    pub total_streams_created: u64,
+    pub total_streams_claimed: u64,
+    pub total_streams_cancelled: u64,
+    pub total_batches_processed: u64,
+    pub total_amount_escrowed: i128,
+    pub total_amount_streamed: i128,
+    pub total_amount_batched: i128,
+}
+
 #[contracterror]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -137,6 +155,32 @@ fn emit_stream_event(env: &Env, creator: &Address, recipient: &Address, amount: 
         (Symbol::new(env, "stream"), creator.clone(), recipient.clone()),
         *amount,
     );
+}
+
+/// Increment a u64 stat field.
+fn inc_stat_u64(env: &Env, get: fn(&ContractStats) -> u64, set: fn(&mut ContractStats, u64)) {
+    let mut stats: ContractStats = env.storage().instance().get(&STATS).unwrap_or(ContractStats {
+        total_payments_recorded: 0, total_escrows_created: 0, total_escrows_released: 0,
+        total_escrows_claimed: 0, total_streams_created: 0, total_streams_claimed: 0,
+        total_streams_cancelled: 0, total_batches_processed: 0,
+        total_amount_escrowed: 0, total_amount_streamed: 0, total_amount_batched: 0,
+    });
+    set(&mut stats, get(&stats).saturating_add(1));
+    env.storage().instance().set(&STATS, &stats);
+    env.storage().instance().extend_ttl(5000, 50000);
+}
+
+/// Add an amount to an i128 stat field.
+fn add_stat_amount(env: &Env, get: fn(&ContractStats) -> i128, set: fn(&mut ContractStats, i128), delta: i128) {
+    let mut stats: ContractStats = env.storage().instance().get(&STATS).unwrap_or(ContractStats {
+        total_payments_recorded: 0, total_escrows_created: 0, total_escrows_released: 0,
+        total_escrows_claimed: 0, total_streams_created: 0, total_streams_claimed: 0,
+        total_streams_cancelled: 0, total_batches_processed: 0,
+        total_amount_escrowed: 0, total_amount_streamed: 0, total_amount_batched: 0,
+    });
+    set(&mut stats, get(&stats).saturating_add(delta));
+    env.storage().instance().set(&STATS, &stats);
+    env.storage().instance().extend_ttl(5000, 50000);
 }
 
 /// Guard: reject all write operations while the contract is paused.
@@ -191,6 +235,20 @@ impl OphirPayContract {
         env.storage().instance().set(&ESCROW_COUNT, &0u64);
         env.storage().instance().set(&STREAM_COUNT, &0u64);
         env.storage().instance().set(&BATCH_COUNT, &0u64);
+        let stats = ContractStats {
+            total_payments_recorded: 0,
+            total_escrows_created: 0,
+            total_escrows_released: 0,
+            total_escrows_claimed: 0,
+            total_streams_created: 0,
+            total_streams_claimed: 0,
+            total_streams_cancelled: 0,
+            total_batches_processed: 0,
+            total_amount_escrowed: 0,
+            total_amount_streamed: 0,
+            total_amount_batched: 0,
+        };
+        env.storage().instance().set(&STATS, &stats);
         env.storage().instance().extend_ttl(5000, 50000);
         Ok(CONTRACT_VERSION)
     }
@@ -206,6 +264,26 @@ impl OphirPayContract {
     /// Get contract version
     pub fn get_version(env: Env) -> u32 {
         env.storage().instance().get(&VERSION).unwrap_or(0)
+    }
+
+    /// Get aggregate contract statistics.
+    pub fn get_stats(env: Env) -> ContractStats {
+        env.storage()
+            .instance()
+            .get(&STATS)
+            .unwrap_or(ContractStats {
+                total_payments_recorded: 0,
+                total_escrows_created: 0,
+                total_escrows_released: 0,
+                total_escrows_claimed: 0,
+                total_streams_created: 0,
+                total_streams_claimed: 0,
+                total_streams_cancelled: 0,
+                total_batches_processed: 0,
+                total_amount_escrowed: 0,
+                total_amount_streamed: 0,
+                total_amount_batched: 0,
+            })
     }
 
     /// Pause all state-changing operations (owner only).
@@ -404,6 +482,8 @@ impl OphirPayContract {
         // Native event
         emit_payment_event(&env, &payer, &payee, &amount);
 
+        inc_stat_u64(&env, |s| s.total_payments_recorded, |s, v| s.total_payments_recorded = v);
+
         Ok(count)
     }
 
@@ -511,6 +591,9 @@ impl OphirPayContract {
 
         emit_escrow_event(&env, &env.current_contract_address(), &beneficiary, &amount);
 
+        inc_stat_u64(&env, |s| s.total_escrows_created, |s, v| s.total_escrows_created = v);
+        add_stat_amount(&env, |s| s.total_amount_escrowed, |s, v| s.total_amount_escrowed = v, amount);
+
         Ok(count)
     }
 
@@ -551,6 +634,8 @@ impl OphirPayContract {
         env.storage().persistent().set(&escrow_id, &escrow);
         env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
 
+        inc_stat_u64(&env, |s| s.total_escrows_released, |s, v| s.total_escrows_released = v);
+
         Ok(())
     }
 
@@ -582,6 +667,8 @@ impl OphirPayContract {
         escrow.claimed = true;
         env.storage().persistent().set(&escrow_id, &escrow);
         env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
+
+        inc_stat_u64(&env, |s| s.total_escrows_claimed, |s, v| s.total_escrows_claimed = v);
 
         Ok(())
     }
@@ -651,6 +738,9 @@ impl OphirPayContract {
 
         emit_stream_event(&env, &env.current_contract_address(), &recipient, &total_amount);
 
+        inc_stat_u64(&env, |s| s.total_streams_created, |s, v| s.total_streams_created = v);
+        add_stat_amount(&env, |s| s.total_amount_streamed, |s, v| s.total_amount_streamed = v, total_amount);
+
         Ok(count)
     }
 
@@ -699,6 +789,8 @@ impl OphirPayContract {
         env.storage().persistent().set(&stream_id, &stream);
         env.storage().persistent().extend_ttl(&stream_id, 5000, 50000);
 
+        inc_stat_u64(&env, |s| s.total_streams_claimed, |s, v| s.total_streams_claimed = v);
+
         Ok(claimable)
     }
 
@@ -732,7 +824,6 @@ impl OphirPayContract {
             now,
         );
 
-        // Use saturating_sub to prevent underflow panic if state is inconsistent
         let unvested = stream
             .total_amount
             .saturating_sub(vested)
@@ -742,12 +833,13 @@ impl OphirPayContract {
         env.storage().persistent().set(&stream_id, &stream);
         env.storage().persistent().extend_ttl(&stream_id, 5000, 50000);
 
-        // Return unvested tokens to creator (0 if fully vested)
         if unvested > 0 {
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &creator, &unvested);
         }
+
+        inc_stat_u64(&env, |s| s.total_streams_cancelled, |s, v| s.total_streams_cancelled = v);
 
         Ok(unvested)
     }
@@ -864,6 +956,9 @@ impl OphirPayContract {
         env.storage().persistent().extend_ttl(&batch_count, 5000, 50000);
         env.storage().instance().set(&BATCH_COUNT, &batch_count);
         env.storage().instance().extend_ttl(5000, 50000);
+
+        inc_stat_u64(&env, |s| s.total_batches_processed, |s, v| s.total_batches_processed = v);
+        add_stat_amount(&env, |s| s.total_amount_batched, |s, v| s.total_amount_batched = v, total_amount);
 
         Ok(BatchCreateResult {
             batch_id: batch_count,
