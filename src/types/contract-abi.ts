@@ -105,6 +105,9 @@ export enum PaymentErrorCode {
   InsufficientBalance = 16,
   PaymentAlreadyCancelled = 17,
   ContractPaused = 18,
+  NoTokensToWithdraw = 19,
+  UpgradeNotProposed = 20,
+  UpgradeTimelockActive = 21,
 }
 
 export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
@@ -126,4 +129,7 @@ export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
   16: "Insufficient balance",
   17: "Payment already cancelled",
   18: "Contract is paused — all writes are blocked",
+  19: "No tokens to withdraw — amount must be positive",
+  20: "No upgrade has been proposed",
+  21: "Upgrade timelock is still active — wait 24 hours",
 };
