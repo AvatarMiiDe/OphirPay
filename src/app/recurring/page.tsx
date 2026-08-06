@@ -170,7 +170,7 @@ export default function RecurringPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{scheduleIcon(rp.schedule)}</span>
-                    <Badge variant={rp.active ? "success" : "error"}>
+                    <Badge variant={rp.active ? "success" : "danger"}>
                       {rp.active ? "Active" : "Cancelled"}
                     </Badge>
                     <Badge variant="info">{rp.schedule}</Badge>

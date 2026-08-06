@@ -14,7 +14,7 @@ import {
   invokeContractFunction,
   submitContractInvocation,
   simulateContractCall,
-  CONTRACT_ID,
+  DEFAULT_CONTRACT_ID,
   EMITTER_CONTRACT_ID,
   classifyContractError,
   type InvokeResult,
@@ -22,7 +22,7 @@ import {
 import { getFreighter } from "@/hooks/useFreighter";
 
 /** Resolve contract ID from env var or fallback to default */
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || CONTRACT_ID;
+const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || DEFAULT_CONTRACT_ID;
 const EMITTER_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || EMITTER_CONTRACT_ID;
 
 // ── Types ──────────────────────────────────────────────────────
