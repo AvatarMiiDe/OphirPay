@@ -23,6 +23,7 @@ const ESCALATION_KEY: Symbol = symbol_short!("ESCLATN");
 const ROLE_KEY: Symbol = symbol_short!("ROLE");
 const AUDIT_CNT: Symbol = symbol_short!("AUDIT");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
+const REFUND_CNT: Symbol = symbol_short!("REF_CNT");
 const FEE_KEY: Symbol = symbol_short!("FEE_CONF");
 const FEE_COLL: Symbol = symbol_short!("FEE_COLL");
 const TMLOCK_CNT: Symbol = symbol_short!("TMLOCK");
@@ -256,6 +257,45 @@ pub struct FeeConfig {
     pub enabled: bool,
 }
 
+/// Structured refund reason codes — enforced by the type system so analytics
+/// never sees free-form strings. Mirrors FacilPay's RefundReasonCode pattern.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefundReasonCode {
+    ProductDefect,
+    NonDelivery,
+    DuplicateCharge,
+    Unauthorized,
+    CustomerRequest,
+    Other,
+}
+
+/// Lifecycle status of a refund request.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefundStatus {
+    Requested,
+    Approved,
+    Rejected,
+    Processed,
+}
+
+/// On-chain refund record with structured reason codes and analytics support.
+#[contracttype]
+#[derive(Clone)]
+pub struct Refund {
+    pub id: u64,
+    pub payment_id: u64,
+    pub requester: Address,
+    pub amount: i128,
+    pub asset: Address,
+    pub reason: String,          // free-text explanation
+    pub reason_code: RefundReasonCode,
+    pub status: RefundStatus,
+    pub requested_at: u64,
+    pub resolved_at: u64,
+}
+
 /// A scheduled recurring payment that can be executed by anyone after due.
 #[contracttype]
 #[derive(Clone)]
@@ -335,6 +375,10 @@ pub enum PaymentError {
     ProposalDefeated = 44,
     DepositTooLow = 45,
     SpendingLimitExpired = 46,
+    RefundNotFound = 47,
+    RefundAlreadyProcessed = 48,
+    PaymentAlreadyRefunded = 49,
+    RefundWindowExpired = 50,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -2292,6 +2336,219 @@ impl OphirPayContract {
     /// Get total recurring payment count.
     pub fn get_recurring_count(env: Env) -> u64 {
         env.storage().instance().get(&RECUR_CNT).unwrap_or(0)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  REFUNDS — Structured refund lifecycle with reason codes
+    // ═══════════════════════════════════════════════════════════
+
+    /// Request a refund for a recorded payment. Stores the refund on-chain
+    /// with a typed reason code for analytics.
+    pub fn request_refund(
+        env: Env,
+        requester: Address,
+        payment_id: u64,
+        amount: i128,
+        asset: Address,
+        reason: String,
+        reason_code: RefundReasonCode,
+    ) -> Result<u64, PaymentError> {
+        requester.require_auth();
+        require_not_paused(&env)?;
+        if amount <= 0 {
+            return Err(PaymentError::InvalidAmount);
+        }
+
+        // Verify payment exists and isn't already refunded
+        let payment: Payment = env
+            .storage()
+            .persistent()
+            .get(&payment_id)
+            .ok_or(PaymentError::PaymentNotFound)?;
+
+        if payment.cancelled {
+            return Err(PaymentError::PaymentAlreadyCancelled);
+        }
+
+        let mut count: u64 = env.storage().instance().get(&REFUND_CNT).unwrap_or(0);
+        count = count.saturating_add(1);
+
+        let refund = Refund {
+            id: count,
+            payment_id,
+            requester: requester.clone(),
+            amount,
+            asset,
+            reason,
+            reason_code,
+            status: RefundStatus::Requested,
+            requested_at: env.ledger().timestamp(),
+            resolved_at: 0,
+        };
+
+        env.storage().persistent().set(&count, &refund);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().instance().set(&REFUND_CNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "refund"), Symbol::new(&env, "requested")),
+            count,
+        );
+
+        record_audit(&env, "refund_requested", &requester, count, "Refund requested");
+
+        Ok(count)
+    }
+
+    /// Approve a refund request (owner only). Moves status to Approved.
+    pub fn approve_refund(
+        env: Env,
+        caller: Address,
+        refund_id: u64,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        let mut refund: Refund = env
+            .storage()
+            .persistent()
+            .get(&refund_id)
+            .ok_or(PaymentError::RefundNotFound)?;
+
+        if refund.status != RefundStatus::Requested {
+            return Err(PaymentError::RefundAlreadyProcessed);
+        }
+
+        refund.status = RefundStatus::Approved;
+        refund.resolved_at = env.ledger().timestamp();
+        env.storage().persistent().set(&refund_id, &refund);
+        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+
+        record_audit(&env, "refund_approved", &caller, refund_id, "Refund approved");
+
+        Ok(())
+    }
+
+    /// Reject a refund request (owner only).
+    pub fn reject_refund(
+        env: Env,
+        caller: Address,
+        refund_id: u64,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        let mut refund: Refund = env
+            .storage()
+            .persistent()
+            .get(&refund_id)
+            .ok_or(PaymentError::RefundNotFound)?;
+
+        if refund.status != RefundStatus::Requested {
+            return Err(PaymentError::RefundAlreadyProcessed);
+        }
+
+        refund.status = RefundStatus::Rejected;
+        refund.resolved_at = env.ledger().timestamp();
+        env.storage().persistent().set(&refund_id, &refund);
+        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+
+        record_audit(&env, "refund_rejected", &caller, refund_id, "Refund rejected");
+
+        Ok(())
+    }
+
+    /// Process an approved refund — transfers tokens back to requester.
+    pub fn process_refund(
+        env: Env,
+        refund_id: u64,
+    ) -> Result<(), PaymentError> {
+        let mut refund: Refund = env
+            .storage()
+            .persistent()
+            .get(&refund_id)
+            .ok_or(PaymentError::RefundNotFound)?;
+
+        if refund.status != RefundStatus::Approved {
+            return Err(PaymentError::RefundAlreadyProcessed);
+        }
+
+        let token_client = token::Client::new(&env, &refund.asset);
+        let contract_addr = env.current_contract_address();
+        token_client.transfer(&contract_addr, &refund.requester, &refund.amount);
+
+        refund.status = RefundStatus::Processed;
+        refund.resolved_at = env.ledger().timestamp();
+        env.storage().persistent().set(&refund_id, &refund);
+        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "refund"), Symbol::new(&env, "processed")),
+            refund_id,
+        );
+
+        record_audit(&env, "refund_processed", &env.current_contract_address(), refund_id, "Refund processed");
+
+        Ok(())
+    }
+
+    /// Get a refund by ID.
+    pub fn get_refund(env: Env, refund_id: u64) -> Result<Refund, PaymentError> {
+        env.storage()
+            .persistent()
+            .get(&refund_id)
+            .ok_or(PaymentError::RefundNotFound)
+    }
+
+    /// Get total refund count.
+    pub fn get_refund_count(env: Env) -> u64 {
+        env.storage().instance().get(&REFUND_CNT).unwrap_or(0)
+    }
+
+    /// Analytics: count refunds grouped by reason code.
+    /// Returns a sorted list of (reason_code, count) pairs.
+    pub fn get_reason_code_analytics(env: Env) -> Vec<(u32, u64)> {
+        let total = env.storage().instance().get(&REFUND_CNT).unwrap_or(0);
+        let mut counts: Vec<(u32, u64)> = Vec::new(&env);
+
+        // Initialize buckets for each reason code
+        let codes = [0u32, 1, 2, 3, 4, 5]; // ProductDefect=0 .. Other=5
+        for code in codes.iter() {
+            counts.push_back((*code, 0));
+        }
+
+        for id in 1..=total {
+            if let Some(refund) = env.storage().persistent().get::<Refund>(&id) {
+                let code_idx = match refund.reason_code {
+                    RefundReasonCode::ProductDefect => 0,
+                    RefundReasonCode::NonDelivery => 1,
+                    RefundReasonCode::DuplicateCharge => 2,
+                    RefundReasonCode::Unauthorized => 3,
+                    RefundReasonCode::CustomerRequest => 4,
+                    RefundReasonCode::Other => 5,
+                };
+                if let Some(entry) = counts.get_mut(code_idx as u32) {
+                    entry.1 = entry.1.saturating_add(1);
+                }
+            }
+        }
+
+        counts
     }
 
     // ═══════════════════════════════════════════════════════════

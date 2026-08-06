@@ -225,6 +225,31 @@ export interface Proposal {
   created_at: number;
 }
 
+// ── Refund System ───────────────────────────────────────────
+
+export type RefundReasonCode =
+  | "ProductDefect"
+  | "NonDelivery"
+  | "DuplicateCharge"
+  | "Unauthorized"
+  | "CustomerRequest"
+  | "Other";
+
+export type RefundStatus = "Requested" | "Approved" | "Rejected" | "Processed";
+
+export interface Refund {
+  id: number;
+  payment_id: number;
+  requester: string;
+  amount: bigint;
+  asset: string;
+  reason: string;
+  reason_code: RefundReasonCode;
+  status: RefundStatus;
+  requested_at: number;
+  resolved_at: number;
+}
+
 // ── Payment Event (Emitter Contract) ────────────────────────
 
 export interface PaymentEvent {
@@ -286,6 +311,10 @@ export enum PaymentErrorCode {
   ProposalDefeated = 44,
   DepositTooLow = 45,
   SpendingLimitExpired = 46,
+  RefundNotFound = 47,
+  RefundAlreadyProcessed = 48,
+  PaymentAlreadyRefunded = 49,
+  RefundWindowExpired = 50,
 }
 
 export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
@@ -335,5 +364,8 @@ export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
   44: "Proposal was defeated (no > yes)",
   45: "Deposit too low to create a proposal",
   46: "Spending limit expired or exceeded — atomic check-and-spend rejected",
-  // placeholder to create a proposal",
+  47: "Refund request not found",
+  48: "Refund has already been processed or approved",
+  49: "This payment has already been refunded",
+  50: "Refund window has expired — no longer eligible",
 };
