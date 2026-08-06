@@ -11,6 +11,7 @@ const ESCROW_COUNT: Symbol = symbol_short!("ESC_CNT");
 const STREAM_COUNT: Symbol = symbol_short!("STR_CNT");
 const BATCH_COUNT: Symbol = symbol_short!("BAT_CNT");
 const OWNER: Symbol = symbol_short!("OWNER");
+const PAUSED: Symbol = symbol_short!("PAUSED");
 const VERSION: Symbol = symbol_short!("VERSION");
 
 // ── Contract Version ───────────────────────────────────────────
@@ -121,6 +122,15 @@ fn emit_stream_event(env: &Env, creator: &Address, recipient: &Address, amount: 
     );
 }
 
+/// Guard: reject all write operations while the contract is paused.
+fn require_not_paused(env: &Env) -> Result<(), PaymentError> {
+    let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
+    if paused {
+        return Err(PaymentError::ContractPaused);
+    }
+    Ok(())
+}
+
 /// Calculate linearly vested amount with overflow protection.
 fn compute_vested(total_amount: i128, start_time: u64, end_time: u64, now: u64) -> i128 {
     if now >= end_time {
@@ -181,8 +191,44 @@ impl OphirPayContract {
         env.storage().instance().get(&VERSION).unwrap_or(0)
     }
 
+    /// Pause all state-changing operations (owner only).
+    pub fn pause(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED, &true);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Unpause all state-changing operations (owner only).
+    pub fn unpause(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED, &false);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Check if the contract is paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&PAUSED).unwrap_or(false)
+    }
+
     /// Transfer ownership.
-    pub fn transfer_ownership(
         env: Env,
         caller: Address,
         new_owner: Address,
@@ -217,6 +263,7 @@ impl OphirPayContract {
         metadata: String,
     ) -> Result<u64, PaymentError> {
         payer.require_auth();
+        require_not_paused(&env)?;
         if amount <= 0 {
             return Err(PaymentError::InvalidAmount);
         }
@@ -319,6 +366,7 @@ impl OphirPayContract {
         metadata: String,
     ) -> Result<u64, PaymentError> {
         depositor.require_auth();
+        require_not_paused(&env)?;
         if amount <= 0 {
             return Err(PaymentError::InvalidAmount);
         }
@@ -360,6 +408,7 @@ impl OphirPayContract {
         escrow_id: u64,
     ) -> Result<(), PaymentError> {
         owner.require_auth();
+        require_not_paused(&env)?;
         let stored_owner: Address = env
             .storage()
             .instance()
@@ -395,6 +444,7 @@ impl OphirPayContract {
     /// Beneficiary claims escrow after deadline.
     pub fn claim_escrow(env: Env, beneficiary: Address, escrow_id: u64) -> Result<(), PaymentError> {
         beneficiary.require_auth();
+        require_not_paused(&env)?;
 
         let mut escrow: Escrow = env
             .storage()
@@ -452,6 +502,7 @@ impl OphirPayContract {
         metadata: String,
     ) -> Result<u64, PaymentError> {
         creator.require_auth();
+        require_not_paused(&env)?;
         if total_amount <= 0 {
             return Err(PaymentError::InvalidAmount);
         }
@@ -493,6 +544,7 @@ impl OphirPayContract {
     /// Claim vested tokens from a stream. Can be called any time.
     pub fn claim_stream(env: Env, recipient: Address, stream_id: u64) -> Result<i128, PaymentError> {
         recipient.require_auth();
+        require_not_paused(&env)?;
 
         let mut stream: Stream = env
             .storage()
@@ -544,6 +596,7 @@ impl OphirPayContract {
         stream_id: u64,
     ) -> Result<i128, PaymentError> {
         creator.require_auth();
+        require_not_paused(&env)?;
 
         let mut stream: Stream = env
             .storage()
@@ -610,6 +663,7 @@ impl OphirPayContract {
         tx_hash: String,
     ) -> Result<u64, PaymentError> {
         creator.require_auth();
+        require_not_paused(&env)?;
 
         let len = payees.len();
         if len == 0 {
