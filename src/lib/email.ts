@@ -11,7 +11,6 @@ interface EmailPayload {
   text?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   if (process.env.NODE_ENV === "development") {
     console.log("[Email Dev]", {

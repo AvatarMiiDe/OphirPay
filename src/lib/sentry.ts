@@ -11,7 +11,6 @@ interface ErrorContext {
   extra?: Record<string, unknown>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function captureError(error: Error, context?: ErrorContext): void {
   if (process.env.NODE_ENV === "production") {
     // Production: send to error tracking service
@@ -27,7 +26,6 @@ export function captureError(error: Error, context?: ErrorContext): void {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function captureMessage(message: string, level: "info" | "warning" | "error" = "info"): void {
   if (process.env.NODE_ENV === "production") {
     // Sentry.captureMessage(message, level);

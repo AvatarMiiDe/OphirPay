@@ -1,0 +1,37 @@
+# OphirPay Code Owners
+# Automatically assigns PR reviewers based on file paths.
+# Last match wins — place more specific rules later.
+
+# Core contracts
+contracts/              @OphirPay/core-contracts
+
+# Frontend pages and components
+src/app/                @OphirPay/frontend
+src/components/         @OphirPay/frontend
+
+# Backend API routes
+src/app/api/            @OphirPay/backend
+
+# Shared library
+src/lib/                @OphirPay/backend @OphirPay/frontend
+src/hooks/              @OphirPay/frontend
+src/types/              @OphirPay/backend @OphirPay/frontend
+
+# DevOps & CI
+.github/workflows/      @OphirPay/devops
+scripts/                @OphirPay/devops
+Dockerfile              @OphirPay/devops
+docker-compose.yml      @OphirPay/devops
+k8s/                    @OphirPay/devops
+helm/                   @OphirPay/devops
+
+# Documentation
+*.md                    @OphirPay/docs
+docs/                   @OphirPay/docs
+
+# Root config files
+package.json            @OphirPay/devops @OphirPay/frontend
+tsconfig.json           @OphirPay/frontend
+next.config.ts          @OphirPay/frontend
+vitest.config.ts        @OphirPay/frontend
+tailwind.config.ts      @OphirPay/frontend

@@ -5,6 +5,10 @@
 
 let permissionRequested = false;
 
+export function isPermissionRequested(): boolean {
+  return permissionRequested;
+}
+
 /**
  * Request browser notification permission.
  * Call this once during onboarding or after a user action.
