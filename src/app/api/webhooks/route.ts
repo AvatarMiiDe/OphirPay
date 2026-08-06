@@ -53,7 +53,7 @@ const _POST = async (request: Request) => {
 
 // ── DELETE /api/webhooks?action=delete&id=... ─────────────────
 
-const _DELETE = async(request: Request) {
+const _DELETE = async (request: Request) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
