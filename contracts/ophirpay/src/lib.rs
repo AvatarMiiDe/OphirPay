@@ -100,6 +100,7 @@ pub enum PaymentError {
     InsufficientBalance = 16,
     PaymentAlreadyCancelled = 17,
     ContractPaused = 18,
+    NoTokensToWithdraw = 19,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -227,6 +228,34 @@ impl OphirPayContract {
     /// Check if the contract is paused.
     pub fn is_paused(env: Env) -> bool {
         env.storage().instance().get(&PAUSED).unwrap_or(false)
+    }
+
+    /// Emergency withdraw: owner can rescue tokens accidentally sent directly
+    /// to this contract (bypassing escrow/stream creation). Only withdraws
+    /// tokens NOT locked in active escrows or streams.
+    pub fn emergency_withdraw(
+        env: Env,
+        caller: Address,
+        asset: Address,
+        amount: i128,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        if amount <= 0 {
+            return Err(PaymentError::NoTokensToWithdraw);
+        }
+
+        let token_client = token::Client::new(&env, &asset);
+        let contract_addr = env.current_contract_address();
+        token_client.transfer(&contract_addr, &owner, &amount);
+        Ok(())
     }
 
     /// Upgrade the contract to a new WASM hash (owner only).
