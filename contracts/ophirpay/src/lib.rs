@@ -32,6 +32,8 @@ const GOV_CNT: Symbol = symbol_short!("GOV_CNT");
 const GOV_CONF: Symbol = symbol_short!("GOV_CONF");
 const EMITTER_ADDR: Symbol = symbol_short!("EMITTER");
 const HOOK_CNT: Symbol = symbol_short!("HOOK_CNT");
+const FEE_VER_CNT: Symbol = symbol_short!("FE_VER");
+const MSIG_VER_CNT: Symbol = symbol_short!("MS_VER");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -327,6 +329,29 @@ pub struct AuditEntry {
     pub details: String,  // human-readable summary
 }
 
+/// Immutable version snapshot of fee configuration.
+/// Each time `set_fee_config` is called, the previous config is archived
+/// under a new version entry. Enables audit trails and rollback analysis.
+#[contracttype]
+#[derive(Clone)]
+pub struct FeeConfigVersion {
+    pub version: u32,
+    pub config: FeeConfig,
+    pub changed_at: u64,
+    pub changed_by: Address,
+}
+
+/// Immutable version snapshot of multisig configuration.
+/// Each change to multisig config is versioned for audit and rollback.
+#[contracttype]
+#[derive(Clone)]
+pub struct MultisigVersion {
+    pub version: u32,
+    pub config: MultisigConfig,
+    pub changed_at: u64,
+    pub changed_by: Address,
+}
+
 /// On-chain notification hook subscription.
 /// When a matching event fires, an off-chain relayer queries `get_hooks_by_event`
 /// and delivers webhooks to each registered subscriber. This is the on-chain
@@ -595,6 +620,20 @@ impl OphirPayContract {
             return Err(PaymentError::InvalidAmount);
         }
         let config = MultisigConfig { threshold, signers, enabled };
+
+        // Archive previous version before overwriting
+        let mut ver_count: u32 = env.storage().instance().get(&MSIG_VER_CNT).unwrap_or(0);
+        ver_count = ver_count.saturating_add(1);
+        let version_entry = MultisigVersion {
+            version: ver_count,
+            config: config.clone(),
+            changed_at: env.ledger().timestamp(),
+            changed_by: caller.clone(),
+        };
+        env.storage().persistent().set(&(MSIG_VER_CNT, ver_count), &version_entry);
+        env.storage().persistent().extend_ttl(&(MSIG_VER_CNT, ver_count), 5000, 50000);
+        env.storage().instance().set(&MSIG_VER_CNT, &ver_count);
+
         env.storage().instance().set(&MULTISIG_CONFIG, &config);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -605,6 +644,21 @@ impl OphirPayContract {
 
     /// Get current multisig config.
     pub fn get_multisig_config(env: Env) -> Option<MultisigConfig> {
+        let config: Option<MultisigConfig> = env.storage().instance().get(&MULTISIG_CONFIG);
+        config
+    }
+
+    /// Get full multisig configuration version history.
+    pub fn get_multisig_config_history(env: Env) -> Vec<MultisigVersion> {
+        let total = env.storage().instance().get(&MSIG_VER_CNT).unwrap_or(0);
+        let mut history = Vec::new(&env);
+        for v in 1..=total {
+            if let Some(entry) = env.storage().persistent().get(&(MSIG_VER_CNT, v)) {
+                history.push_back(entry);
+            }
+        }
+        history
+    }
         env.storage().instance().get(&MULTISIG_CONFIG)
     }
 
@@ -815,6 +869,20 @@ impl OphirPayContract {
             batch_per_item_fee,
             enabled,
         };
+
+        // Archive previous version before overwriting
+        let mut ver_count: u32 = env.storage().instance().get(&FEE_VER_CNT).unwrap_or(0);
+        ver_count = ver_count.saturating_add(1);
+        let version_entry = FeeConfigVersion {
+            version: ver_count,
+            config: config.clone(),
+            changed_at: env.ledger().timestamp(),
+            changed_by: caller.clone(),
+        };
+        env.storage().persistent().set(&(FEE_VER_CNT, ver_count), &version_entry);
+        env.storage().persistent().extend_ttl(&(FEE_VER_CNT, ver_count), 5000, 50000);
+        env.storage().instance().set(&FEE_VER_CNT, &ver_count);
+
         env.storage().instance().set(&FEE_KEY, &config);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -825,7 +893,28 @@ impl OphirPayContract {
 
     /// Get the current fee configuration.
     pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
-        env.storage().instance().get(&FEE_KEY)
+        let config: Option<FeeConfig> = env.storage().instance().get(&FEE_KEY);
+        config
+    }
+
+    /// Get full fee configuration version history.
+    pub fn get_fee_config_history(env: Env) -> Vec<FeeConfigVersion> {
+        let total = env.storage().instance().get(&FEE_VER_CNT).unwrap_or(0);
+        let mut history = Vec::new(&env);
+        for v in 1..=total {
+            if let Some(entry) = env.storage().persistent().get(&(FEE_VER_CNT, v)) {
+                history.push_back(entry);
+            }
+        }
+        history
+    }
+
+    /// Get a specific fee config version by number.
+    pub fn get_fee_config_at_version(
+        env: Env,
+        version: u32,
+    ) -> Option<FeeConfigVersion> {
+        env.storage().persistent().get(&(FEE_VER_CNT, version))
     }
 
     /// Set the fee collector address (owner only).

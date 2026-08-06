@@ -179,6 +179,20 @@ export interface RecurringPayment {
 
 // ── Fee Configuration ──────────────────────────────────────
 
+export interface FeeConfigVersion {
+  version: number;
+  config: FeeConfig;
+  changed_at: number;
+  changed_by: string;
+}
+
+export interface MultisigVersion {
+  version: number;
+  config: MultisigConfig;
+  changed_at: number;
+  changed_by: string;
+}
+
 export interface FeeConfig {
   payment_fee_bps: number;
   escrow_fee_bps: number;
