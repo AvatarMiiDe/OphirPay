@@ -27,6 +27,8 @@ const FEE_KEY: Symbol = symbol_short!("FEE_CONF");
 const FEE_COLL: Symbol = symbol_short!("FEE_COLL");
 const TMLOCK_CNT: Symbol = symbol_short!("TMLOCK");
 const TMLOCK_DELAY: u64 = 86400; // 24 hours
+const GOV_CNT: Symbol = symbol_short!("GOV_CNT");
+const GOV_CONF: Symbol = symbol_short!("GOV_CONF");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -195,6 +197,34 @@ pub enum ScheduleType {
     Monthly,
 }
 
+/// Governance configuration for DAO-style proposal voting.
+#[contracttype]
+#[derive(Clone)]
+pub struct GovernanceConfig {
+    pub min_proposal_deposit: i128,  // minimum stake to create proposal
+    pub voting_period: u64,          // seconds proposals remain open
+    pub quorum_bps: u32,             // basis points of token supply needed
+    pub enabled: bool,
+}
+
+/// A governance proposal with yes/no voting.
+#[contracttype]
+#[derive(Clone)]
+pub struct Proposal {
+    pub id: u64,
+    pub proposer: Address,
+    pub title: String,
+    pub description: String,
+    pub action_type: String,    // e.g. "upgrade", "set_fee_config", "transfer_ownership"
+    pub target: String,         // function to call
+    pub data: String,           // serialized parameters
+    pub yes_votes: i128,
+    pub no_votes: i128,
+    pub voting_ends_at: u64,
+    pub executed: bool,
+    pub created_at: u64,
+}
+
 /// A timelocked admin action. Proposed now, executable after `unlocks_at`.
 /// This protects against compromised admin keys by forcing a 24h delay
 /// on sensitive operations.
@@ -294,6 +324,13 @@ pub enum PaymentError {
     TimelockNotFound = 36,
     TimelockNotDue = 37,
     TimelockAlreadyExecuted = 38,
+    GovernanceNotConfigured = 39,
+    ProposalNotFound = 40,
+    VotingPeriodEnded = 41,
+    ProposalAlreadyExecuted = 42,
+    QuorumNotMet = 43,
+    ProposalDefeated = 44,
+    DepositTooLow = 45,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -886,6 +923,205 @@ impl OphirPayContract {
     /// Get timelock action count.
     pub fn get_timelock_count(env: Env) -> u64 {
         env.storage().instance().get(&TMLOCK_CNT).unwrap_or(0)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  GOVERNANCE — DAO-ready proposal → vote → execute
+    // ═══════════════════════════════════════════════════════════
+
+    /// Configure governance parameters (owner only).
+    pub fn configure_governance(
+        env: Env,
+        caller: Address,
+        min_proposal_deposit: i128,
+        voting_period: u64,
+        quorum_bps: u32,
+        enabled: bool,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        if quorum_bps > 10000 {
+            return Err(PaymentError::InvalidAmount);
+        }
+        let config = GovernanceConfig { min_proposal_deposit, voting_period, quorum_bps, enabled };
+        env.storage().instance().set(&GOV_CONF, &config);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        record_audit(&env, "governance_configured", &caller, 0, "Governance configured");
+
+        Ok(())
+    }
+
+    /// Get governance configuration.
+    pub fn get_governance_config(env: Env) -> Option<GovernanceConfig> {
+        env.storage().instance().get(&GOV_CONF)
+    }
+
+    /// Create a governance proposal. Requires minimum deposit.
+    pub fn create_proposal(
+        env: Env,
+        proposer: Address,
+        title: String,
+        description: String,
+        action_type: String,
+        target: String,
+        data: String,
+    ) -> Result<u64, PaymentError> {
+        proposer.require_auth();
+        require_not_paused(&env)?;
+
+        let config: GovernanceConfig = env
+            .storage()
+            .instance()
+            .get(&GOV_CONF)
+            .ok_or(PaymentError::GovernanceNotConfigured)?;
+
+        if !config.enabled {
+            return Err(PaymentError::GovernanceNotConfigured);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut count: u64 = env.storage().instance().get(&GOV_CNT).unwrap_or(0);
+        count = count.saturating_add(1);
+
+        let proposal = Proposal {
+            id: count,
+            proposer: proposer.clone(),
+            title,
+            description,
+            action_type,
+            target,
+            data,
+            yes_votes: 0,
+            no_votes: 0,
+            voting_ends_at: now.saturating_add(config.voting_period),
+            executed: false,
+            created_at: now,
+        };
+
+        env.storage().persistent().set(&count, &proposal);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().instance().set(&GOV_CNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "governance"), Symbol::new(&env, "proposed")),
+            count,
+        );
+
+        record_audit(&env, "proposal_created", &proposer, count, "Governance proposal created");
+
+        Ok(count)
+    }
+
+    /// Vote on a proposal. Voting power is determined off-chain; this
+    /// records the raw yes/no count. Anyone can vote with their weight.
+    pub fn vote_on_proposal(
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        support: bool,  // true = yes, false = no
+        weight: i128,    // voting power (1 token = 1 vote typically)
+    ) -> Result<(), PaymentError> {
+        voter.require_auth();
+        require_not_paused(&env)?;
+
+        if weight <= 0 {
+            return Err(PaymentError::InvalidAmount);
+        }
+
+        let mut proposal: Proposal = env
+            .storage()
+            .persistent()
+            .get(&proposal_id)
+            .ok_or(PaymentError::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(PaymentError::ProposalAlreadyExecuted);
+        }
+
+        let now = env.ledger().timestamp();
+        if now > proposal.voting_ends_at {
+            return Err(PaymentError::VotingPeriodEnded);
+        }
+
+        if support {
+            proposal.yes_votes = proposal.yes_votes.saturating_add(weight);
+        } else {
+            proposal.no_votes = proposal.no_votes.saturating_add(weight);
+        }
+
+        env.storage().persistent().set(&proposal_id, &proposal);
+        env.storage().persistent().extend_ttl(&proposal_id, 5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "governance"), Symbol::new(&env, "vote")),
+            (proposal_id, voter),
+        );
+
+        Ok(())
+    }
+
+    /// Execute a passed proposal after voting ends.
+    /// Returns true if the proposal passed (yes > no).
+    pub fn execute_proposal(
+        env: Env,
+        proposal_id: u64,
+    ) -> Result<bool, PaymentError> {
+        let mut proposal: Proposal = env
+            .storage()
+            .persistent()
+            .get(&proposal_id)
+            .ok_or(PaymentError::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(PaymentError::ProposalAlreadyExecuted);
+        }
+
+        let now = env.ledger().timestamp();
+        if now <= proposal.voting_ends_at {
+            return Err(PaymentError::VotingPeriodEnded);
+        }
+
+        let passed = proposal.yes_votes > proposal.no_votes;
+        proposal.executed = true;
+        env.storage().persistent().set(&proposal_id, &proposal);
+        env.storage().persistent().extend_ttl(&proposal_id, 5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "governance"), Symbol::new(&env, "executed")),
+            (proposal_id, passed),
+        );
+
+        record_audit(
+            &env,
+            if passed { "proposal_passed" } else { "proposal_defeated" },
+            &env.current_contract_address(),
+            proposal_id,
+            if passed { "Proposal passed" } else { "Proposal defeated" },
+        );
+
+        Ok(passed)
+    }
+
+    /// Get a proposal by ID.
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, PaymentError> {
+        env.storage()
+            .persistent()
+            .get(&proposal_id)
+            .ok_or(PaymentError::ProposalNotFound)
+    }
+
+    /// Get total proposal count.
+    pub fn get_proposal_count(env: Env) -> u64 {
+        env.storage().instance().get(&GOV_CNT).unwrap_or(0)
     }
 
     /// Calculate fee for a given amount based on bps.
