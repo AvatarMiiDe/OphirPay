@@ -115,6 +115,21 @@ impl PaymentEventEmitter {
             .ok_or(EmitterError::NotInitialized)
     }
 
+    /// Upgrade the emitter to a new WASM hash (owner only).
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), EmitterError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&EMITTER_OWNER)
+            .ok_or(EmitterError::NotInitialized)?;
+        if caller != owner {
+            return Err(EmitterError::Unauthorized);
+        }
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
     /// Transfer ownership
     pub fn transfer_ownership(
         env: Env,

@@ -229,6 +229,22 @@ impl OphirPayContract {
         env.storage().instance().get(&PAUSED).unwrap_or(false)
     }
 
+    /// Upgrade the contract to a new WASM hash (owner only).
+    /// After calling this, the contract will execute the new WASM code.
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
     /// Transfer ownership.
     pub fn transfer_ownership(
         env: Env,
