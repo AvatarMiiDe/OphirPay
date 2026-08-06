@@ -23,6 +23,8 @@ const ESCALATION_KEY: Symbol = symbol_short!("ESCLATN");
 const ROLE_KEY: Symbol = symbol_short!("ROLE");
 const AUDIT_CNT: Symbol = symbol_short!("AUDIT");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
+const FEE_KEY: Symbol = symbol_short!("FEE_CONF");
+const FEE_COLL: Symbol = symbol_short!("FEE_COLL");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -191,6 +193,18 @@ pub enum ScheduleType {
     Monthly,
 }
 
+/// Configurable platform fee structure per operation type.
+#[contracttype]
+#[derive(Clone)]
+pub struct FeeConfig {
+    pub payment_fee_bps: u32,    // basis points (1/10000) per payment record
+    pub escrow_fee_bps: u32,     // fee for creating escrow
+    pub stream_fee_bps: u32,     // fee for creating stream
+    pub batch_base_fee: i128,    // flat base fee per batch (in stroops)
+    pub batch_per_item_fee: i128, // additional fee per batch item
+    pub enabled: bool,
+}
+
 /// A scheduled recurring payment that can be executed by anyone after due.
 #[contracttype]
 #[derive(Clone)]
@@ -257,6 +271,8 @@ pub enum PaymentError {
     RecurringNotDue = 31,
     RecurringAlreadyCancelled = 32,
     RecurringExpired = 33,
+    FeeConfigNotFound = 34,
+    FeeTooHigh = 35,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -644,6 +660,83 @@ impl OphirPayContract {
     // ═══════════════════════════════════════════════════════════
     //  SPENDING LIMITS — Per-user caps with escalation tiers
     // ═══════════════════════════════════════════════════════════
+
+    /// Configure platform fees (owner only). Max 1000 bps = 10%.
+    pub fn set_fee_config(
+        env: Env,
+        caller: Address,
+        payment_fee_bps: u32,
+        escrow_fee_bps: u32,
+        stream_fee_bps: u32,
+        batch_base_fee: i128,
+        batch_per_item_fee: i128,
+        enabled: bool,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        if payment_fee_bps > 1000 || escrow_fee_bps > 1000 || stream_fee_bps > 1000 {
+            return Err(PaymentError::FeeTooHigh);
+        }
+        let config = FeeConfig {
+            payment_fee_bps,
+            escrow_fee_bps,
+            stream_fee_bps,
+            batch_base_fee,
+            batch_per_item_fee,
+            enabled,
+        };
+        env.storage().instance().set(&FEE_KEY, &config);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        record_audit(&env, "fee_config_set", &caller, 0, "Fee configuration updated");
+
+        Ok(())
+    }
+
+    /// Get the current fee configuration.
+    pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
+        env.storage().instance().get(&FEE_KEY)
+    }
+
+    /// Set the fee collector address (owner only).
+    pub fn set_fee_collector(
+        env: Env,
+        caller: Address,
+        collector: Address,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.storage().instance().set(&FEE_COLL, &collector);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Get the fee collector address.
+    pub fn get_fee_collector(env: Env) -> Option<Address> {
+        env.storage().instance().get(&FEE_COLL)
+    }
+
+    /// Calculate fee for a given amount based on bps.
+    pub fn calculate_fee(env: Env, amount: i128, fee_bps: u32) -> i128 {
+        if fee_bps == 0 || amount <= 0 {
+            return 0;
+        }
+        amount.saturating_mul(fee_bps as i128) / 10000
+    }
 
     /// Set spending limits for a user (owner only).
     pub fn set_spending_limit(
