@@ -36,13 +36,15 @@ pub struct Payment {
     pub cancelled: bool,
 }
 
-/// An escrow that locks funds until released by the owner or claimed after deadline.
+/// An escrow that locks funds until released by the owner, claimed after
+/// deadline, or released by an optional third-party arbiter for disputes.
 #[contracttype]
 #[derive(Clone)]
 pub struct Escrow {
     pub id: u64,
     pub depositor: Address,
     pub beneficiary: Address,
+    pub arbiter: Option<Address>,
     pub amount: i128,
     pub asset: Address,
     pub deadline: u64, // ledger timestamp when beneficiary can claim
@@ -548,11 +550,13 @@ impl OphirPayContract {
     // ═══════════════════════════════════════════════════════════
 
     /// Create an escrow. Tokens are transferred from depositor to this contract.
-    /// The beneficiary can claim after `deadline`; owner can release early.
+    /// The beneficiary can claim after `deadline`; owner can release early;
+    /// optional arbiter can resolve disputes.
     pub fn create_escrow(
         env: Env,
         depositor: Address,
         beneficiary: Address,
+        arbiter: Option<Address>,
         amount: i128,
         asset: Address,
         deadline: u64,
@@ -576,6 +580,7 @@ impl OphirPayContract {
             id: count,
             depositor,
             beneficiary: beneficiary.clone(),
+            arbiter: arbiter.clone(),
             amount,
             asset,
             deadline,
@@ -628,6 +633,53 @@ impl OphirPayContract {
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&contract_addr, &escrow.beneficiary, &escrow.amount);
+
+        escrow.released = true;
+        escrow.claimed = true;
+        env.storage().persistent().set(&escrow_id, &escrow);
+        env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
+
+        inc_stat_u64(&env, |s| s.total_escrows_released, |s, v| s.total_escrows_released = v);
+
+        Ok(())
+    }
+
+    /// Arbiter releases escrow to either party (dispute resolution).
+    /// Only the escrow's designated arbiter can call this.
+    pub fn release_by_arbiter(
+        env: Env,
+        arbiter: Address,
+        escrow_id: u64,
+        release_to_beneficiary: bool,
+    ) -> Result<(), PaymentError> {
+        arbiter.require_auth();
+        require_not_paused(&env)?;
+
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_id)
+            .ok_or(PaymentError::EscrowNotFound)?;
+
+        // Verify caller is the designated arbiter
+        match &escrow.arbiter {
+            Some(a) if *a == arbiter => {}
+            _ => return Err(PaymentError::Unauthorized),
+        }
+
+        if escrow.released || escrow.claimed {
+            return Err(PaymentError::EscrowAlreadyReleased);
+        }
+
+        let recipient = if release_to_beneficiary {
+            escrow.beneficiary.clone()
+        } else {
+            escrow.depositor.clone()
+        };
+
+        let token_client = token::Client::new(&env, &escrow.asset);
+        let contract_addr = env.current_contract_address();
+        token_client.transfer(&contract_addr, &recipient, &escrow.amount);
 
         escrow.released = true;
         escrow.claimed = true;
@@ -1172,6 +1224,7 @@ mod tests {
         let escrow_id = client.create_escrow(
             &depositor,
             &beneficiary,
+            &Option::<Address>::None,
             &1000i128,
             &sac,
             &(env.ledger().timestamp() + 86400),
