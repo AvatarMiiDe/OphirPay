@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import { createPaymentRequestSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
+import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 
 export async function GET() {
   try {
@@ -32,6 +34,16 @@ export async function POST(request: Request) {
     });
 
     logger.info("Payment request created", { id: req.id, amount: req.amount });
+
+    dispatchWebhookEventAsync(WEBHOOK_EVENTS.REQUEST_CREATED, {
+      requestId: req.id,
+      amount: req.amount,
+      assetCode: req.assetCode,
+      description: req.description,
+      status: req.status,
+      createdAt: req.createdAt.toISOString(),
+    });
+
     return successResponse(req, undefined, 201);
   } catch (err) {
     logger.error("Failed to create payment request", { error: String(err) });
