@@ -43,6 +43,8 @@ model User {
   payments        Payment[]
   webhooks        Webhook[]
   apiKeys         ApiKey[]
+  refunds         Refund[]
+  notificationHooks NotificationHook[]
 }
 
 // ── Stellar Accounts ──────────────────────────────────────────
@@ -202,6 +204,45 @@ model Webhook {
   updatedAt DateTime @updatedAt
 
   user      User     @relation(fields: [userId], references: [id])
+}
+
+// ── Refunds ───────────────────────────────────────────────────
+
+model Refund {
+  id          String   @id @default(cuid())
+  userId      String
+  paymentId   Int
+  amount      BigInt
+  asset       String   @default("native")
+  reason      String
+  reasonCode  Int      @default(0)
+  status      String   @default("Requested") // Requested | Approved | Rejected | Processed
+  requestedAt DateTime @default(now())
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ── Notification Hooks ────────────────────────────────────────
+
+model NotificationHook {
+  id          String   @id @default(cuid())
+  userId      String
+  eventType   String
+  webhookUrl  String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([eventType])
 }
 
 // ── API Keys ──────────────────────────────────────────────────
