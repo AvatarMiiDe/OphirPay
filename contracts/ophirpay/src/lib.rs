@@ -34,6 +34,8 @@ const EMITTER_ADDR: Symbol = symbol_short!("EMITTER");
 const HOOK_CNT: Symbol = symbol_short!("HOOK_CNT");
 const FEE_VER_CNT: Symbol = symbol_short!("FE_VER");
 const MSIG_VER_CNT: Symbol = symbol_short!("MS_VER");
+const PENDING_OWNER: Symbol = symbol_short!("PND_OWN");
+const OWNER_PROPOSED_AT: Symbol = symbol_short!("OWN_PAT");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -1829,7 +1831,10 @@ impl OphirPayContract {
         Ok(())
     }
 
-    /// Transfer ownership.
+    /// Propose a new owner (two-step transfer).
+    /// The current owner proposes a new owner. After a 24-hour timelock,
+    /// the new owner must call `accept_ownership` to complete the transfer.
+    /// This prevents accidental or malicious ownership changes.
     pub fn transfer_ownership(
         env: Env,
         caller: Address,
@@ -1844,12 +1849,86 @@ impl OphirPayContract {
         if caller != owner {
             return Err(PaymentError::Unauthorized);
         }
-        env.storage().instance().set(&OWNER, &new_owner);
+
+        env.storage().instance().set(&PENDING_OWNER, &new_owner);
+        env.storage().instance().set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
         env.storage().instance().extend_ttl(5000, 50000);
 
-        record_audit(&env, "ownership_transferred", &caller, 0, "Ownership transferred");
+        record_audit(&env, "ownership_proposed", &caller, 0, "Two-step ownership transfer proposed");
 
         Ok(())
+    }
+
+    /// Accept ownership after the 24-hour timelock.
+    /// Called by the proposed new owner. Reverts if no transfer is pending
+    /// or if the timelock hasn't elapsed.
+    pub fn accept_ownership(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&PENDING_OWNER)
+            .ok_or(PaymentError::UpgradeNotProposed)?; // reuse: no pending transfer
+
+        if caller != pending {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        let proposed_at: u64 = env
+            .storage()
+            .instance()
+            .get(&OWNER_PROPOSED_AT)
+            .unwrap_or(0);
+
+        let now = env.ledger().timestamp();
+        let min_delay: u64 = 86400; // 24 hours
+        if now.saturating_sub(proposed_at) < min_delay {
+            return Err(PaymentError::UpgradeTimelockActive); // reuse: timelock not elapsed
+        }
+
+        // Clear pending state
+        env.storage().instance().remove(&PENDING_OWNER);
+        env.storage().instance().remove(&OWNER_PROPOSED_AT);
+
+        // Complete the transfer
+        env.storage().instance().set(&OWNER, &caller);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        record_audit(&env, "ownership_accepted", &caller, 0, "Two-step ownership transfer completed");
+
+        Ok(())
+    }
+
+    /// Cancel a pending ownership transfer (current owner only).
+    pub fn cancel_ownership_transfer(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        env.storage().instance().remove(&PENDING_OWNER);
+        env.storage().instance().remove(&OWNER_PROPOSED_AT);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        record_audit(&env, "ownership_cancelled", &caller, 0, "Pending ownership transfer cancelled");
+
+        Ok(())
+    }
+
+    /// Check if there's a pending ownership transfer.
+    pub fn get_pending_owner(env: Env) -> Option<(Address, u64)> {
+        let pending: Option<Address> = env.storage().instance().get(&PENDING_OWNER);
+        let proposed_at: Option<u64> = env.storage().instance().get(&OWNER_PROPOSED_AT);
+        match (pending, proposed_at) {
+            (Some(addr), Some(ts)) => Some((addr, ts)),
+            _ => None,
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

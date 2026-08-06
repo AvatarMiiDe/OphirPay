@@ -8,6 +8,8 @@ const EMITTER_OWNER: Symbol = symbol_short!("EM_OWNR");
 const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
 const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 const PAUSED: Symbol = symbol_short!("PAUSED");
+const PENDING_OWNER: Symbol = symbol_short!("PND_OWN");
+const OWNER_PROPOSED_AT: Symbol = symbol_short!("OWN_PAT");
 
 // ── Data Types ─────────────────────────────────────────────────
 
@@ -192,7 +194,7 @@ impl PaymentEventEmitter {
         Ok(())
     }
 
-    /// Transfer ownership
+    /// Propose a new owner (two-step transfer). The new owner must accept after 24h.
     pub fn transfer_ownership(
         env: Env,
         caller: Address,
@@ -207,7 +209,31 @@ impl PaymentEventEmitter {
         if caller != owner {
             return Err(EmitterError::Unauthorized);
         }
-        env.storage().instance().set(&EMITTER_OWNER, &new_owner);
+        env.storage().instance().set(&PENDING_OWNER, &new_owner);
+        env.storage().instance().set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Accept ownership after the 24-hour timelock.
+    pub fn accept_ownership(env: Env, caller: Address) -> Result<(), EmitterError> {
+        caller.require_auth();
+        let pending: Address = env
+            .storage()
+            .instance()
+            .get(&PENDING_OWNER)
+            .ok_or(EmitterError::UpgradeNotProposed)?;
+        if caller != pending {
+            return Err(EmitterError::Unauthorized);
+        }
+        let proposed_at: u64 = env.storage().instance().get(&OWNER_PROPOSED_AT).unwrap_or(0);
+        let now = env.ledger().timestamp();
+        if now.saturating_sub(proposed_at) < 86400 {
+            return Err(EmitterError::UpgradeTimelockActive);
+        }
+        env.storage().instance().remove(&PENDING_OWNER);
+        env.storage().instance().remove(&OWNER_PROPOSED_AT);
+        env.storage().instance().set(&EMITTER_OWNER, &caller);
         env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
     }
