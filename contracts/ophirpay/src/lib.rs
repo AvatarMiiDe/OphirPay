@@ -75,6 +75,7 @@ pub struct BatchPayment {
     pub asset: Address,
     pub timestamp: u64,
     pub tx_hash: String,
+    pub payment_ids: Vec<u64>,
 }
 
 #[contracterror]
@@ -229,6 +230,7 @@ impl OphirPayContract {
     }
 
     /// Transfer ownership.
+    pub fn transfer_ownership(
         env: Env,
         caller: Address,
         new_owner: Address,
@@ -678,6 +680,7 @@ impl OphirPayContract {
 
         let mut total_amount: i128 = 0;
         let mut pay_count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
+        let mut payment_ids: Vec<u64> = Vec::new(&env);
 
         for i in 0..len {
             let amount = amounts.get(i).unwrap_or(0);
@@ -687,6 +690,7 @@ impl OphirPayContract {
             }
             total_amount += amount;
             pay_count += 1;
+            payment_ids.push_back(pay_count);
 
             let payment = Payment {
                 id: pay_count,
@@ -720,6 +724,7 @@ impl OphirPayContract {
             asset,
             timestamp: env.ledger().timestamp(),
             tx_hash,
+            payment_ids,
         };
 
         env.storage().persistent().set(&batch_count, &batch);
@@ -741,6 +746,22 @@ impl OphirPayContract {
     /// Get batch count
     pub fn get_batch_count(env: Env) -> u64 {
         env.storage().instance().get(&BATCH_COUNT).unwrap_or(0)
+    }
+
+    /// Get all payment IDs belonging to a batch, then fetch each payment.
+    pub fn get_payments_by_batch(env: Env, batch_id: u64) -> Vec<Payment> {
+        let batch: Option<BatchPayment> = env.storage().persistent().get(&batch_id);
+        let mut payments = Vec::new(&env);
+
+        if let Some(b) = batch {
+            for pid in b.payment_ids.iter() {
+                if let Some(p) = env.storage().persistent().get(&pid) {
+                    payments.push_back(p);
+                }
+            }
+        }
+
+        payments
     }
 }
 
@@ -1115,6 +1136,11 @@ mod tests {
         let batch = client.get_batch(&1);
         assert_eq!(batch.total_amount, 600);
         assert_eq!(batch.total_recipients, 3);
+        assert_eq!(batch.payment_ids.len(), 3);
+
+        // Query batch payments
+        let batch_payments = client.get_payments_by_batch(&1);
+        assert_eq!(batch_payments.len(), 3);
     }
 
     #[test]
