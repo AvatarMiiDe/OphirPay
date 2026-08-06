@@ -7,6 +7,7 @@ const EVENT_COUNT: Symbol = symbol_short!("EVT_CNT");
 const EMITTER_OWNER: Symbol = symbol_short!("EM_OWNR");
 const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
 const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
+const PAUSED: Symbol = symbol_short!("PAUSED");
 
 // ── Data Types ─────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ pub enum EmitterError {
     Unauthorized = 4,
     UpgradeNotProposed = 5,
     UpgradeTimelockActive = 6,
+    ContractPaused = 7,
 }
 
 // ── Contract ───────────────────────────────────────────────────
@@ -65,6 +67,12 @@ impl PaymentEventEmitter {
         tx_hash: String,
     ) -> u64 {
         caller.require_auth();
+
+        // Respect pause state — reject emits while paused
+        let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
+        if paused {
+            panic!("Emitter is paused");
+        }
 
         let mut count: u64 = env.storage().instance().get(&EVENT_COUNT).unwrap_or(0);
         count += 1;
@@ -202,6 +210,44 @@ impl PaymentEventEmitter {
         env.storage().instance().set(&EMITTER_OWNER, &new_owner);
         env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
+    }
+
+    /// Pause event emission (owner only).
+    /// Used by the OphirPay orchestrator to freeze both contracts atomically.
+    pub fn pause(env: Env, caller: Address) -> Result<(), EmitterError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&EMITTER_OWNER)
+            .ok_or(EmitterError::NotInitialized)?;
+        if caller != owner {
+            return Err(EmitterError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED, &true);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Unpause event emission (owner only).
+    pub fn unpause(env: Env, caller: Address) -> Result<(), EmitterError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&EMITTER_OWNER)
+            .ok_or(EmitterError::NotInitialized)?;
+        if caller != owner {
+            return Err(EmitterError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED, &false);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Check if the emitter is paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&PAUSED).unwrap_or(false)
     }
 }
 

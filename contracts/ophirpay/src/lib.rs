@@ -30,6 +30,7 @@ const TMLOCK_CNT: Symbol = symbol_short!("TMLOCK");
 const TMLOCK_DELAY: u64 = 86400; // 24 hours
 const GOV_CNT: Symbol = symbol_short!("GOV_CNT");
 const GOV_CONF: Symbol = symbol_short!("GOV_CONF");
+const EMITTER_ADDR: Symbol = symbol_short!("EMITTER");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -1492,8 +1493,89 @@ impl OphirPayContract {
         entries
     }
 
-    /// Pause all state-changing operations (owner only).
-    pub fn pause(env: Env, caller: Address) -> Result<(), PaymentError> {
+    /// Set the linked Emitter contract address for cross-contract orchestration.
+    /// Owner only. Enables emergency_pause_all / emergency_unpause_all.
+    pub fn set_emitter(
+        env: Env,
+        caller: Address,
+        emitter: Address,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.storage().instance().set(&EMITTER_ADDR, &emitter);
+        env.storage().instance().extend_ttl(5000, 50000);
+        record_audit(&env, "emitter_set", &caller, 0, "Emitter contract linked");
+        Ok(())
+    }
+
+    /// Get the linked Emitter contract address.
+    pub fn get_emitter(env: Env) -> Option<Address> {
+        env.storage().instance().get(&EMITTER_ADDR)
+    }
+
+    /// Emergency pause: pauses BOTH OphirPay AND the linked Emitter contract
+    /// in a single atomic transaction. If the Emitter is not linked, only
+    /// OphirPay is paused. This mirrors FacilPay's cross-contract pause_all.
+    pub fn emergency_pause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        // Pause OphirPay
+        env.storage().instance().set(&PAUSED, &true);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        // Cross-contract call: pause the Emitter if linked
+        if let Some(emitter) = env.storage().instance().get::<Address>(&EMITTER_ADDR) {
+            let pause_fn = Symbol::new(&env, "pause");
+            let args = soroban_sdk::vec![&env, caller.clone()];
+            let _: () = env.invoke_contract(&emitter, &pause_fn, args);
+        }
+
+        record_audit(&env, "emergency_pause_all", &caller, 0, "All contracts paused");
+        Ok(())
+    }
+
+    /// Emergency unpause: unpauses BOTH OphirPay AND the linked Emitter contract
+    /// in a single atomic transaction.
+    pub fn emergency_unpause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        // Unpause OphirPay
+        env.storage().instance().set(&PAUSED, &false);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        // Cross-contract call: unpause the Emitter if linked
+        if let Some(emitter) = env.storage().instance().get::<Address>(&EMITTER_ADDR) {
+            let unpause_fn = Symbol::new(&env, "unpause");
+            let args = soroban_sdk::vec![&env, caller.clone()];
+            let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
+        }
+
+        record_audit(&env, "emergency_unpause_all", &caller, 0, "All contracts unpaused");
+        Ok(())
+    }
         caller.require_auth();
         let owner: Address = env
             .storage()
