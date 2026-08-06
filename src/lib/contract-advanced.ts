@@ -14,11 +14,16 @@ import {
   invokeContractFunction,
   submitContractInvocation,
   simulateContractCall,
-  DEFAULT_CONTRACT_ID,
+  CONTRACT_ID,
+  EMITTER_CONTRACT_ID,
   classifyContractError,
   type InvokeResult,
 } from "@/lib/contracts";
 import { getFreighter } from "@/hooks/useFreighter";
+
+/** Resolve contract ID from env var or fallback to default */
+const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || CONTRACT_ID;
+const EMITTER_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || EMITTER_CONTRACT_ID;
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -85,7 +90,7 @@ export async function setMultisigConfig(
     nativeToScVal(signers, { type: "vec" }),
     nativeToScVal(enabled, { type: "bool" }),
   ];
-  return signAndSubmit(caller, DEFAULT_CONTRACT_ID, "set_multisig_config", args);
+  return signAndSubmit(caller, CONTRACT_ID, "set_multisig_config", args);
 }
 
 export async function proposeMultisigPayment(
@@ -102,7 +107,7 @@ export async function proposeMultisigPayment(
     nativeToScVal(asset, { type: "address" }),
     nativeToScVal(txHash, { type: "string" }),
   ];
-  return signAndSubmit(caller, DEFAULT_CONTRACT_ID, "propose_payment", args);
+  return signAndSubmit(caller, CONTRACT_ID, "propose_payment", args);
 }
 
 export async function approveMultisigPayment(
@@ -113,7 +118,7 @@ export async function approveMultisigPayment(
     nativeToScVal(signer, { type: "address" }),
     nativeToScVal(requestId, { type: "u64" }),
   ];
-  return signAndSubmit(signer, DEFAULT_CONTRACT_ID, "approve_payment", args);
+  return signAndSubmit(signer, CONTRACT_ID, "approve_payment", args);
 }
 
 export async function executeApprovedPayment(
@@ -124,7 +129,7 @@ export async function executeApprovedPayment(
     nativeToScVal(caller, { type: "address" }),
     nativeToScVal(requestId, { type: "u64" }),
   ];
-  return signAndSubmit(caller, DEFAULT_CONTRACT_ID, "execute_approved_payment", args);
+  return signAndSubmit(caller, CONTRACT_ID, "execute_approved_payment", args);
 }
 
 // ── Governance Functions ───────────────────────────────────────
@@ -145,7 +150,7 @@ export async function createGovernanceProposal(
     nativeToScVal(target, { type: "string" }),
     nativeToScVal(data, { type: "string" }),
   ];
-  return signAndSubmit(proposer, DEFAULT_CONTRACT_ID, "create_proposal", args);
+  return signAndSubmit(proposer, CONTRACT_ID, "create_proposal", args);
 }
 
 export async function voteOnProposal(
@@ -160,7 +165,7 @@ export async function voteOnProposal(
     nativeToScVal(support, { type: "bool" }),
     nativeToScVal(weight, { type: "i128" }),
   ];
-  return signAndSubmit(voter, DEFAULT_CONTRACT_ID, "vote_on_proposal", args);
+  return signAndSubmit(voter, CONTRACT_ID, "vote_on_proposal", args);
 }
 
 export async function executeGovernanceProposal(
@@ -171,7 +176,7 @@ export async function executeGovernanceProposal(
   ];
   return signAndSubmit(
     "",
-    DEFAULT_CONTRACT_ID,
+    CONTRACT_ID,
     "execute_proposal",
     args,
   );
@@ -198,7 +203,7 @@ export async function createRecurringPayment(
     nativeToScVal(remaining, { type: "u32" }),
     nativeToScVal(metadata, { type: "string" }),
   ];
-  return signAndSubmit(creator, DEFAULT_CONTRACT_ID, "create_recurring", args);
+  return signAndSubmit(creator, CONTRACT_ID, "create_recurring", args);
 }
 
 export async function cancelRecurringPayment(
@@ -209,7 +214,7 @@ export async function cancelRecurringPayment(
     nativeToScVal(caller, { type: "address" }),
     nativeToScVal(recurringId, { type: "u64" }),
   ];
-  return signAndSubmit(caller, DEFAULT_CONTRACT_ID, "cancel_recurring", args);
+  return signAndSubmit(caller, CONTRACT_ID, "cancel_recurring", args);
 }
 
 // ── Utility: Read-Only Simulation Helpers ──────────────────────
@@ -218,12 +223,12 @@ export async function cancelRecurringPayment(
  * Simulate reading contract stats (read-only, no wallet needed).
  */
 export async function readContractStats(sourcePublicKey: string) {
-  return simulateContractCall(DEFAULT_CONTRACT_ID, "get_stats", sourcePublicKey);
+  return simulateContractCall(CONTRACT_ID, "get_stats", sourcePublicKey);
 }
 
 /**
  * Simulate reading audit log count.
  */
 export async function readAuditLogCount(sourcePublicKey: string) {
-  return simulateContractCall(DEFAULT_CONTRACT_ID, "get_audit_log_count", sourcePublicKey);
+  return simulateContractCall(CONTRACT_ID, "get_audit_log_count", sourcePublicKey);
 }

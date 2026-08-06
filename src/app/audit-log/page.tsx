@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
 interface AuditEntry {
   id: number;
@@ -56,6 +57,9 @@ export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [liveMode, setLiveMode] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -69,6 +73,34 @@ export default function AuditLogPage() {
   }, []);
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  // SSE live streaming
+  const connectSSE = useCallback(() => {
+    if (sseRef.current) sseRef.current.close();
+    const es = new EventSource("/api/audit-log/sse");
+    sseRef.current = es;
+    es.addEventListener("connected", () => setConnected(true));
+    es.addEventListener("audit:entry", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setEntries((prev) => [data, ...prev].slice(0, 100));
+      } catch {}
+    });
+    es.onerror = () => setConnected(false);
+    return es;
+  }, []);
+
+  const toggleLive = () => {
+    if (!liveMode) {
+      const es = connectSSE();
+      setLiveMode(true);
+    } else {
+      sseRef.current?.close();
+      setConnected(false);
+      setLiveMode(false);
+      fetchEntries();
+    }
+  };
 
   const filtered = filter
     ? entries.filter((e) => e.action.includes(filter) || e.details.toLowerCase().includes(filter.toLowerCase()))
@@ -103,13 +135,29 @@ export default function AuditLogPage() {
             Immutable on-chain trail of every contract state change
           </p>
         </div>
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by action or details..."
-          className="px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 text-sm w-full sm:w-64"
-        />
+        <div className="flex gap-2 items-center">
+          <Button
+            size="sm"
+            variant={liveMode ? "primary" : "secondary"}
+            onClick={toggleLive}
+          >
+            {liveMode ? (
+              <span className="flex items-center gap-1">
+                <span className={`h-2 w-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"} animate-pulse`} />
+                Live {connected ? "●" : "✕"}
+              </span>
+            ) : (
+              "▶ Live"
+            )}
+          </Button>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by action or details..."
+            className="px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 text-sm w-full sm:w-64"
+          />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
