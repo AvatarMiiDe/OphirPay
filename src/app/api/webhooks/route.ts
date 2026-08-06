@@ -3,11 +3,12 @@ import prisma from "@/lib/prisma";
 import { createWebhookSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { withApiAuth } from "@/lib/api-auth";
 import crypto from "crypto";
 
 // ── GET /api/webhooks ─────────────────────────────────────────
 
-export async function GET() {
+const _GET = async () => {
   try {
     const webhooks = await prisma.webhook.findMany({
       orderBy: { createdAt: "desc" },
@@ -22,7 +23,7 @@ export async function GET() {
 
 // ── POST /api/webhooks ────────────────────────────────────────
 
-export async function POST(request: Request) {
+const _POST = async (request: Request) => {
   try {
     const body = await request.json();
     const parsed = createWebhookSchema.safeParse(body);
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
 
 // ── DELETE /api/webhooks?action=delete&id=... ─────────────────
 
-export async function DELETE(request: Request) {
+const _DELETE = async(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -64,3 +65,6 @@ export async function DELETE(request: Request) {
     return serverError("Failed to delete webhook");
   }
 }
+export const GET = withApiAuth(_GET);
+export const POST = withApiAuth(_POST);
+export const DELETE = withApiAuth(_DELETE);

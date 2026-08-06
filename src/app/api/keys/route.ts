@@ -2,11 +2,12 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { successResponse, serverError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { withApiAuth } from "@/lib/api-auth";
 
 /**
  * GET /api/keys — list API keys (without exposing hashes)
  */
-export async function GET() {
+const _GET = async () => {
   try {
     const keys = await prisma.apiKey.findMany({
       orderBy: { createdAt: "desc" },
@@ -22,7 +23,7 @@ export async function GET() {
  * POST /api/keys — generate a new API key
  * The raw key is returned only once; only the hash is stored.
  */
-export async function POST(request: Request) {
+const _POST = async (request: Request) => {
   try {
     const { name, userId } = await request.json() as { name: string; userId: string };
 
@@ -67,3 +68,6 @@ export async function DELETE(request: Request) {
     return serverError("Failed to revoke API key");
   }
 }
+
+export const GET = withApiAuth(_GET);
+export const POST = withApiAuth(_POST);
