@@ -72,13 +72,17 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | Single payments | ✅ | ✅ |
 | **Batch payments** (multi-recipient in 1 tx) | ✅ | ❌ |
 | **Recurring payment schedules** | ✅ | ❌ |
-| **Payment requests** (invoice-style) | ✅ | ❌ |
+| **Payment requests** (invoice-style, QR codes) | ✅ | ❌ |
 | **Real-time event streaming** (SSE) | ✅ | ❌ |
+| **Webhook delivery** (HMAC signed, retries) | ✅ | ❌ |
 | **Cross-contract communication** | ✅ | ❌ |
+| **Multi-wallet support** (Freighter, Albedo, xBull) | ✅ | ❌ |
+| **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
+| **PWA with offline support** | ✅ | ❌ |
 | **Classified error handling** (3 types) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
-| **Mainnet-ready config** (1 env var swap) | ✅ | ⚠️ |
-| **Full CI/CD + 23 tests** | ✅ | ⚠️ |
+| **PostgreSQL + SQLite** (provider switching) | ✅ | ⚠️ |
+| **Full CI/CD + 68 tests** | ✅ | ⚠️ |
 
 ---
 
@@ -229,30 +233,42 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 ## 🔐 Wallet Integration
 
-OphirPay uses the **Freighter browser extension** for wallet authentication. Our `WalletProvider` context wraps the entire application, providing:
+OphirPay supports multiple Stellar wallets through a unified connector abstraction. Our `MultiWalletProvider` context wraps the entire application, providing:
 
 | Feature | Implementation |
 |---|---|
-| **Connect** | `freighter.requestAccess()` → reads address + network |
-| **Disconnect** | Full state reset to initial values |
-| **Session persistence** | Auto-detects existing connection on page load |
-| **Missing wallet** | Graceful error: "*Freighter wallet not installed*" |
+| **Multi-wallet** | Connector interface for Freighter, Albedo, xBull, Ledger |
+| **Connect** | Wallet selector modal → `connector.connect()` |
+| **Disconnect** | Full state reset + connector-specific cleanup |
+| **Session persistence** | Auto-detects existing connections on page load |
+| **Missing wallet** | Graceful detection — "Not found" badge + actionable error |
 | **Rejected connection** | Caught, displayed as inline error |
 | **Balance refresh** | Manual refresh button + auto-refresh after send |
 | **Loading states** | `balanceLoading` flag → skeleton shimmer |
 | **Network badge** | Live indicator showing TESTNET/PUBLIC with status dot |
 
+**Supported wallets:**
+
+| Wallet | Type | Status |
+|---|---|---|
+| Freighter | Browser extension | ✅ Fully supported |
+| Albedo | Web-based (no extension) | ✅ Supported |
+| xBull | Browser extension | ✅ Supported |
+| Ledger | Hardware (WebUSB/HID) | 🔜 Coming soon |
+
 ```tsx
 // Consuming the wallet anywhere in your app
 const { wallet, connect, disconnect, fetchBalance } = useWallet();
 
-// wallet.connected  → boolean
-// wallet.publicKey  → "GABCD..."
-// wallet.balance    → "12500.50"
-// wallet.network    → "TESTNET"
-```
+// wallet.connected      → boolean
+// wallet.publicKey      → "GABCD..."
+// wallet.balance        → "12500.50"
+// wallet.network        → "TESTNET"
+// wallet.activeWalletId → "freighter" | "albedo" | "xbull"
 
-**Supported wallets (roadmap):** Albedo, Ledger, xBull, Lobstr, Rabet.
+// Connect a specific wallet
+connect("albedo");  // or "freighter", "xbull"
+```
 
 ---
 
@@ -408,7 +424,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (23 passing)
+# All tests (68 passing)
 npm test
 
 # Watch mode
@@ -421,8 +437,12 @@ npm run ci   # typecheck → lint → test → build
 | Suite | File | Tests | Focus |
 |---|---|---|---|
 | Utils | `src/__tests__/utils.test.ts` | 12 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn` |
+| Utils Extended | `src/__tests__/utils-extended.test.ts` | 20 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn`, asset helpers |
+| UI Components | `src/__tests__/ui-components.test.tsx` | 17 | Button, Card, Badge, Modal, Spinner, Toast |
 | Contracts | `src/__tests__/contracts.test.ts` | 6 | `classifyContractError` — NETWORK, CONTRACT, USER_REJECTION |
+| Contract Utils | `src/__tests__/contract-utils.test.ts` | 5 | Soroban contract helpers |
 | Stellar | `src/__tests__/stellar.test.ts` | 5 | `isValidStellarAddress`, `getStellarExplorerUrl` |
+| Integration | `src/__tests__/integration.test.ts` | 3 | API endpoint health checks |
 
 ![Test Output](./public/screenshots/test-output.png)
 
@@ -451,7 +471,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | Step | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 23 tests across 3 suites |
+| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites |
 | Build | `next build` | Generates `.next/` + `.next/types/` |
 | TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
 
@@ -486,7 +506,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 <img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
 
 ### Test Suite
-*23 tests, 3 suites, all green*
+*68 tests, 7 suites, all green*
 <img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
 
 </div>
@@ -502,8 +522,8 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com) | Utility-first, dark mode, custom theme |
 | **Blockchain** | [Stellar SDK v13](https://stellar.org) + [Soroban](https://soroban.stellar.org) | Horizon, Soroban RPC, TX building |
 | **Contracts** | [Rust](https://www.rust-lang.org) + `soroban-sdk` | WASM compilation, cross-contract invocation |
-| **Wallet** | [Freighter API v4](https://freighter.app) | Browser extension for Stellar |
-| **Database** | [Prisma](https://prisma.io) + SQLite | Type-safe ORM, zero-config local DB |
+| **Wallet** | [Freighter](https://freighter.app) · [Albedo](https://albedo.link) · [xBull](https://xbull.app) | Multi-wallet connector abstraction |
+| **Database** | [Prisma](https://prisma.io) + SQLite / PostgreSQL | Type-safe ORM, provider switching |
 | **Testing** | [Vitest](https://vitest.dev) + React Testing Library | Fast, Vite-native test runner |
 | **CI/CD** | [GitHub Actions](https://github.com/features/actions) | Build, lint, test, typecheck on push |
 | **Hosting** | [Vercel](https://vercel.com) | Auto-deploy from `main`, edge network |
@@ -556,14 +576,15 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 23 tests | **Done** |
-| 🔜 Multi-wallet support (Albedo, Ledger, xBull) | Planned |
-| 🔜 Stellar assets (USDC, custom tokens) | Planned |
-| 🔜 Payment request links (shareable invoices) | Planned |
-| 🔜 Webhook delivery for payment events | Planned |
+| ✅ CI/CD pipeline + 68 tests | **Done** |
+| ✅ Multi-wallet support (Freighter, Albedo, xBull, Ledger) | **Done** |
+| ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
+| ✅ Payment request links (shareable invoices, QR codes) | **Done** |
+| ✅ Webhook delivery for payment events (HMAC signed, retries) | **Done** |
+| ✅ PostgreSQL support (provider switching, migrations) | **Done** |
+| ✅ PWA / mobile app (offline support, install prompt) | **Done** |
 | 🔜 Mainnet deployment | Planned |
-| 🔜 PostgreSQL support | Planned |
-| 🔜 PWA / mobile app | Planned |
+| 🔜 Ledger hardware wallet (WebUSB/HID connector) | Planned |
 
 ---
 
