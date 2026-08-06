@@ -232,3 +232,70 @@ export async function readContractStats(sourcePublicKey: string) {
 export async function readAuditLogCount(sourcePublicKey: string) {
   return simulateContractCall(CONTRACT_ID, "get_audit_log_count", sourcePublicKey);
 }
+
+// ── Refund Functions ──────────────────────────────────────────
+
+export async function requestRefund(
+  caller: string,
+  paymentId: number,
+  amount: number,
+  asset: string,
+  reason: string,
+  reasonCode: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(paymentId, { type: "u64" }),
+    nativeToScVal(amount, { type: "i128" }),
+    nativeToScVal(asset, { type: "address" }),
+    nativeToScVal(reason, { type: "string" }),
+    nativeToScVal(reasonCode, { type: "u32" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "request_refund", args);
+}
+
+export async function approveRefund(
+  caller: string,
+  refundId: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(refundId, { type: "u64" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "approve_refund", args);
+}
+
+export async function processRefund(
+  refundId: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(refundId, { type: "u64" }),
+  ];
+  return signAndSubmit("", CONTRACT_ID, "process_refund", args);
+}
+
+// ── Notification Hook Functions ───────────────────────────────
+
+export async function registerHook(
+  subscriber: string,
+  eventType: string,
+  webhookUrl: string,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(subscriber, { type: "address" }),
+    nativeToScVal(eventType, { type: "string" }),
+    nativeToScVal(webhookUrl, { type: "string" }),
+  ];
+  return signAndSubmit(subscriber, CONTRACT_ID, "register_hook", args);
+}
+
+export async function unregisterHook(
+  caller: string,
+  hookId: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(hookId, { type: "u64" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "unregister_hook", args);
+}
