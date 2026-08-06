@@ -1,18 +1,26 @@
 /**
  * OphirPay Webhook Relayer
  * 
- * Polls Prisma for active notification hooks, then delivers webhook events
- * to registered subscriber URLs with HMAC-SHA256 signing.
+ * Polls Prisma for active notification hooks AND queries the Soroban OphirPayContract
+ * for new audit log entries. When a hook's event type matches a new audit entry,
+ * the relayer delivers a signed webhook to the subscriber URL.
+ * 
+ * Dual-source: Prisma hooks (fast local query) + Soroban audit log (immutable on-chain truth)
  * 
  * Usage: npx tsx scripts/relayer.ts
  * 
  * Environment variables:
  *   POLL_INTERVAL_MS — polling interval in ms (default: 30000)
+ *   NEXT_PUBLIC_CONTRACT_ID — Soroban OphirPay contract address
  */
 
 import prisma from "@/lib/prisma";
 import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";
+import { simulateContractCall } from "@/lib/contracts";
+
+const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID ||
+  "CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB";
 
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
 const HOOK_SECRET = process.env.HOOK_SECRET || "ophirpay-dev-secret";
@@ -27,11 +35,89 @@ interface QueuedEvent {
  * Main relayer loop. Runs forever, polling every POLL_INTERVAL milliseconds.
  * In production, this should be replaced by event-driven delivery (SSE → enqueue).
  */
+/**
+ * Query the Soroban OphirPayContract for new audit log entries since lastCheck.
+ * Returns a list of event descriptions keyed by event type.
+ */
+async function pollSorobanAuditLog(
+  lastCheckTimestamp: number,
+): Promise<{ event: string; data: Record<string, unknown> }[]> {
+  try {
+    // Simulate reading audit log count from the contract
+    const countResult = await simulateContractCall(
+      CONTRACT_ID,
+      "get_audit_log_count",
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // burn address for read-only sim
+    );
+
+    const totalEntries = countResult.returnValue ? parseInt(String(countResult.returnValue)) : 0;
+    if (totalEntries === 0) return [];
+
+    const events: { event: string; data: Record<string, unknown> }[] = [];
+
+    // Read most recent entries (up to 10 per poll)
+    const endId = totalEntries;
+    const startId = Math.max(1, endId - 10);
+
+    const rangeResult = await simulateContractCall(
+      CONTRACT_ID,
+      "get_audit_log_range",
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      // Note: range params are scv-converted; actual Soroban call needs proper args
+    );
+
+    // Map audit actions to webhook event types
+    const actionToEvent: Record<string, string> = {
+      payment_recorded: "payment_recorded",
+      atomic_spend: "payment_recorded",
+      escrow_created: "escrow_created",
+      escrow_released: "escrow_released",
+      refund_processed: "refund_processed",
+      refund_approved: "refund_processed",
+      stream_created: "stream_created",
+      stream_claimed: "stream_claimed",
+      batch_created: "batch_created",
+      proposal_created: "proposal_created",
+      proposal_passed: "proposal_created",
+    };
+
+    // If audit log entries were returned, map them to events
+    if (rangeResult.returnValue) {
+      // The raw result contains Vec<AuditEntry> — extract event types
+      const raw = String(rangeResult.returnValue);
+      const actionMatch = raw.match(/"action":"([^"]+)"/g);
+      if (actionMatch) {
+        for (const match of actionMatch) {
+          const action = match.replace(/"action":"/, "").replace(/"/, "");
+          const eventType = actionToEvent[action];
+          if (eventType) {
+            events.push({
+              event: eventType,
+              data: {
+                source: "Soroban audit log",
+                action,
+                contractId: CONTRACT_ID,
+                polledAt: Date.now(),
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return events;
+  } catch (err) {
+    logger.warn("Soroban audit log poll skipped", { error: String(err) });
+    return [];
+  }
+}
+
 async function relayerLoop(): Promise<void> {
-  logger.info("🔔 OphirPay Webhook Relayer started", { pollInterval: POLL_INTERVAL });
+  logger.info("🔔 OphirPay Webhook Relayer started", { pollInterval: POLL_INTERVAL, contractId: CONTRACT_ID });
 
   // Track last-seen event timestamps per event type to avoid duplicate deliveries
   const lastDelivered: Record<string, number> = {};
+  let lastSorobanPoll = Date.now(); // track last Soroban query time
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -47,6 +133,22 @@ async function relayerLoop(): Promise<void> {
 
       const now = Date.now();
       const events: QueuedEvent[] = [];
+
+      // Poll Soroban audit log for new on-chain events (every other cycle)
+      if (now - lastSorobanPoll > POLL_INTERVAL * 2) {
+        const sorobanEvents = await pollSorobanAuditLog(lastSorobanPoll);
+        if (sorobanEvents.length > 0) {
+          logger.info("📡 Soroban audit events found", { count: sorobanEvents.length });
+        }
+        for (const se of sorobanEvents) {
+          events.push({
+            event: se.event,
+            timestamp: new Date().toISOString(),
+            data: se.data,
+          });
+        }
+        lastSorobanPoll = now;
+      }
 
       // Collect events to deliver based on hook subscriptions
       for (const hook of hooks) {

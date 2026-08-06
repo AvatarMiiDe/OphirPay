@@ -18,13 +18,16 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-68%20passed-brightgreen.svg" alt="68 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-114%20passed-brightgreen.svg" alt="114 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
     </a>
     <a href="./public/demo.mp4">
       <img src="https://img.shields.io/badge/demo-2%20min-8A2BE2.svg?logo=video" alt="2-Minute Demo" />
+    </a>
+    <a href="https://stellar.expert/explorer/testnet/tx/46b565b60170743b847fce7b99708593532f29111688b74494db63ea2ddb3cd9">
+      <img src="https://img.shields.io/badge/verified%20on%20testnet-%E2%9C%93%20View%20TX-success.svg" alt="Verified on Testnet" />
     </a>
     <a href="https://stellar.expert/explorer/testnet/contract/CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
