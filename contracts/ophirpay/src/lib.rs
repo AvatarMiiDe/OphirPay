@@ -145,11 +145,11 @@ fn compute_vested(total_amount: i128, start_time: u64, end_time: u64, now: u64) 
     if total_duration == 0 {
         return total_amount;
     }
-    // Checked multiply to prevent overflow; clamp to total_amount on overflow
+    // Checked multiply to prevent overflow; return 0 on overflow (safe default)
     total_amount
         .checked_mul(elapsed)
         .map(|product| product / total_duration)
-        .unwrap_or(total_amount)
+        .unwrap_or(0)
 }
 
 // ── Contract ───────────────────────────────────────────────────
