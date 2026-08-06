@@ -1,13 +1,16 @@
 /**
- * Contract ABI type definitions for OphirPay Soroban contracts v2.
+ * Contract ABI type definitions for OphirPay Soroban contracts v3.
  * Matches the contracts/ophirpay/src/lib.rs and contracts/emitter/src/lib.rs interfaces.
  *
- * Key features added in v2:
+ * Key features:
  * - Escrow: lock funds with deadline, owner release, beneficiary claim
- * - Payment Streaming: linear vesting over time
- * - Batch Payments: atomic multi-recipient recording
+ * - Payment Streaming: linear vesting with overflow-protected math
+ * - Batch Payments: atomic multi-recipient recording with queryability
  * - SAC Token Support: works with any Stellar Asset Contract
- * - Native Soroban Events: env.events().publish() instead of cross-contract calls
+ * - Native Soroban Events: env.events().publish()
+ * - Emergency pause/unpause circuit breaker
+ * - Contract upgrade mechanism
+ * - Auth-gated emitter contract
  */
 
 /** Supported Stellar asset types */
@@ -24,6 +27,7 @@ export interface OnChainPayment {
   tx_hash: string;
   timestamp: number;
   metadata: string;
+  cancelled: boolean;
 }
 
 // ── Escrow ──────────────────────────────────────────────────
@@ -65,6 +69,7 @@ export interface BatchData {
   asset: string;
   timestamp: number;
   tx_hash: string;
+  payment_ids: number[];
 }
 
 // ── Payment Event (Emitter Contract) ────────────────────────
@@ -98,6 +103,8 @@ export enum PaymentErrorCode {
   BatchEmpty = 14,
   TokenTransferFailed = 15,
   InsufficientBalance = 16,
+  PaymentAlreadyCancelled = 17,
+  ContractPaused = 18,
 }
 
 export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
@@ -117,4 +124,6 @@ export const PAYMENT_ERROR_MESSAGES: Record<number, string> = {
   14: "Batch is empty",
   15: "Token transfer failed",
   16: "Insufficient balance",
+  17: "Payment already cancelled",
+  18: "Contract is paused — all writes are blocked",
 };
