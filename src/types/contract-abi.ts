@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Contract ABI type definitions for OphirPay Soroban contracts v3.
  * Matches the contracts/ophirpay/src/lib.rs and contracts/emitter/src/lib.rs interfaces.

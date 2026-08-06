@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { FreighterAPI } from "@/types";
 
 declare global {

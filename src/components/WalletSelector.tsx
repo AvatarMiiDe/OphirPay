@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useState } from "react";
 import { WALLET_REGISTRY, type WalletId } from "@/lib/wallets";

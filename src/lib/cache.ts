@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Cache-control header utilities for API and static responses.
  */

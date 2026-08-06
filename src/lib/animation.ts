@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Animation constants and helper utilities for consistent motion design.
  */

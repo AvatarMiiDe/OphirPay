@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Common validation helpers for forms and inputs.
  * Works standalone or alongside Zod schemas.

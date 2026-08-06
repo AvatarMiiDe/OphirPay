@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * ARIA label constants for consistent accessibility across the application.
  */

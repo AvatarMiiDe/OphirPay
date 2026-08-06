@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Standard webhook event types for OphirPay.
  * These are the values used in the `events` array when creating a webhook.

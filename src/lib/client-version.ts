@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Client-side version tracking and cache-busting.
  * Reads the build ID from Next.js and exposes it for service workers and analytics.

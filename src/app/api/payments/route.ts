@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import prisma from "@/lib/prisma";
 import { createPaymentSchema, paginationSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError, notFoundError } from "@/lib/api-response";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Responsive design constants matching Tailwind breakpoints.
  */

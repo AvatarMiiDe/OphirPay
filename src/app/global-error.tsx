@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";

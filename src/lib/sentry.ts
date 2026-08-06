@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Error tracking integration point.
  * In production, replace with a real Sentry/DataDog/LogRocket integration.

@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useEffect, useRef } from "react";
 import { getFreighter } from "@/hooks/useFreighter"; // Legacy Freighter-specific hook

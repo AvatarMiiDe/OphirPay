@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * TypeScript type guard and narrowing utilities.
  */

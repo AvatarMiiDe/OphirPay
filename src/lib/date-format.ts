@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Locale-aware date formatting utilities.
  * Uses Intl for consistent formatting across browsers.

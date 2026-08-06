@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * CSV export utility — generates and downloads CSV files from array data.
  */

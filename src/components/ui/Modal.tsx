@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";

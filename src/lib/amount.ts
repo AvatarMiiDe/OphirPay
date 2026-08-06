@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Amount formatting utilities for precise blockchain display.
  * Handles large numbers, compact notation, and consistent precision.

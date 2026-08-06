@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { WalletButton } from "./WalletButton";
 import { useTheme } from "@/hooks/useTheme";

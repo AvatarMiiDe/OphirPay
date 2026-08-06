@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { BatchRecipient } from "@/types";
 import { isValidStellarAddress } from "@/lib/stellar";
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Lightweight runtime validation — no Zod required.
  * For when you need quick client-side validation without importing the Zod schema.

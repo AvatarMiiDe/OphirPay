@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { shortenAddress, timeAgo } from "@/lib/utils";

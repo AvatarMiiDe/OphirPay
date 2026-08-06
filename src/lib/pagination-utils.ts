@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Pagination computation utilities shared between client and server.
  */

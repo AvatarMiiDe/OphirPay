@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Network status detection and display helpers.
  */

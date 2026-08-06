@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * JSON-LD structured data generator for better SEO.
  * Adds schema.org markup for WebApplication, Organization, etc.

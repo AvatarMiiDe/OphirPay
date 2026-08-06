@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Text utilities for truncation, pluralization, and title casing.
  */

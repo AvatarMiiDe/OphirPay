@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Rate limit store abstraction with pluggable backends.
  * Default: in-memory Map (sufficient for single-instance dev).

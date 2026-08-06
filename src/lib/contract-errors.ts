@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Soroban contract error decoding utilities.
  * Maps raw contract error codes and diagnostic events to human-readable messages.

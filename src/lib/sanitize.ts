@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Basic input sanitization utilities to prevent XSS and injection.
  * These are simple defense-in-depth measures — proper validation should

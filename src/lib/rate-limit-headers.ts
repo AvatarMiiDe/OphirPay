@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Rate limit header generation for API responses.
  * Follows IETF draft for RateLimit headers and X-RateLimit-* conventions.

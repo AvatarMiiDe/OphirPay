@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * API authentication middleware for validating API keys against the database.
  * Enforces bearer token authentication on protected API routes.

@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Utility to merge Tailwind classes safely
  */

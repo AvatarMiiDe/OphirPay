@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { decodeContractError, getContractErrorCatalog } from "@/lib/contract-errors";
 

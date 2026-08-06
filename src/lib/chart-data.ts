@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Chart data formatting utilities for analytics displays.
  * Transforms payment records into chart-ready datasets.

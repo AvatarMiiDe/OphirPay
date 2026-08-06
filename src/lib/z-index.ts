@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Z-index management constants for consistent layering.
  * Prevents z-index wars by defining all layers in one place.

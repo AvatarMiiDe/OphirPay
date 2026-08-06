@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Focus trap utility for modals, dialogs, and drawers.
  * Ensures keyboard focus stays within a container when active.

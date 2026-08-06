@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Simple feature flag system for gradual rollouts and A/B testing.
  * Flags are environment-driven and can be overridden via localStorage in dev.

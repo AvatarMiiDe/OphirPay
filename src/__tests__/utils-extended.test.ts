@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect } from "vitest";
 import { sanitizeHtml, escapeHtml, sanitizeStellarAddress } from "@/lib/sanitize";
 import { hashMemoSync, verifyMemo } from "@/lib/memo";

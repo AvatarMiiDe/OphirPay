@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { getHorizonServer } from "@/lib/stellar";
 
 interface FeeEstimate {

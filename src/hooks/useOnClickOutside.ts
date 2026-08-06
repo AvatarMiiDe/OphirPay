@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useEffect, useRef, type RefObject } from "react";
 

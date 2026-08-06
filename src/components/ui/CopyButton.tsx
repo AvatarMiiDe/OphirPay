@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useCallback, useState } from "react";
 import { cn } from "@/lib/utils";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Wallet connector interface for multi-wallet support.
  * Each Stellar wallet (Freighter, Albedo, xBull, Ledger) implements this interface.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Barrel export for the lib directory.
  * Re-exports commonly used utilities for convenient imports.

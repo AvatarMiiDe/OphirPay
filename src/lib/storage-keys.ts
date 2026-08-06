@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * localStorage and sessionStorage key constants.
  * Prevents typos and makes it easy to find all storage usage.

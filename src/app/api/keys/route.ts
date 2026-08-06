@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { successResponse, serverError } from "@/lib/api-response";

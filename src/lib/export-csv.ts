@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Server-side CSV generation for API route export endpoints.
  * Different from the client-side csv.ts which triggers downloads in the browser.

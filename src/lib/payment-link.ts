@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Generate shareable payment request links.
  * These encode payment details into a URL that recipients can open

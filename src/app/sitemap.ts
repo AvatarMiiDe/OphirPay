@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {

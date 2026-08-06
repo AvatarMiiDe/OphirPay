@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Web Vitals tracking integration.
  * In production, send metrics to your analytics platform (Vercel Analytics, Google Analytics, etc.).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * User-facing error message catalog.
  * Centralized messages for consistent UX across the application.

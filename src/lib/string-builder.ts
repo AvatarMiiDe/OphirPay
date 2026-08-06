@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * String builder utility for constructing complex display strings
  * like payment descriptions, event summaries, and notification text.

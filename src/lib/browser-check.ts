@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Browser compatibility detection.
  * Shows warnings for unsupported browsers or missing features.

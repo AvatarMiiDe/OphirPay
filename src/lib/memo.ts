@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Memo hashing utility for privacy-preserving Stellar memos.
  * Stellar memos are public — this utility lets you hash sensitive

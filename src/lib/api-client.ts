@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Client-side API fetch wrapper with error handling and type safety.
  */

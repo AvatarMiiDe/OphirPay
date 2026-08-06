@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore } from "@/lib/rate-limit";

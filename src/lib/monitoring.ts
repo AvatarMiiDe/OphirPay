@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { logger } from "@/lib/logger";
 
 interface HealthSnapshot {

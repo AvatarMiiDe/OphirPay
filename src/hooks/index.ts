@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 export { MultiWalletProvider as WalletProvider, useWallet } from "./useMultiWallet";
 export { getFreighter as getFreighterLegacy } from "./useFreighter";
 export { useTheme } from "./useTheme";

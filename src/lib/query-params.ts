@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Safe URL query parameter parsing utilities.
  * Provides typed extraction with defaults and validation.

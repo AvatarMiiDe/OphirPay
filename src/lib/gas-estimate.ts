@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Stellar transaction cost display utilities.
  * Formats gas costs and fees in human-readable form.

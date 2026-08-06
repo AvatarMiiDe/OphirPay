@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Stellar memo validation utilities.
  * Supports text, ID, hash, and return memo types.

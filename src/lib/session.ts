@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Client-side session store for persisting wallet connection state.
  * Survives page refreshes without reconnecting to Freighter.

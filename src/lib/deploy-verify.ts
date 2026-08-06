@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { Contract } from "@stellar/stellar-sdk";
 import { getSorobanServer } from "@/lib/stellar";
 import { logger } from "@/lib/logger";

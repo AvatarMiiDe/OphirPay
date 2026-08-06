@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Email notification service placeholder.
  * In production, integrate with Resend, SendGrid, or SES to send transactional emails

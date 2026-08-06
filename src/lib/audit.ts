@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Audit trail utility — records important actions for security and compliance.
  * In production, write to a dedicated audit log table or external service.

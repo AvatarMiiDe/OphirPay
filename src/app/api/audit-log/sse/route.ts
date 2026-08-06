@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { NextResponse } from "next/server";
 import { Contract, TransactionBuilder, scValToNative, nativeToScVal } from "@stellar/stellar-sdk";
 import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";

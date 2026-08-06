@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Currency formatting utilities for payment amounts.
  * Supports fiat, XLM, and token amount formatting with locale awareness.

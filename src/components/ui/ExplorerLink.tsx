@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { cn, shortenAddress } from "@/lib/utils";
 import {

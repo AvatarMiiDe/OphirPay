@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { Spinner } from "@/components/ui/Spinner";
 
 /**

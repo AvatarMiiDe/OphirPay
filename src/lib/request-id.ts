@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 

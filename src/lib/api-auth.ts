@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import crypto from "crypto";
 import { timingSafeEqual } from "@/lib/crypto";
 import prisma from "@/lib/prisma";

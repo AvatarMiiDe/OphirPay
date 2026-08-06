@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Stellar Horizon error codes and user-friendly messages.
  * Maps Horizon transaction result codes to human-readable explanations.

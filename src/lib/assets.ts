@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Multi-asset support for Stellar payments beyond native XLM.
  * Includes USDC on Stellar and custom token validation helpers.

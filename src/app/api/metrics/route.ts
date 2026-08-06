@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { NextResponse } from "next/server";
 
 // In-memory counters for Prometheus scraping

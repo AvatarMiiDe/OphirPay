@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { MultiWalletProvider } from "@/hooks/useMultiWallet";
 import { ToastProvider } from "@/components/ui/Toast";

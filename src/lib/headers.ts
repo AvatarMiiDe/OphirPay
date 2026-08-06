@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Security and best-practice HTTP headers for Next.js responses.
  */

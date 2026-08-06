@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Time and duration formatting utilities.
  */

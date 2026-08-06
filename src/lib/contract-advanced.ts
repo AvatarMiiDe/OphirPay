@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Advanced contract interaction helpers for multisig, governance,
  * recurring payments, and audit log queries.

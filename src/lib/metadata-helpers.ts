@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { Metadata } from "next";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ophirpay.vercel.app";

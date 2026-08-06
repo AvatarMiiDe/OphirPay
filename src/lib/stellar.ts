@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import {
   rpc,
   Networks,

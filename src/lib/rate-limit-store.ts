@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Pluggable rate limit store interface.
  * Currently uses an in-memory Map, but can be swapped for Redis in production

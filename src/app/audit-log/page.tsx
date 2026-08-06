@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { EmptyState } from "@/components/EmptyState";

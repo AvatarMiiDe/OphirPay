@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Browser notification API utility for payment alerts.
  * Requests permission once and sends notifications for important events.

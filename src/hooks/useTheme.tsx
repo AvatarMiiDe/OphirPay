@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Theme context provider and useTheme hook.
  * Supports light/dark/system mode with localStorage persistence.

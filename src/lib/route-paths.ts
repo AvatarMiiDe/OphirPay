@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /** Centralized route path constants — prevents hardcoding URLs across the app. */
 export const ROUTES = {
   HOME: "/",

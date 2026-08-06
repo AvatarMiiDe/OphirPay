@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Promise timeout utilities for API calls and async operations.
  */

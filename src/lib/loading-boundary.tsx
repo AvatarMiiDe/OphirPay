@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { Suspense, type ReactNode } from "react";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";

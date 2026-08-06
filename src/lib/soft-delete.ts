@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Soft-delete pattern for Prisma models.
  * Instead of permanently deleting records, mark them as deleted

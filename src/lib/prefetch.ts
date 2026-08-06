@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";

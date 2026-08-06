@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Cryptographic utility functions for OphirPay.
  * Uses the Web Crypto API (available in Node.js 19+ and all modern browsers).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Simple client-side search utility for filtering arrays of objects.
  * No external dependencies — works entirely in-memory.

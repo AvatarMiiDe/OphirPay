@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";

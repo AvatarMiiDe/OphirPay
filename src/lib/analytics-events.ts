@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Analytics event tracking utility.
  * In production, send events to your analytics platform (Google Analytics, Mixpanel, PostHog).

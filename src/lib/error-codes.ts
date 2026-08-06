@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Standard error codes used across the application.
  * These are the `code` values returned in API error responses.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { createWebhookSchema } from "@/lib/validations";

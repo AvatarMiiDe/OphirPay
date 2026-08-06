@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Structured logger for API requests and application events.
  * In production, replace console.log with a proper logger (e.g., pino, winston).

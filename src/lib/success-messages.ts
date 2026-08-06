@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * User-facing success and confirmation message catalog.
  */

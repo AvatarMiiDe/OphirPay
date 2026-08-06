@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import prisma from "@/lib/prisma";
 import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";

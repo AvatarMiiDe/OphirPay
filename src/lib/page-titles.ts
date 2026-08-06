@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Page title constants for consistent navigation and SEO.
  */

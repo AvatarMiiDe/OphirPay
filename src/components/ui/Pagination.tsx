@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";

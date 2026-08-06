@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { fetchOnChainPayments } from "@/lib/contracts";
 import { successResponse, serverError } from "@/lib/api-response";
 import { CACHE_PRESETS } from "@/lib/cache";

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * SSE (Server-Sent Events) endpoint for real-time payment event streaming.
  *

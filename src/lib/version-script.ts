@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Build-time version management.
  * These are utility functions, not an executable script.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // ── Payment Lifecycle States ──────────────────────────────────
 
 export type PaymentStatus =

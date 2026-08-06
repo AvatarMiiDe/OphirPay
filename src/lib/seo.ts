@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * SEO utility helpers for generating sitemap entries, canonical URLs, etc.
  */

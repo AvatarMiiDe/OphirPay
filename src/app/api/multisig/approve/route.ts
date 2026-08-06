@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { type NextRequest, NextResponse } from "next/server";
 
 // POST /api/multisig/approve — approve a payment

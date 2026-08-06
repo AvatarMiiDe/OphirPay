@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Client-side address book using localStorage.
  * Stores frequently used Stellar addresses with labels for quick access.

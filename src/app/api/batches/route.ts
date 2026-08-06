@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import prisma from "@/lib/prisma";
 import type { PaymentStatus } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validations";

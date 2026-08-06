@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Simple client-side A/B testing utility.
  * Assigns users to variants based on a hash of a stable identifier (e.g., address).

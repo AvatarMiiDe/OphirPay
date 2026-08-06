@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 export type { WalletId, WalletConnector, SignOptions, MultiWalletState } from "./types";
 export { WALLET_REGISTRY } from "./types";
 export { freighterConnector } from "./freighter";

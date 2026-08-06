@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Analytics computation helpers for payment metrics.
  */

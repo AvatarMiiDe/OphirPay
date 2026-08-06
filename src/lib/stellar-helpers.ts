@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import { isValidStellarAddress, XLM_STROOPS } from "@/lib/stellar";
 
 /**

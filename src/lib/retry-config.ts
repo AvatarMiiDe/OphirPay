@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Centralized retry configuration for API calls, contract interactions, and webhooks.
  */

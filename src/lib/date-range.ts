@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Date range presets for analytics and reporting filters.
  */

@@ -1,4 +1,6 @@
 "use client";
+// SPDX-License-Identifier: MIT
+
 
 import { useCallback } from "react";
 import { captureError, captureMessage } from "@/lib/sentry";

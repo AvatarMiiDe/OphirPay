@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Color utility functions for charts, badges, and dynamic theming.
  */

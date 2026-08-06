@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { OnChainPayment } from "@/lib/contracts";
 import { XLM_STROOPS } from "@/lib/stellar";
 import { titleCase } from "@/lib/text";

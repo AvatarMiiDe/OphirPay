@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import prisma from "@/lib/prisma";
 import { STELLAR_NETWORK, SOROBAN_RPC_URL } from "@/lib/stellar";
 import { successResponse, serverError } from "@/lib/api-response";
