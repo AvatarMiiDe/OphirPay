@@ -50,15 +50,18 @@ impl PaymentEventEmitter {
     }
 
     /// Record an external payment event.
-    /// This is for events that originate from external systems (Horizon txs, etc.)
+    /// Caller must authorize — typically the main OphirPay contract via cross-contract call.
     pub fn emit_payment(
         env: Env,
+        caller: Address,
         source: String,
         payer: Address,
         payee: Address,
         amount: i128,
         tx_hash: String,
     ) -> u64 {
+        caller.require_auth();
+
         let mut count: u64 = env.storage().instance().get(&EVENT_COUNT).unwrap_or(0);
         count += 1;
 
@@ -180,6 +183,7 @@ mod tests {
         let _ = client.init(&owner);
 
         let id = client.emit_payment(
+            &owner,
             &String::from_str(&env, "OphirPay"),
             &payer,
             &payee,
@@ -212,6 +216,7 @@ mod tests {
 
         for i in 0..5 {
             client.emit_payment(
+                &owner,
                 &String::from_str(&env, "test"),
                 &p1,
                 &p2,
