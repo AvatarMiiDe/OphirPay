@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { Badge } from "@/components/ui/Badge";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { useWallet } from "@/hooks/useMultiWallet";
 import {
   fetchOnChainPayments,
@@ -29,6 +31,14 @@ export default function EventsPage() {
   const [onChainPayments, setOnChainPayments] = useState<OnChainPayment[]>([]);
   const [viewMode, setViewMode] = useState<"live" | "onchain">("live");
   const eventsEndRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  // Auto-scroll to latest event
+  useEffect(() => {
+    if (autoScroll && eventsEndRef.current) {
+      eventsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [liveEvents, autoScroll]);
 
   // SSE connection
   useEffect(() => {
@@ -120,7 +130,14 @@ export default function EventsPage() {
               {liveEvents.length} event{liveEvents.length !== 1 ? "s" : ""}
             </span>
           </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-[600px] overflow-y-auto">
+          <div
+            className="divide-y divide-gray-100 dark:divide-gray-800 max-h-[600px] overflow-y-auto"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+              setAutoScroll(nearBottom);
+            }}
+          >
             {liveEvents.length === 0 && (
               <div className="text-center py-16">
                 <div className="h-12 w-12 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
