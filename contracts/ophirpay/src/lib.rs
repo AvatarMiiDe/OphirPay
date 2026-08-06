@@ -567,23 +567,19 @@ impl OphirPayContract {
         );
 
         let unvested = stream.total_amount - vested - stream.claimed_amount;
-        let already_claimed = stream.claimed_amount;
 
         stream.cancelled = true;
         env.storage().persistent().set(&stream_id, &stream);
         env.storage().persistent().extend_ttl(&stream_id, 5000, 50000);
 
-        // Return unvested tokens to creator
+        // Return unvested tokens to creator (0 if fully vested)
         if unvested > 0 {
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &creator, &unvested);
-            Ok(unvested)
-        } else {
-            // All vested — nothing to return, but stream is cancelled
-            // already_claimed tokens remain with recipient
-            Ok(already_claimed)
         }
+
+        Ok(unvested)
     }
 
     /// Get a stream by ID
