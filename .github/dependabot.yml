@@ -1,0 +1,79 @@
+# OphirPay Dependabot Configuration
+# Automated dependency updates for npm and Cargo.
+
+version: 2
+updates:
+  # ── npm (Next.js frontend + backend) ─────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "📦 dependencies"
+      - "automated"
+    assignees:
+      - "OphirPay/frontend"
+    reviewers:
+      - "OphirPay/frontend"
+    versioning-strategy: "increase"
+    groups:
+      dev-dependencies:
+        patterns:
+          - "@types/*"
+          - "eslint*"
+          - "prettier"
+          - "vitest"
+          - "playwright"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types: ["version-update:semver-major"]
+
+  # ── Cargo (OphirPay contract) ────────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/contracts/ophirpay"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "📦 dependencies"
+      - "📦 contracts"
+      - "automated"
+    assignees:
+      - "OphirPay/core-contracts"
+
+  # ── Cargo (Emitter contract) ─────────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/contracts/emitter"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "📦 dependencies"
+      - "📦 contracts"
+      - "automated"
+    assignees:
+      - "OphirPay/core-contracts"
+
+  # ── GitHub Actions ───────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "⚙️ devops"
+      - "automated"
+    assignees:
+      - "OphirPay/devops"
