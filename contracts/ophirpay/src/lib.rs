@@ -18,6 +18,8 @@ const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 const STATS: Symbol = symbol_short!("STATS");
 const MULTISIG_CONFIG: Symbol = symbol_short!("MULTI_CF");
 const APPROVAL_COUNT: Symbol = symbol_short!("APPR_CNT");
+const SPEND_LIMIT_KEY: Symbol = symbol_short!("SPNDLIM");
+const ESCALATION_KEY: Symbol = symbol_short!("ESCLATN");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -135,6 +137,37 @@ pub struct ApprovalRequest {
     pub approvals: Vec<Address>,
     pub executed: bool,
     pub created_at: u64,
+}
+
+/// Per-user spending limit configuration.
+#[contracttype]
+#[derive(Clone)]
+pub struct SpendingLimit {
+    pub daily_limit: i128,
+    pub monthly_limit: i128,
+    pub current_daily_spend: i128,
+    pub current_monthly_spend: i128,
+    pub last_reset_day: u64,
+    pub last_reset_month: u64,
+    pub is_active: bool,
+}
+
+/// Escalation rules for spending enforcement.
+#[contracttype]
+#[derive(Clone)]
+pub struct EscalationRules {
+    pub small_threshold: i128,  // auto-approve below this
+    pub medium_threshold: i128, // log above this
+    pub enabled: bool,          // above medium → requires admin approval
+}
+
+/// Result of a spending limit check.
+#[contracttype]
+#[derive(Clone)]
+pub enum SpendCheckResult {
+    Approved,
+    Escalated,
+    Rejected,
 }
 
 #[contracterror]
@@ -520,6 +553,134 @@ impl OphirPayContract {
     /// Get an approval request by ID.
     pub fn get_approval_request(env: Env, request_id: u64) -> Option<ApprovalRequest> {
         env.storage().persistent().get(&request_id)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  SPENDING LIMITS — Per-user caps with escalation tiers
+    // ═══════════════════════════════════════════════════════════
+
+    /// Set spending limits for a user (owner only).
+    pub fn set_spending_limit(
+        env: Env,
+        caller: Address,
+        user: Address,
+        daily_limit: i128,
+        monthly_limit: i128,
+        is_active: bool,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        let limit = SpendingLimit {
+            daily_limit,
+            monthly_limit,
+            current_daily_spend: 0,
+            current_monthly_spend: 0,
+            last_reset_day: env.ledger().timestamp(),
+            last_reset_month: env.ledger().timestamp(),
+            is_active,
+        };
+        let key = (SPEND_LIMIT_KEY, user);
+        env.storage().persistent().set(&key, &limit);
+        env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        Ok(())
+    }
+
+    /// Get spending limit for a user.
+    pub fn get_spending_limit(env: Env, user: Address) -> Option<SpendingLimit> {
+        let key = (SPEND_LIMIT_KEY, user);
+        env.storage().persistent().get(&key)
+    }
+
+    /// Configure escalation rules (owner only).
+    pub fn configure_escalation(
+        env: Env,
+        caller: Address,
+        small_threshold: i128,
+        medium_threshold: i128,
+        enabled: bool,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        if small_threshold <= 0 || medium_threshold <= small_threshold {
+            return Err(PaymentError::InvalidAmount);
+        }
+        let rules = EscalationRules { small_threshold, medium_threshold, enabled };
+        env.storage().instance().set(&ESCALATION_KEY, &rules);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Check if a spend is within limits and escalation rules.
+    /// Returns Approved, Escalated, or Rejected.
+    pub fn check_spending(
+        env: Env,
+        user: Address,
+        amount: i128,
+    ) -> SpendCheckResult {
+        // Check escalation rules
+        if let Some(rules) = env.storage().instance().get::<EscalationRules>(&ESCALATION_KEY) {
+            if rules.enabled {
+                if amount >= rules.medium_threshold {
+                    return SpendCheckResult::Escalated;
+                }
+                if amount >= rules.small_threshold {
+                    // Logged but auto-approved — could emit an event here
+                }
+            }
+        }
+
+        // Check per-user spending limits
+        let key = (SPEND_LIMIT_KEY, user.clone());
+        if let Some(mut limit) = env.storage().persistent().get::<SpendingLimit>(&key) {
+            if !limit.is_active {
+                return SpendCheckResult::Rejected;
+            }
+
+            let now = env.ledger().timestamp();
+            let day_seconds: u64 = 86400;
+            let month_seconds: u64 = 30 * 86400;
+
+            // Reset daily counter if a day has passed
+            if now.saturating_sub(limit.last_reset_day) >= day_seconds {
+                limit.current_daily_spend = 0;
+                limit.last_reset_day = now;
+            }
+            // Reset monthly counter if 30 days have passed
+            if now.saturating_sub(limit.last_reset_month) >= month_seconds {
+                limit.current_monthly_spend = 0;
+                limit.last_reset_month = now;
+            }
+
+            // Check limits
+            if limit.current_daily_spend.saturating_add(amount) > limit.daily_limit {
+                return SpendCheckResult::Rejected;
+            }
+            if limit.current_monthly_spend.saturating_add(amount) > limit.monthly_limit {
+                return SpendCheckResult::Rejected;
+            }
+
+            // Update spending counters
+            limit.current_daily_spend = limit.current_daily_spend.saturating_add(amount);
+            limit.current_monthly_spend = limit.current_monthly_spend.saturating_add(amount);
+            env.storage().persistent().set(&key, &limit);
+            env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        }
+
+        SpendCheckResult::Approved
     }
 
     /// Pause all state-changing operations (owner only).
