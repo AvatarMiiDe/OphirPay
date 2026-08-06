@@ -36,6 +36,7 @@ export interface EscrowData {
   id: number;
   depositor: string;
   beneficiary: string;
+  arbiter: string | null;
   amount: bigint;
   asset: string;
   deadline: number;
@@ -70,6 +71,28 @@ export interface BatchData {
   timestamp: number;
   tx_hash: string;
   payment_ids: number[];
+}
+
+export interface BatchCreateResult {
+  batch_id: number;
+  total_requests: number;
+  successful: number;
+  failed: number;
+  total_amount: bigint;
+}
+
+export interface ContractStats {
+  total_payments_recorded: number;
+  total_escrows_created: number;
+  total_escrows_released: number;
+  total_escrows_claimed: number;
+  total_streams_created: number;
+  total_streams_claimed: number;
+  total_streams_cancelled: number;
+  total_batches_processed: number;
+  total_amount_escrowed: bigint;
+  total_amount_streamed: bigint;
+  total_amount_batched: bigint;
 }
 
 // ── Payment Event (Emitter Contract) ────────────────────────
