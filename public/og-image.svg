@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F172A"/>
+      <stop offset="100%" style="stop-color:#1E293B"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <text x="60" y="180" font-family="system-ui,sans-serif" font-size="72" font-weight="bold" fill="#FFFFFF">OphirPay</text>
+  <text x="60" y="245" font-family="system-ui,sans-serif" font-size="28" fill="#94A3B8">Open-Source Payment Orchestration Layer for Stellar</text>
+  <rect x="60" y="290" width="120" height="6" rx="3" fill="#7C3AED"/>
+  <text x="60" y="390" font-family="system-ui,sans-serif" font-size="20" fill="#64748B">Soroban Smart Contracts · 50 Error Codes · 46 Contract Tests · 15-Job CI/CD</text>
+  <text x="60" y="425" font-family="system-ui,sans-serif" font-size="20" fill="#64748B">Payments · Escrows · Streaming · Batch · Refunds · Multisig · Governance</text>
+  <text x="60" y="460" font-family="system-ui,sans-serif" font-size="20" fill="#64748B">Next.js · React 19 · Tailwind CSS · Prisma · Docker · Kubernetes · Helm</text>
+  <text x="60" y="540" font-family="system-ui,sans-serif" font-size="18" fill="#475569">github.com/OphirPay/OphirPay</text>
+  <text x="60" y="570" font-family="system-ui,sans-serif" font-size="16" fill="#334155">MIT Licensed · v0.1.0 · 114 Tests</text>
+</svg>

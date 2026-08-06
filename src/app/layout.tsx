@@ -34,6 +34,13 @@ export const metadata: Metadata = {
     description: "Open-source payment orchestration layer for Stellar. Send, batch, schedule, and track payments.",
     type: "website",
     siteName: "OphirPay",
+    images: [{ url: "/og-image.svg", width: 1200, height: 630, alt: "OphirPay — Stellar Payment Orchestration" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OphirPay — Stellar Payment Orchestration",
+    description: "Open-source payment orchestration layer for Stellar. Smart contracts, webhooks, batch payments, refunds, multisig, governance.",
+    images: ["/og-image.svg"],
   },
   robots: { index: true, follow: true },
   colorScheme: "dark light",
