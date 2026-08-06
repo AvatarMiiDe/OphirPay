@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import { createPaymentSchema, paginationSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError, notFoundError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
+import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 
 export async function GET(request: Request) {
   try {
@@ -66,6 +68,15 @@ export async function POST(request: Request) {
     });
 
     logger.info("Payment created", { id: payment.id, amount: payment.amount });
+
+    // Fire webhook — non-blocking
+    dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CREATED, {
+      paymentId: payment.id,
+      amount: payment.amount,
+      assetCode: payment.assetCode,
+      status: payment.status,
+      createdAt: payment.createdAt.toISOString(),
+    });
 
     return successResponse(payment, undefined, 201);
   } catch (err) {

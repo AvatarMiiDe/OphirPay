@@ -136,7 +136,24 @@ export default function SendPage() {
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
-      // 5. Success!
+      // 5. Create a DB payment record (triggers webhooks automatically)
+      try {
+        await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: parseFloat(amount),
+            assetCode: "XLM",
+            memo: memo.trim() || undefined,
+            sourceAccountId: wallet.publicKey,
+            destAddress: destination.trim(),
+          }),
+        });
+      } catch {
+        // Best-effort: payment already settled on-chain
+      }
+
+      // 6. Success!
       setStep("done");
       setResult({
         type: "success",
