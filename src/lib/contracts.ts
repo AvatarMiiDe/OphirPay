@@ -365,7 +365,7 @@ export async function fetchOnChainPayments(
     const sim = await server.simulateTransaction(tx);
     if ("error" in sim && sim.error) return null;
     if ("result" in sim && sim.result) {
-      let raw = scValToNative(sim.result.retval);
+      const raw = scValToNative(sim.result.retval);
       return {
         id: Number(raw.id),
         payer: String(raw.payer ?? ""),

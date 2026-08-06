@@ -17,13 +17,12 @@ import {
   DEFAULT_CONTRACT_ID,
   EMITTER_CONTRACT_ID,
   classifyContractError,
-  type InvokeResult,
 } from "@/lib/contracts";
 import { getFreighter } from "@/hooks/useFreighter";
 
 /** Resolve contract ID from env var or fallback to default */
 const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || DEFAULT_CONTRACT_ID;
-const EMITTER_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || EMITTER_CONTRACT_ID;
+export const EMITTER_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || EMITTER_CONTRACT_ID;
 
 // ── Types ──────────────────────────────────────────────────────
 
