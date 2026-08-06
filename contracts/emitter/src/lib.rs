@@ -5,6 +5,8 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_sh
 // ── Storage Keys ───────────────────────────────────────────────
 const EVENT_COUNT: Symbol = symbol_short!("EVT_CNT");
 const EMITTER_OWNER: Symbol = symbol_short!("EM_OWNR");
+const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
+const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 
 // ── Data Types ─────────────────────────────────────────────────
 
@@ -28,6 +30,8 @@ pub enum EmitterError {
     AlreadyInitialized = 2,
     EventNotFound = 3,
     Unauthorized = 4,
+    UpgradeNotProposed = 5,
+    UpgradeTimelockActive = 6,
 }
 
 // ── Contract ───────────────────────────────────────────────────
@@ -115,8 +119,12 @@ impl PaymentEventEmitter {
             .ok_or(EmitterError::NotInitialized)
     }
 
-    /// Upgrade the emitter to a new WASM hash (owner only).
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), EmitterError> {
+    /// Propose an emitter upgrade (owner only). Sets a 24-hour timelock.
+    pub fn propose_upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: soroban_sdk::BytesN<32>,
+    ) -> Result<(), EmitterError> {
         caller.require_auth();
         let owner: Address = env
             .storage()
@@ -126,7 +134,53 @@ impl PaymentEventEmitter {
         if caller != owner {
             return Err(EmitterError::Unauthorized);
         }
+        let unlock_at = env.ledger().timestamp() + 86400;
+        env.storage().instance().set(&UPGRADE_HASH, &new_wasm_hash);
+        env.storage().instance().set(&UPGRADE_TIMELOCK, &unlock_at);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Execute a previously proposed upgrade after the timelock expires.
+    pub fn execute_upgrade(env: Env) -> Result<(), EmitterError> {
+        let new_wasm_hash: soroban_sdk::BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&UPGRADE_HASH)
+            .ok_or(EmitterError::UpgradeNotProposed)?;
+
+        let unlock_at: u64 = env
+            .storage()
+            .instance()
+            .get(&UPGRADE_TIMELOCK)
+            .unwrap_or(0);
+
+        if env.ledger().timestamp() < unlock_at {
+            return Err(EmitterError::UpgradeTimelockActive);
+        }
+
+        env.storage().instance().remove(&UPGRADE_HASH);
+        env.storage().instance().remove(&UPGRADE_TIMELOCK);
+        env.storage().instance().extend_ttl(5000, 50000);
+
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Cancel a pending upgrade (owner only).
+    pub fn cancel_upgrade(env: Env, caller: Address) -> Result<(), EmitterError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&EMITTER_OWNER)
+            .ok_or(EmitterError::NotInitialized)?;
+        if caller != owner {
+            return Err(EmitterError::Unauthorized);
+        }
+        env.storage().instance().remove(&UPGRADE_HASH);
+        env.storage().instance().remove(&UPGRADE_TIMELOCK);
+        env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
     }
 

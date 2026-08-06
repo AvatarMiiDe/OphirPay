@@ -13,6 +13,8 @@ const BATCH_COUNT: Symbol = symbol_short!("BAT_CNT");
 const OWNER: Symbol = symbol_short!("OWNER");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const VERSION: Symbol = symbol_short!("VERSION");
+const UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
+const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -101,6 +103,8 @@ pub enum PaymentError {
     PaymentAlreadyCancelled = 17,
     ContractPaused = 18,
     NoTokensToWithdraw = 19,
+    UpgradeNotProposed = 20,
+    UpgradeTimelockActive = 21,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -258,9 +262,13 @@ impl OphirPayContract {
         Ok(())
     }
 
-    /// Upgrade the contract to a new WASM hash (owner only).
-    /// After calling this, the contract will execute the new WASM code.
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), PaymentError> {
+    /// Propose a contract upgrade (owner only). Sets a 24-hour timelock.
+    /// After the timelock expires, anyone can call `execute_upgrade`.
+    pub fn propose_upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: soroban_sdk::BytesN<32>,
+    ) -> Result<(), PaymentError> {
         caller.require_auth();
         let owner: Address = env
             .storage()
@@ -270,7 +278,54 @@ impl OphirPayContract {
         if caller != owner {
             return Err(PaymentError::Unauthorized);
         }
+        let unlock_at = env.ledger().timestamp() + 86400; // 24 hours
+        env.storage().instance().set(&UPGRADE_HASH, &new_wasm_hash);
+        env.storage().instance().set(&UPGRADE_TIMELOCK, &unlock_at);
+        env.storage().instance().extend_ttl(5000, 50000);
+        Ok(())
+    }
+
+    /// Execute a previously proposed upgrade after the timelock expires.
+    pub fn execute_upgrade(env: Env) -> Result<(), PaymentError> {
+        let new_wasm_hash: soroban_sdk::BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&UPGRADE_HASH)
+            .ok_or(PaymentError::UpgradeNotProposed)?;
+
+        let unlock_at: u64 = env
+            .storage()
+            .instance()
+            .get(&UPGRADE_TIMELOCK)
+            .unwrap_or(0);
+
+        if env.ledger().timestamp() < unlock_at {
+            return Err(PaymentError::UpgradeTimelockActive);
+        }
+
+        // Clear the pending upgrade
+        env.storage().instance().remove(&UPGRADE_HASH);
+        env.storage().instance().remove(&UPGRADE_TIMELOCK);
+        env.storage().instance().extend_ttl(5000, 50000);
+
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Cancel a pending upgrade (owner only).
+    pub fn cancel_upgrade(env: Env, caller: Address) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
+        env.storage().instance().remove(&UPGRADE_HASH);
+        env.storage().instance().remove(&UPGRADE_TIMELOCK);
+        env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
     }
 
