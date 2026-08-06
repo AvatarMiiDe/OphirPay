@@ -20,6 +20,7 @@ const MULTISIG_CONFIG: Symbol = symbol_short!("MULTI_CF");
 const APPROVAL_COUNT: Symbol = symbol_short!("APPR_CNT");
 const SPEND_LIMIT_KEY: Symbol = symbol_short!("SPNDLIM");
 const ESCALATION_KEY: Symbol = symbol_short!("ESCLATN");
+const ROLE_KEY: Symbol = symbol_short!("ROLE");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -170,6 +171,15 @@ pub enum SpendCheckResult {
     Rejected,
 }
 
+/// Role-based access control roles.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Role {
+    Admin,
+    Operator,
+    Auditor,
+}
+
 #[contracterror]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -200,6 +210,7 @@ pub enum PaymentError {
     AlreadyApproved = 24,
     ThresholdNotMet = 25,
     AlreadyExecuted = 26,
+    NotARoleHolder = 27,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -681,6 +692,69 @@ impl OphirPayContract {
         }
 
         SpendCheckResult::Approved
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  RBAC — Role-Based Access Control
+    // ═══════════════════════════════════════════════════════════
+
+    /// Grant a role to an address (admin only).
+    pub fn grant_role(
+        env: Env,
+        caller: Address,
+        grantee: Address,
+        role: Role,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, &Role::Admin)?;
+        let key = (ROLE_KEY, grantee);
+        env.storage().persistent().set(&key, &role);
+        env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        env.events().publish(
+            (Symbol::new(&env, "rbac"), Symbol::new(&env, "grant")),
+            (grantee, role),
+        );
+        Ok(())
+    }
+
+    /// Revoke a role from an address (admin only).
+    pub fn revoke_role(
+        env: Env,
+        caller: Address,
+        grantee: Address,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, &Role::Admin)?;
+        let key = (ROLE_KEY, grantee);
+        env.storage().persistent().remove(&key);
+        Ok(())
+    }
+
+    /// Get the role for an address.
+    pub fn get_role(env: Env, addr: Address) -> Option<Role> {
+        let key = (ROLE_KEY, addr);
+        env.storage().persistent().get(&key)
+    }
+
+    /// Check that `caller` holds at least `required` role.
+    /// Admin > Operator > Auditor. Admin can do anything.
+    pub fn require_role(env: &Env, caller: &Address, required: &Role) -> Result<(), PaymentError> {
+        let key = (ROLE_KEY, caller.clone());
+        let role: Option<Role> = env.storage().persistent().get(&key);
+        match role {
+            Some(Role::Admin) => Ok(()), // Admin can do anything
+            Some(Role::Operator) if *required == Role::Operator || *required == Role::Auditor => Ok(()),
+            Some(Role::Auditor) if *required == Role::Auditor => Ok(()),
+            Some(ref r) if r == required => Ok(()),
+            _ => {
+                // Fallback: check legacy owner
+                let owner: Option<Address> = env.storage().instance().get(&OWNER);
+                if owner.as_ref() == Some(caller) {
+                    return Ok(());
+                }
+                Err(PaymentError::NotARoleHolder)
+            }
+        }
     }
 
     /// Pause all state-changing operations (owner only).
