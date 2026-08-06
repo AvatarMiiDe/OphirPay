@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { getDatabaseProvider } from "@/lib/env";
 
 /**
  * Application startup bootstrap.
@@ -7,7 +8,13 @@ import { logger } from "@/lib/logger";
 export async function bootstrap(): Promise<void> {
   const start = Date.now();
 
-  logger.info("OphirPay starting up", { version: "0.1.0", nodeEnv: process.env.NODE_ENV });
+  const dbProvider = getDatabaseProvider();
+
+  logger.info("OphirPay starting up", {
+    version: "0.1.0",
+    nodeEnv: process.env.NODE_ENV,
+    database: dbProvider,
+  });
 
   // Validate required environment variables
   const required = [
@@ -15,6 +22,13 @@ export async function bootstrap(): Promise<void> {
     "NEXT_PUBLIC_CONTRACT_ID",
     "NEXT_PUBLIC_EMITTER_CONTRACT_ID",
   ];
+
+  // PostgreSQL requires DIRECT_DATABASE_URL for migrations when pooling
+  if (dbProvider === "postgresql" && !process.env.DIRECT_DATABASE_URL) {
+    logger.warn(
+      "DIRECT_DATABASE_URL not set — connection pooling (e.g. Supabase/Neon) may need this for migrations"
+    );
+  }
 
   const missing = required.filter((key) => !process.env[key]);
 

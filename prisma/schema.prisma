@@ -2,26 +2,31 @@
 // Documentation: https://pris.ly/d/prisma-schema
 //
 // ── Database Provider ──────────────────────────────────────
-// SQLite (development): npm run db:push
-// PostgreSQL (production): uncomment the PostgreSQL datasource,
-//   comment out the SQLite one, set DATABASE_URL appropriately,
-//   then run: npx prisma migrate deploy
+// The provider is selected via the DATABASE_PROVIDER env var.
+// Supported values: "sqlite" | "postgresql"
+//
+//   SQLite (dev):       DATABASE_PROVIDER=sqlite       npx prisma db push
+//   PostgreSQL (prod):  DATABASE_PROVIDER=postgresql   npx prisma migrate deploy
+//
+// For PostgreSQL with connection pooling (e.g. Supabase, Neon),
+// set DIRECT_DATABASE_URL for migrations.
 
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
-// ── PostgreSQL (uncomment for production) ──────────────────
+// ── SQLite (development) ──────────────────────────────────
 // datasource db {
-//   provider = "postgresql"
+//   provider = "sqlite"
 //   url      = env("DATABASE_URL")
-//   directUrl = env("DIRECT_DATABASE_URL")
 // }
+
+// ── PostgreSQL (production) ────────────────────────────────
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
 
 // ── User / Organization ──────────────────────────────────────
 

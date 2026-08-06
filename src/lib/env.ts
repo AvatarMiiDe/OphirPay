@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_PROVIDER: z.enum(["sqlite", "postgresql"]).default("postgresql"),
+  DIRECT_DATABASE_URL: z.string().optional(),
   NEXT_PUBLIC_STELLAR_NETWORK: z.enum(["TESTNET", "PUBLIC"]).default("TESTNET"),
   NEXT_PUBLIC_STELLAR_RPC_URL: z.string().url().default("https://soroban-testnet.stellar.org:443"),
   NEXT_PUBLIC_STELLAR_HORIZON_URL: z.string().url().default("https://horizon-testnet.stellar.org"),
@@ -17,7 +19,6 @@ const envSchema = z.object({
   NEXT_PUBLIC_FEATURE_MULTI_ASSET: z.string().optional(),
   NEXT_PUBLIC_FEATURE_WEBHOOKS: z.string().optional(),
   NEXT_PUBLIC_APP_VERSION: z.string().optional(),
-  DIRECT_DATABASE_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -26,6 +27,8 @@ export function validateEnv(): Env {
   try {
     return envSchema.parse({
       DATABASE_URL: process.env.DATABASE_URL,
+      DATABASE_PROVIDER: process.env.DATABASE_PROVIDER,
+      DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
       NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
       NEXT_PUBLIC_STELLAR_RPC_URL: process.env.NEXT_PUBLIC_STELLAR_RPC_URL,
       NEXT_PUBLIC_STELLAR_HORIZON_URL: process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL,
@@ -41,7 +44,6 @@ export function validateEnv(): Env {
       NEXT_PUBLIC_FEATURE_MULTI_ASSET: process.env.NEXT_PUBLIC_FEATURE_MULTI_ASSET,
       NEXT_PUBLIC_FEATURE_WEBHOOKS: process.env.NEXT_PUBLIC_FEATURE_WEBHOOKS,
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
-      DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -54,6 +56,10 @@ export function validateEnv(): Env {
 
 export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
+}
+
+export function getDatabaseProvider(): "sqlite" | "postgresql" {
+  return (process.env.DATABASE_PROVIDER as "sqlite" | "postgresql") || "postgresql";
 }
 
 export function getAppUrl(): string {
