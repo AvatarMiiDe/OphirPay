@@ -225,6 +225,17 @@ export interface Proposal {
   created_at: number;
 }
 
+// ── Notification Hooks ──────────────────────────────────────
+
+export interface NotificationHook {
+  id: number;
+  subscriber: string;
+  event_type: string;
+  webhook_url: string;
+  active: boolean;
+  created_at: number;
+}
+
 // ── Refund System ───────────────────────────────────────────
 
 export type RefundReasonCode =

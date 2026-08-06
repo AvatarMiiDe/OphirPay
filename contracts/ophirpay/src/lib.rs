@@ -31,6 +31,7 @@ const TMLOCK_DELAY: u64 = 86400; // 24 hours
 const GOV_CNT: Symbol = symbol_short!("GOV_CNT");
 const GOV_CONF: Symbol = symbol_short!("GOV_CONF");
 const EMITTER_ADDR: Symbol = symbol_short!("EMITTER");
+const HOOK_CNT: Symbol = symbol_short!("HOOK_CNT");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -324,6 +325,21 @@ pub struct AuditEntry {
     pub actor: Address,
     pub target_id: u64,   // the affected entity id (payment, escrow, stream, etc.)
     pub details: String,  // human-readable summary
+}
+
+/// On-chain notification hook subscription.
+/// When a matching event fires, an off-chain relayer queries `get_hooks_by_event`
+/// and delivers webhooks to each registered subscriber. This is the on-chain
+/// source of truth — no missed events, no tampered delivery lists.
+#[contracttype]
+#[derive(Clone)]
+pub struct NotificationHook {
+    pub id: u64,
+    pub subscriber: Address,
+    pub event_type: String, // e.g. "payment_recorded", "refund_processed", "escrow_created"
+    pub webhook_url: String,
+    pub active: bool,
+    pub created_at: u64,
 }
 
 #[contracterror]
@@ -2631,6 +2647,144 @@ impl OphirPayContract {
         }
 
         counts
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  NOTIFICATION HOOKS — On-chain webhook subscriptions
+    // ═══════════════════════════════════════════════════════════
+
+    /// Register a notification hook subscription.
+    /// Returns the hook ID for later management.
+    pub fn register_hook(
+        env: Env,
+        subscriber: Address,
+        event_type: String,
+        webhook_url: String,
+    ) -> Result<u64, PaymentError> {
+        subscriber.require_auth();
+        require_not_paused(&env)?;
+        if event_type.len() == 0 || webhook_url.len() == 0 {
+            return Err(PaymentError::InvalidAmount);
+        }
+
+        let mut count: u64 = env.storage().instance().get(&HOOK_CNT).unwrap_or(0);
+        count = count.saturating_add(1);
+
+        let hook = NotificationHook {
+            id: count,
+            subscriber: subscriber.clone(),
+            event_type: event_type.clone(),
+            webhook_url: webhook_url.clone(),
+            active: true,
+            created_at: env.ledger().timestamp(),
+        };
+
+        // Store hook by ID
+        env.storage().persistent().set(&count, &hook);
+        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+
+        // Index: subscriber → hook IDs (for management)
+        let sub_key = (Symbol::new(&env, "HOOK_SUB"), subscriber);
+        let mut subscriber_hooks: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&sub_key)
+            .unwrap_or(Vec::new(&env));
+        subscriber_hooks.push_back(count);
+        env.storage().persistent().set(&sub_key, &subscriber_hooks);
+        env.storage().persistent().extend_ttl(&sub_key, 5000, 50000);
+
+        env.storage().instance().set(&HOOK_CNT, &count);
+        env.storage().instance().extend_ttl(5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "hook"), Symbol::new(&env, "registered")),
+            (count, event_type),
+        );
+
+        record_audit(&env, "hook_registered", &subscriber, count, "Notification hook registered");
+
+        Ok(count)
+    }
+
+    /// Unregister (deactivate) a notification hook by ID.
+    /// Only the subscriber who created the hook can deactivate it.
+    pub fn unregister_hook(
+        env: Env,
+        caller: Address,
+        hook_id: u64,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        let mut hook: NotificationHook = env
+            .storage()
+            .persistent()
+            .get(&hook_id)
+            .ok_or(PaymentError::AuditEntryNotFound)?; // reuse closest error
+
+        if hook.subscriber != caller {
+            return Err(PaymentError::Unauthorized);
+        }
+
+        hook.active = false;
+        env.storage().persistent().set(&hook_id, &hook);
+        env.storage().persistent().extend_ttl(&hook_id, 5000, 50000);
+
+        env.events().publish(
+            (Symbol::new(&env, "hook"), Symbol::new(&env, "unregistered")),
+            hook_id,
+        );
+
+        record_audit(&env, "hook_unregistered", &caller, hook_id, "Notification hook deactivated");
+
+        Ok(())
+    }
+
+    /// Get all active hooks for a specific event type.
+    /// Used by off-chain relayer to deliver webhooks after an event fires.
+    /// Returns (hook_id, webhook_url) pairs for relayers to deliver to.
+    pub fn get_hooks_by_event(
+        env: Env,
+        event_type: String,
+    ) -> Vec<(u64, String)> {
+        let total = env.storage().instance().get(&HOOK_CNT).unwrap_or(0);
+        let mut results = Vec::new(&env);
+
+        for id in 1..=total {
+            if let Some(hook) = env.storage().persistent().get::<NotificationHook>(&id) {
+                if hook.active && hook.event_type == event_type {
+                    results.push_back((id, hook.webhook_url));
+                }
+            }
+            if results.len() >= 50 {
+                break;
+            }
+        }
+
+        results
+    }
+
+    /// Get all hooks for a specific subscriber.
+    pub fn get_subscriber_hooks(env: Env, subscriber: Address) -> Vec<NotificationHook> {
+        let sub_key = (Symbol::new(&env, "HOOK_SUB"), subscriber);
+        let hook_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&sub_key)
+            .unwrap_or(Vec::new(&env));
+
+        let mut hooks = Vec::new(&env);
+        for id in hook_ids.iter() {
+            if let Some(hook) = env.storage().persistent().get(&id) {
+                hooks.push_back(hook);
+            }
+        }
+
+        hooks
+    }
+
+    /// Get total registered hook count.
+    pub fn get_hook_count(env: Env) -> u64 {
+        env.storage().instance().get(&HOOK_CNT).unwrap_or(0)
     }
 
     // ═══════════════════════════════════════════════════════════
