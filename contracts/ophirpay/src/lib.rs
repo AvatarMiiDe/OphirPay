@@ -2885,4 +2885,372 @@ mod tests {
         // Second cancel should panic with PaymentAlreadyCancelled
         client.cancel_payment(&owner, &1);
     }
+
+    // ── Multisig Tests ─────────────────────────────────────
+
+    #[test]
+    fn test_multisig_configure_and_propose() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let signer1 = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signer3 = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        let signers = vec![&env, signer1.clone(), signer2.clone(), signer3.clone()];
+        client.set_multisig_config(&owner, &2u32, &signers, &true);
+
+        let config = client.get_multisig_config();
+        assert!(config.is_some());
+        let cfg = config.unwrap();
+        assert_eq!(cfg.threshold, 2);
+        assert!(cfg.enabled);
+
+        let proposal_id = client.propose_payment(
+            &signer1, &payee, &1000i128, &sac, &String::from_str(&env, "tx1"),
+        );
+        assert_eq!(proposal_id, 1);
+
+        let req = client.get_approval_request(&1);
+        assert!(req.is_some());
+        assert!(!req.unwrap().executed);
+    }
+
+    #[test]
+    fn test_multisig_approve_and_execute() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let signer1 = Address::generate(&env);
+        let signer2 = Address::generate(&env);
+        let signer3 = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        let signers = vec![&env, signer1.clone(), signer2.clone(), signer3.clone()];
+        client.set_multisig_config(&owner, &2u32, &signers, &true);
+
+        let _ = client.propose_payment(
+            &signer1, &payee, &1000i128, &sac, &String::from_str(&env, "tx1"),
+        );
+
+        let threshold_met = client.approve_payment(&signer2, &1);
+        assert!(!threshold_met);
+
+        let threshold_met = client.approve_payment(&signer3, &1);
+        assert!(threshold_met);
+
+        let pay_id = client.execute_approved_payment(&signer1, &1);
+        assert_eq!(pay_id, 1);
+        assert_eq!(client.get_payment_count(), 1);
+    }
+
+    // ── Spending Limit Tests ───────────────────────────────
+
+    #[test]
+    fn test_spending_limit_approved() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let user = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.set_spending_limit(&owner, &user, &1000i128, &5000i128, &true);
+
+        let result = client.check_spending(&user, &500i128);
+        assert!(matches!(result, SpendCheckResult::Approved));
+    }
+
+    #[test]
+    fn test_spending_limit_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let user = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.set_spending_limit(&owner, &user, &100i128, &1000i128, &true);
+
+        let result = client.check_spending(&user, &500i128);
+        assert!(matches!(result, SpendCheckResult::Rejected));
+    }
+
+    #[test]
+    fn test_escalation_rules() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let user = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.configure_escalation(&owner, &100i128, &1000i128, &true);
+
+        let result = client.check_spending(&user, &2000i128);
+        assert!(matches!(result, SpendCheckResult::Escalated));
+    }
+
+    // ── RBAC Tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_grant_and_revoke_role() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let operator = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.grant_role(&owner, &operator, &Role::Operator);
+
+        let role = client.get_role(&operator);
+        assert!(role.is_some());
+
+        client.revoke_role(&owner, &operator);
+        let role = client.get_role(&operator);
+        assert!(role.is_none());
+    }
+
+    // ── Audit Log Test ─────────────────────────────────────
+
+    #[test]
+    fn test_audit_log_after_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+        let _ = client.record_payment(
+            &payer, &payee, &100i128, &sac,
+            &String::from_str(&env, "tx"), &String::from_str(&env, "audit"),
+        );
+
+        let count = client.get_audit_log_count();
+        assert!(count >= 1);
+
+        let entry = client.get_audit_entry(&1);
+        assert!(entry.is_ok());
+    }
+
+    // ── Recurring Payment Tests ─────────────────────────────
+
+    #[test]
+    fn test_create_recurring_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        let id = client.create_recurring(
+            &creator, &payee, &100i128, &sac,
+            &ScheduleType::Daily, &10u32, &String::from_str(&env, "subscription"),
+        );
+        assert_eq!(id, 1);
+        assert_eq!(client.get_recurring_count(), 1);
+
+        let rec = client.get_recurring(&1);
+        assert!(rec.is_ok());
+        assert!(rec.unwrap().active);
+    }
+
+    #[test]
+    fn test_execute_recurring_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let now = env.ledger().timestamp();
+        let _ = client.init(&owner);
+
+        let id = client.create_recurring(
+            &creator, &payee, &100i128, &sac,
+            &ScheduleType::Daily, &5u32, &String::from_str(&env, "sub"),
+        );
+
+        env.ledger().set_timestamp(now + 86400 + 1);
+        let pay_id = client.execute_recurring(&creator, &id);
+        assert_eq!(pay_id, 1);
+        assert_eq!(client.get_payment_count(), 1);
+    }
+
+    #[test]
+    fn test_cancel_recurring_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+        let id = client.create_recurring(
+            &creator, &payee, &100i128, &sac,
+            &ScheduleType::Daily, &10u32, &String::from_str(&env, "sub"),
+        );
+
+        client.cancel_recurring(&creator, &id);
+        let rec = client.get_recurring(&id).unwrap();
+        assert!(!rec.active);
+    }
+
+    // ── Fee Config Tests ───────────────────────────────────
+
+    #[test]
+    fn test_set_and_get_fee_config() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.set_fee_config(&owner, &50u32, &100u32, &200u32, &10i128, &1i128, &true);
+
+        let config = client.get_fee_config();
+        assert!(config.is_some());
+        let cfg = config.unwrap();
+        assert_eq!(cfg.payment_fee_bps, 50);
+        assert!(cfg.enabled);
+    }
+
+    #[test]
+    fn test_calculate_fee() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let fee = client.calculate_fee(&1000i128, &100u32);
+        assert_eq!(fee, 10);
+
+        let fee = client.calculate_fee(&0i128, &100u32);
+        assert_eq!(fee, 0);
+    }
+
+    // ── Timelocked Action Tests ────────────────────────────
+
+    #[test]
+    fn test_timelocked_action_propose_and_execute() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let now = env.ledger().timestamp();
+        let _ = client.init(&owner);
+
+        let id = client.propose_timelocked_action(
+            &owner,
+            &String::from_str(&env, "set_fee_config"),
+            &String::from_str(&env, "set_fee_config"),
+            &String::from_str(&env, "params"),
+        );
+        assert_eq!(id, 1);
+        assert_eq!(client.get_timelock_count(), 1);
+
+        let action = client.get_timelocked_action(&1);
+        assert!(action.is_ok());
+        assert!(!action.unwrap().executed);
+
+        env.ledger().set_timestamp(now + TMLOCK_DELAY + 1);
+        client.execute_timelocked_action(&1);
+
+        let action = client.get_timelocked_action(&1).unwrap();
+        assert!(action.executed);
+    }
+
+    #[test]
+    fn test_timelocked_action_cancel() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let id = client.propose_timelocked_action(
+            &owner,
+            &String::from_str(&env, "pause"),
+            &String::from_str(&env, "pause"),
+            &String::from_str(&env, ""),
+        );
+
+        client.cancel_timelocked_action(&owner, &id);
+        let action = client.get_timelocked_action(&id).unwrap();
+        assert!(action.executed);
+    }
+
+    // ── Governance Tests ───────────────────────────────────
+
+    #[test]
+    fn test_governance_proposal_vote_execute() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        let now = env.ledger().timestamp();
+        let _ = client.init(&owner);
+
+        client.configure_governance(&owner, &0i128, &1000u64, &51u32, &true);
+
+        let pid = client.create_proposal(
+            &proposer,
+            &String::from_str(&env, "Test Proposal"),
+            &String::from_str(&env, "A test description"),
+            &String::from_str(&env, "upgrade"),
+            &String::from_str(&env, "execute_upgrade"),
+            &String::from_str(&env, "hash"),
+        );
+        assert_eq!(pid, 1);
+        assert_eq!(client.get_proposal_count(), 1);
+
+        client.vote_on_proposal(&voter, &1, &true, &100i128);
+
+        let prop = client.get_proposal(&1).unwrap();
+        assert_eq!(prop.yes_votes, 100);
+        assert_eq!(prop.no_votes, 0);
+
+        env.ledger().set_timestamp(now + 2000);
+        let passed = client.execute_proposal(&1);
+        assert!(passed);
+    }
 }
