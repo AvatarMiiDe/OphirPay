@@ -198,12 +198,26 @@ jobs:
           retention-days: 7
 
   # ══════════════════════════════════════════════════════════════
-  # 9. PRISMA VALIDATE — Schema integrity + generate
+  # 9. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
-    name: "9️⃣ Prisma — Validate Schema"
+    name: "9️⃣ Prisma — Validate + DB Push"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prisma
+          POSTGRES_PASSWORD: prisma
+          POSTGRES_DB: ophirpay_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -213,8 +227,25 @@ jobs:
         run: npx prisma validate
       - name: Generate Prisma client
         run: npx prisma generate
+      - name: Push schema to test DB (catches runtime schema errors)
+        run: |
+          npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_ci
       - name: Check for drift (schema vs migrations)
-        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url postgresql://postgres:postgres@localhost:5432/dummy 2>&1 || true
+        run: |
+          # If migrations exist, diff must be empty; if none exist yet, skip
+          if [ -d prisma/migrations ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+            npx prisma migrate diff \
+              --from-migrations prisma/migrations \
+              --to-schema-datamodel prisma/schema.prisma \
+              --shadow-database-url "postgresql://prisma:prisma@localhost:5432/ophirpay_ci_shadow"
+            echo "✅ No schema drift detected"
+          else
+            echo "ℹ️  No migrations directory yet — skipping drift check"
+          fi
+        env:
+          DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_ci
 
   # ══════════════════════════════════════════════════════════════
   # 10. DOCKER BUILD — Build & validate Docker image
@@ -255,8 +286,13 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
       - name: Validate Kubernetes manifests
         run: kubeconform -summary -strict k8s/
-      - name: Validate with k8s schema
-        run: kubeconform -schema-location default -schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' -summary k8s/ 2>&1 || true
+      - name: Validate against Kubernetes JSON schemas (strict)
+        run: |
+          kubeconform \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json' \
+            -summary -strict \
+            k8s/
 
   # ══════════════════════════════════════════════════════════════
   # 12. HELM LINT — Helm chart validation

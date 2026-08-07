@@ -37,6 +37,26 @@ export async function GET() {
       rpcStatus = "error";
     }
 
+    // Check Redis connectivity (if configured)
+    let redisStatus: "ok" | "error" | "disabled" = "disabled";
+    let redisLatency: number | null = null;
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+      try {
+        const start = Date.now();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(redisUrl.replace(/\/\/.*@/, "//health:@").replace(/\/\d+$/, "") + "/ping", {
+          signal: controller.signal,
+        }).catch(() => null);
+        clearTimeout(timeout);
+        redisLatency = Date.now() - start;
+        redisStatus = res?.ok ? "ok" : "error";
+      } catch {
+        redisStatus = "error";
+      }
+    }
+
     const healthy = dbStatus === "ok";
 
     return successResponse(
@@ -44,6 +64,7 @@ export async function GET() {
         version: "0.1.0",
         services: {
           database: { status: dbStatus, latencyMs: dbLatency },
+          redis: { status: redisStatus, latencyMs: redisLatency },
           stellar: {
             network: STELLAR_NETWORK,
             rpcUrl: SOROBAN_RPC_URL,

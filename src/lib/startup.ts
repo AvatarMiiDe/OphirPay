@@ -2,6 +2,7 @@
 
 import { logger } from "@/lib/logger";
 import { getDatabaseProvider } from "@/lib/env";
+import { initRateLimitStore } from "@/lib/rate-limit";
 
 /**
  * Application startup bootstrap.
@@ -16,7 +17,11 @@ export async function bootstrap(): Promise<void> {
     version: "0.1.0",
     nodeEnv: process.env.NODE_ENV,
     database: dbProvider,
+    redis: process.env.REDIS_URL ? "configured" : "not configured",
   });
+
+  // Initialise rate-limit store (Redis if available, else in-memory)
+  await initRateLimitStore();
 
   // Validate required environment variables
   const required = [

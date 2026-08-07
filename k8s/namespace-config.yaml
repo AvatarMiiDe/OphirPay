@@ -26,5 +26,6 @@ metadata:
 type: Opaque
 stringData:
   DATABASE_URL: "postgresql://ophirpay:CHANGE_ME@postgres:5432/ophirpay"
+  REDIS_URL: "redis://ophirpay:CHANGE_ME@redis:6379"
   NEXT_PUBLIC_CONTRACT_ID: "CHANGE_ME"
   NEXT_PUBLIC_EMITTER_CONTRACT_ID: "CHANGE_ME"
