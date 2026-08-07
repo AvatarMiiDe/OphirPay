@@ -11,23 +11,22 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
-/** OphirPay core contract — lazy resolution for Vercel build compatibility */
+/** OphirPay core contract */
+export function getOphirpayContractId(): string {
+  const id = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
+  if (!id) throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
+  return id;
+}
+/** @deprecated Use getOphirpayContractId() for runtime safety */
 export const OPHIRPAY_CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
-export function requireOphirpayContractId(): string {
-  if (!OPHIRPAY_CONTRACT_ID) {
-    throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
-  }
-  return OPHIRPAY_CONTRACT_ID;
-}
 
-/** Emitter contract — lazy resolution for Vercel build compatibility */
-export const EMITTER_CONTRACT_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
-export function requireEmitterContractId(): string {
-  if (!EMITTER_CONTRACT_ID) {
-    throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
-  }
-  return EMITTER_CONTRACT_ID;
+/** Emitter contract */
+export function getEmitterContractId(): string {
+  const id = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
+  if (!id) throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
+  return id;
 }
+export const EMITTER_CONTRACT_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
 
 // Legacy alias — kept for backward compatibility in existing callers
 export const DEFAULT_CONTRACT_ID = OPHIRPAY_CONTRACT_ID;
@@ -317,6 +316,11 @@ export async function recordPaymentOnChain(params: {
 // ── On-Chain Reads (Public) ────────────────────────────────────
 
 /** Simulation source account for public chain reads — must be a funded account on the target network. */
+export function getChainReadSource(): string {
+  const src = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || "";
+  if (!src) throw new Error("NEXT_PUBLIC_CHAIN_READ_SOURCE is required.");
+  return src;
+}
 export const CHAIN_READ_SOURCE = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || "";
 
 export interface OnChainPayment {
@@ -335,11 +339,13 @@ export interface OnChainPayment {
  */
 export async function fetchOnChainPayments(
   limit = 20,
-  sourcePublicKey = CHAIN_READ_SOURCE
+  sourcePublicKey?: string
 ): Promise<{ payments: OnChainPayment[]; total: number }> {
+  const src = sourcePublicKey || getChainReadSource();
+  const contractId = getOphirpayContractId();
   const server = getSorobanServer();
-  const contract = new Contract(DEFAULT_CONTRACT_ID);
-  const account = await server.getAccount(sourcePublicKey);
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(src);
 
   const readCount = async (): Promise<number> => {
     const tx = new TransactionBuilder(account, {
