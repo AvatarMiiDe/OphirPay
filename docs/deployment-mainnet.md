@@ -102,6 +102,17 @@ stellar contract invoke \
 
 ---
 
+## 2.5 Contract Address Registry
+
+| Network | OphirPay Contract | Emitter Contract |
+|---|---|---|
+| **Testnet** | `CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB` | `CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4` |
+| **Mainnet** | *To be deployed* | *To be deployed* |
+
+> After mainnet deployment, update this table and set the contract IDs in `.env.production`.
+
+---
+
 ## 3. Database Setup
 
 ### 3.1 Provision PostgreSQL

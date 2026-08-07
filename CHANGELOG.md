@@ -2,9 +2,27 @@
 
 All notable changes to OphirPay will be documented in this file.
 
-## [Unreleased] — 2026-08-06
+## [Unreleased] — 2026-08-07
 
-### Added — Smart Contracts
+### Changed
+- **Auth refactor**: merged duplicate `auth-middleware.ts` into `api-auth.ts`, indexed hash+prefix DB lookup (O(1) vs O(n))
+- **Rate-limit consolidation**: merged `rate-limit-store.ts`, added Redis auto-init with REDIS_URL env var, periodic in-memory cleanup
+- **Error handling**: added `handleApiError()` mapping Prisma/Zod errors to correct HTTP codes (400/404/409/503), fixed 11 route handlers
+- **Prometheus metrics**: extracted shared counter module, wired `incMetric()` into middleware, payments, batches, webhook delivery
+- **Test suite**: 68 → 154 backend tests (+86 real tests across 3 new test files: api-response, validation, auth)
+- **RPC failover**: added 60s URL cache, circuit breaker with 30s cooldown, per-endpoint health probes
+- **CI hardening**: replaced soft-fail migration validation with real PostgreSQL service container + strict `db push`
+- **Redis integration**: health-checked, K8s-ready, Helm values, startup bootstrap
+- **Security headers**: CSP with Stellar-specific directives, HSTS 2-year, COOP, CORP, Permissions-Policy
+- **E2E contract tests**: 16 API contract tests covering auth, pagination, health, metrics, SSE, security headers
+- **Contract fixes**: removed duplicate `pause`/`unpause` re-declarations, fixed orphan expression, fixed Emitter two-step ownership test
+- **Hardcoded values removed**: contract IDs and RPC source now env-driven with launch-time validation (no testnet fallback)
+- **Stub routes replaced**: governance execute, audit-log with pagination/filtering, all routes use `withApiAuth` wrapper
+- **OpenAPI 3.1 spec**: 26 endpoints across 14 tag groups, exact Zod validation schema parity
+- **Rate-limit bypass**: `/api/health` and `/api/metrics` excluded from rate limiting for monitoring
+- **Cargo.toml**: caret ranges (`^22.0.0`) for Soroban SDK patch updates
+
+## [0.1.0-alpha] — 2026-08-06
 - **Structured refund system**: `RefundReasonCode` enum (6 variant codes), `RefundStatus` lifecycle (Requested→Approved→Rejected→Processed), `request_refund`/`approve_refund`/`process_refund` with SAC token transfers, `get_reason_code_analytics()` for on-chain analytics
 - **Cross-contract orchestration**: Emitter contract `pause`/`unpause`/`is_paused`, OphirPay `set_emitter`/`get_emitter`, `emergency_pause_all()` and `emergency_unpause_all()` atomically pause both contracts via `env.invoke_contract()`
 - **On-chain notification hooks**: `NotificationHook` struct, `register_hook`/`unregister_hook`, `get_hooks_by_event` (off-chain relayer queryable), `get_subscriber_hooks`, per-subscriber indexing
@@ -66,8 +84,8 @@ All notable changes to OphirPay will be documented in this file.
 ### Changed
 - Contract error codes expanded from 21 → 50
 - Contract test count: 33 → 46
-- Frontend test count: 68 across 7 suites
-- Total test count: 114 (68 + 46)
+- Frontend test count: 154 across 10 suites
+- Total test count: 200 (154 + 46)
 - `transfer_ownership` now two-step with 24h timelock (breaking change)
 - `set_fee_config` and `set_multisig_config` now archive immutable version history
 - Sidebar expanded to 13 nav items with keyboard shortcuts (Ctrl+1..13)
@@ -105,8 +123,10 @@ All notable changes to OphirPay will be documented in this file.
 - Sidebar uses shared Icon components
 
 ### Security
-- Security headers on all responses
+- Security headers on all responses (CSP, HSTS, COOP, CORP, Permissions-Policy)
 - Input sanitization against XSS
 - SQL injection pattern detection
 - API key hashing with SHA-256
 - Timing-safe comparison for secrets
+- No private keys stored server-side
+- Rate-limit bypass protection for monitoring endpoints

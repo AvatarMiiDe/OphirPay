@@ -36,30 +36,37 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const ip = getClientIp(request);
-  const store = getRateLimitStore();
-  const { allowed, remaining, resetAt } = await store.increment(
-    ip,
-    RATE_LIMIT_WINDOW_MS,
-    RATE_LIMIT_MAX
-  );
+  // Skip rate limiting for health checks and metrics (monitoring endpoints
+  // are hit frequently by orchestrators and should never be throttled)
+  const skipRateLimit = pathname === "/api/health" || pathname === "/api/metrics";
 
-  // Rate limit exceeded
-  if (!allowed) {
-    const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
-    return NextResponse.json(
-      {
-        success: false,
-        error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later." },
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfter),
-          "X-Request-Id": requestId,
+  let remaining = RATE_LIMIT_MAX;
+  let resetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
+
+  if (!skipRateLimit) {
+    const ip = getClientIp(request);
+    const store = getRateLimitStore();
+    const result = await store.increment(ip, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
+    remaining = result.remaining;
+    resetAt = result.resetAt;
+
+    // Rate limit exceeded
+    if (!result.allowed) {
+      const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later." },
         },
-      }
-    );
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfter),
+            "X-Request-Id": requestId,
+          },
+        }
+      );
+    }
   }
 
   const response = NextResponse.next();

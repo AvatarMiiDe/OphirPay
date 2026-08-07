@@ -463,7 +463,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (68 passing)
+# All tests (154 passing)
 npm test
 
 # Watch mode
@@ -545,7 +545,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 <img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
 
 ### Test Suite
-*200 tests (154 integration + 46 contract), all green*
+*154 tests across 10 suites + 46 contract tests, all green*
 <img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
 
 </div>
