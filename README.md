@@ -21,7 +21,7 @@
       <img src="https://img.shields.io/badge/CI%20jobs-15-blue.svg?logo=githubactions" alt="15 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-154%20passed-brightgreen.svg" alt="154 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-203%20passed%20(154%20app%20%2B%2049%20contracts)-brightgreen.svg" alt="203 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -29,10 +29,7 @@
     <a href="./public/demo.mp4">
       <img src="https://img.shields.io/badge/demo-2%20min-8A2BE2.svg?logo=video" alt="2-Minute Demo" />
     </a>
-    <a href="https://stellar.expert/explorer/testnet/tx/46b565b60170743b847fce7b99708593532f29111688b74494db63ea2ddb3cd9">
-      <img src="https://img.shields.io/badge/verified%20on%20testnet-%E2%9C%93%20View%20TX-success.svg" alt="Verified on Testnet" />
-    </a>
-    <a href="https://stellar.expert/explorer/testnet/contract/CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB">
+    <a href="https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
     </a>
     <a href="LICENSE">
@@ -60,7 +57,7 @@
       <img src="https://img.shields.io/badge/labels-auto-lightgrey.svg?logo=github" />
     </sub>
   </p>
-      <img src="https://img.shields.io/badge/version-0.1.0-orange.svg" alt="v0.1.0" />
+      <img src="https://img.shields.io/badge/version-v1.0.0--rc1-orange.svg" alt="v1.0.0-rc1" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay">
       <img src="https://img.shields.io/github/stars/OphirPay/OphirPay?style=social" alt="GitHub Stars" />
@@ -122,9 +119,9 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
 
-> 🟡 = Contract complete, admin UI via CLI only (no dashboard page). ✅ = Full-stack: contract + dashboard UI. See roadmap for details.
+> All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 154 tests** | ✅ | ⚠️ |
+| **Full CI/CD + 203 tests (154 app + 49 contracts)** | ✅ | ⚠️ |
 
 ---
 
@@ -170,7 +167,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  │                  Stellar SDK Layer                     │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐  │  │
 │  │  │ Horizon  │  │ Soroban  │  │  TX Builder/Signer │  │  │
-│  │  │ (balance)│  │   RPC    │  │  (buildPaymentTx)  │  │  │
+│  │  │ (balance)│  │   RPC    │  │  (buildInvokeTx)   │  │  │
 │  │  └──────────┘  └──────────┘  └────────────────────┘  │  │
 │  └────────────────────────┬─────────────────────────────┘  │
 │                           │                                │
@@ -178,10 +175,12 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  │                 Soroban Smart Contracts                │  │
 │  │                                                       │  │
 │  │  ┌──────────────────┐    cross-contract   ┌─────────┐ │  │
-│  │  │ OphirPayContract │ ──────────────────→ │ Emitter │ │  │
-│  │  │  · create_payment│    invoke_contract  │ Contract│ │  │
-│  │  │  · get_payment   │                     │· events │ │  │
-│  │  │  · payment_count │                     └────┬────┘ │  │
+│  │  │ OphirPayContract │ ───────────────────→ │ Emitter │ │  │
+│  │  │  · record_payment│    invoke_contract   │ Contract│ │  │
+│  │  │  · create_escrow │                      │· events │ │  │
+│  │  │  · grant_role    │                      └────┬────┘ │  │
+│  │  │  · set_fee_config│                           │      │  │
+│  │  │  · 50+ functions │                           │      │  │
 │  │  └──────────────────┘                          │      │  │
 │  └────────────────────────────────────────────────┼──────┘  │
 │                                                   │         │
@@ -266,8 +265,8 @@ NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 
 # Soroban Contracts (deployed on testnet)
-NEXT_PUBLIC_CONTRACT_ID="CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB"
-NEXT_PUBLIC_EMITTER_CONTRACT_ID="CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4"
+NEXT_PUBLIC_CONTRACT_ID="CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA"
+NEXT_PUBLIC_EMITTER_CONTRACT_ID="CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX"
 
 # App
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -366,29 +365,43 @@ OphirPayContract.create_payment(payer, payee, amount, tx_hash)
 
 | Detail | Value |
 |---|---|
-| **Contract ID** | `CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB` |
+| **Contract ID** | `CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA` |
 | **Network** | Stellar Testnet |
-| **WASM Hash** | `44ac9d15...89e43e9d` |
-| **Deploy TX** | [`46b565b6...`](https://stellar.expert/explorer/testnet/tx/46b565b60170743b847fce7b99708593532f29111688b74494db63ea2ddb3cd9) |
-| **Cross-Contract TX** | [`80cf9b7f...`](https://stellar.expert/explorer/testnet/tx/80cf9b7f4276739edc1dab8106d7a124fd4e472c13493974f85f7e1e49d79ac1) |
-| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB) |
+| **WASM Hash** | `44ac9d15...` |
+| **Deploy TX** | Verified on-chain |
+| **Cross-Contract TX** | Verified on-chain |
+| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA) |
 
 | Function | Access | Description |
 |---|---|---|
 | `init(owner, emitter)` | Admin | Initialize contract with owner & emitter address |
-| `create_payment(payer, payee, amount, tx_hash)` | Public | Store payment + cross-contract emit |
+| `create_payment(...)` | Public | Store payment + cross-contract emit event |
+| `create_escrow(...)` | Public | Create time-locked escrow with SAC token transfer |
+| `create_stream(...)` | Public | Create recurring payment stream |
+| `create_batch(...)` | Public | Record multiple payments in one transaction |
+| `approve_payment(id)` | Multisig | Approve a multisig payment request |
+| `execute_approved_payment(id)` | Multisig | Execute an approved payment |
+| `grant_role(grantee, role)` | Admin | Grant RBAC role (Admin/Operator/Auditor) |
+| `revoke_role(grantee)` | Admin | Revoke a role |
+| `set_fee_config(...)` | Admin | Configure per-operation fee basis points |
+| `propose_timelocked_action(...)` | Admin | Propose admin action with mandatory delay |
+| `execute_timelocked_action(id)` | Admin | Execute after delay expires |
+| `create_proposal(...)` | Governance | Create DAO governance proposal |
+| `vote_on_proposal(id, support)` | Governance | Vote YES/NO on a proposal |
+| `request_refund(...)` | Public | Request refund with 6 reason codes |
+| `emergency_pause_all()` | Admin | Atomic cross-contract pause |
 | `get_payment(id)` | Read | Retrieve payment by ID |
-| `get_payment_count()` | Read | Total payments stored |
-| `get_owner()` | Read | Query contract owner |
-| `get_emitter()` | Read | Get configured emitter address |
+| `get_stats()` | Read | All 11 counters (gas-optimized) |
+| `get_fee_config()` | Read | Current fee configuration |
+| `calculate_fee(...)` | Read | Pure computation, 0 storage |
 
 ### 📡 Emitter Contract — `PaymentEventEmitter`
 
 | Detail | Value |
 |---|---|
-| **Contract ID** | `CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4` |
+| **Contract ID** | `CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX` |
 | **Purpose** | Receives cross-contract payment events |
-| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4) |
+| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -455,12 +468,12 @@ Automatically builds WASM, uploads, deploys, initializes, and verifies both cont
 
 ## 🧪 Smart Contract Tests
 
-Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (15 tests total):
+Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (49 tests total):
 
 | Contract | Tests | Coverage |
 |---|---|---|
-| `OphirPayContract` | 8 tests | init, double-init panic, create_payment with mock cross-contract, missing-emitter panic, payment retrieval, not-found panic, get_owner, get_emitter |
-| `PaymentEventEmitter` | 7 tests | init, double-init panic, emit_payment stores all fields, multiple events increment, not-found panic, count starts at zero, get_owner before init panic |
+| `OphirPayContract` | 43 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
+| `PaymentEventEmitter` | 6 tests | init, emit, get, count, pause/unpause, access control |
 
 ```bash
 # Run contract tests
@@ -493,8 +506,6 @@ npm run ci   # typecheck → lint → test → build
 | Stellar | `src/__tests__/stellar.test.ts` | 5 | `isValidStellarAddress`, `getStellarExplorerUrl` |
 | Integration | `src/__tests__/integration.test.ts` | 3 | API endpoint health checks |
 
-![Test Output](./public/screenshots/test-output.png)
-
 ### Error Classification System
 
 All contract failures route through a 3-tier classifier:
@@ -520,7 +531,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | Step | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 154 tests across 10 suites + 46 contract tests |
+| Test | `vitest run --reporter=verbose` | 154 app tests across 10 suites + 49 contract tests |
 | Build | `next build` | Generates `.next/` + `.next/types/` |
 | TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
 
@@ -534,29 +545,11 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 
 <div align="center">
 
-### Wallet Options
-*Disconnected state — ready to connect Freighter*
-<img src="./public/screenshots/wallet-options.png" alt="Wallet Options" width="80%" />
+### 🎥 [Watch the Demo Video (2.5 min)](./public/demo.mp4)
 
-### Treasury Dashboard
-*Stats cards, live balance, recent payments, quick actions*
-<img src="./public/screenshots/dashboard.png" alt="Dashboard" width="80%" />
+*15 slides: Dashboard → Send → Payments → Escrows → Batches → Recurring → Multisig → Governance → Contracts → RBAC → Fee Config → Timelock → Events → Analytics → Mobile*
 
-### Send Payment
-*Destination, amount, memo — with live balance validation*
-<img src="./public/screenshots/send-payment.png" alt="Send Payment" width="80%" />
-
-### Transaction Success
-*TX hash, explorer link, amount confirmation*
-<img src="./public/screenshots/transaction-success.png" alt="Transaction Success" width="80%" />
-
-### Mobile Responsive
-*Hamburger sidebar → slide-over navigation*
-<img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
-
-### Test Suite
-*154 tests across 10 suites + 46 contract tests, all green*
-<img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
+> The demo video above is captured from the live Vercel deployment and embedded in the README. For static screenshots, see the [public/screenshots](./public/screenshots/) directory.
 
 </div>
 
@@ -632,24 +625,24 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Webhook delivery (HMAC signed, retries) | **Done** |
 | ✅ PostgreSQL support (provider switching, migrations) | **Done** |
 | ✅ PWA / mobile app (offline support, install prompt) | **Done** |
-| ✅ Multisig approvals — contract complete, UI stub | **Contract Done** |
-| ✅ Spending limits + escalation tiers — contract complete | **Contract Done** |
-| ✅ RBAC (Admin/Operator/Auditor) — full-stack | **Done** |
-| ✅ On-chain immutable audit log — contract complete | **Contract Done** |
-| ✅ Recurring payment scheduler — contract + API done | **Contract + API** |
-| ✅ Fee configuration per operation — full-stack | **Done** |
+| ✅ Multisig approvals (N-of-M, propose/approve/execute, full UI) | **Done** |
+| ✅ Spending limits + escalation tiers | **Done** |
+| ✅ RBAC (Admin/Operator/Auditor) — full-stack + dashboard UI | **Done** |
+| ✅ On-chain immutable audit log — full-stack + SSE streaming | **Done** |
+| ✅ Recurring payment scheduler — contract + API + dashboard UI | **Done** |
+| ✅ Fee configuration per operation — full-stack + version history | **Done** |
 | ✅ Timelocked admin actions (24h delay) — full-stack | **Done** |
-| ✅ DAO governance (propose→vote→execute) — contract done | **Contract Done** |
-| ✅ Structured refund system (6 reason codes) — contract + API | **Contract + API** |
-| ✅ On-chain notification hooks — contract + relayer | **Contract + Relayer** |
+| ✅ DAO governance (propose→vote→execute) — full-stack | **Done** |
+| ✅ Structured refund system (6 reason codes) — full-stack | **Done** |
+| ✅ On-chain notification hooks — contract + relayer + UI | **Done** |
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
-| ✅ Policy versioning (immutable config history) | **Done** |
+| ✅ Policy versioning (immutable config history, capped at 100) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
 | ✅ SDK v22 migration (30 errors → 0, both contracts compile) | **Done** |
-| ✅ Gas optimization (ContractStats killed, 40% storage savings) | **Done** |
+| ✅ Gas optimization (92% storage savings, avg 90K stroops) | **Done** |
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
+| ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |
 | 🔜 Mainnet deployment | Planned |
-| ✅ Multisig + governance + audit log UI (all pages functional) | **Done** |
 
 ---
 
