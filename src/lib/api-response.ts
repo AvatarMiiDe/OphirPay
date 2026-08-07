@@ -115,21 +115,32 @@ export function handleApiError(err: unknown, context?: string): NextResponse {
     stack: err instanceof Error ? err.stack : undefined,
   });
 
-  // Prisma errors — use the mapped status code
+  // Zod validation errors (check first — before Prisma instance checks)
+  if (err instanceof z.ZodError) {
+    return validationError(err);
+  }
+
+  // Prisma errors — use handlePrismaError which knows all Prisma error types
+  if (
+    err instanceof Error &&
+    err.constructor &&
+    (err.constructor.name === "PrismaClientKnownRequestError" ||
+     err.constructor.name === "PrismaClientValidationError" ||
+     err.constructor.name === "PrismaClientInitializationError" ||
+     err.constructor.name === "PrismaClientUnknownRequestError" ||
+     err.constructor.name === "PrismaClientRustPanicError")
+  ) {
+    const mapped = handlePrismaError(err);
+    return errorResponse(mapped.code, mapped.message, mapped.status);
+  }
+
+  // Fallback for Prisma errors detected by code pattern
   if (err && typeof err === "object" && "code" in err) {
     const prismaCode = (err as { code: string }).code;
-    if (
-      typeof prismaCode === "string" &&
-      prismaCode.startsWith("P")
-    ) {
+    if (typeof prismaCode === "string" && prismaCode.startsWith("P")) {
       const mapped = handlePrismaError(err);
       return errorResponse(mapped.code, mapped.message, mapped.status);
     }
-  }
-
-  // Zod validation errors
-  if (err instanceof z.ZodError) {
-    return validationError(err);
   }
 
   // Generic — mask the message in production
