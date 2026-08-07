@@ -611,31 +611,34 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Wallet connect/disconnect + balance | **Done** |
 | ✅ Send XLM with Freighter signing | **Done** |
 | ✅ Batch payments (multi-recipient) | **Done** |
-| ✅ Soroban contract deployment | **Done** |
+| ✅ Soroban contract deployed (Stellar Testnet) | **Done** |
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
 | ✅ CI/CD pipeline + 154 tests | **Done** |
-| ✅ Multi-wallet support (Freighter, Albedo, xBull, Ledger) | **Done** |
+| ✅ Multi-wallet support (Freighter, Albedo, xBull) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
-| ✅ Webhook delivery for payment events (HMAC signed, retries) | **Done** |
+| ✅ Webhook delivery (HMAC signed, retries) | **Done** |
 | ✅ PostgreSQL support (provider switching, migrations) | **Done** |
 | ✅ PWA / mobile app (offline support, install prompt) | **Done** |
-| ✅ Multisig approvals (N-of-M signers) | **Done** |
-| ✅ Spending limits + escalation tiers | **Done** |
-| ✅ RBAC (Admin/Operator/Auditor roles) | **Done** |
-| ✅ On-chain immutable audit log | **Done** |
-| ✅ Recurring payment scheduler (Daily/Weekly/Monthly) | **Done** |
-| ✅ Fee configuration per operation | **Done** |
-| ✅ Timelocked admin actions (24h delay) | **Done** |
-| ✅ DAO governance (propose→vote→execute) | **Done** |
-| ✅ Structured refund system (6 reason codes, analytics) | **Done** |
-| ✅ On-chain notification hooks (subscriber-indexed) | **Done** |
+| ✅ Multisig approvals — contract complete, UI stub | **Contract Done** |
+| ✅ Spending limits + escalation tiers — contract complete | **Contract Done** |
+| ✅ RBAC (Admin/Operator/Auditor) — contract complete | **Contract Done** |
+| ✅ On-chain immutable audit log — contract complete | **Contract Done** |
+| ✅ Recurring payment scheduler — contract + API done | **Contract + API** |
+| ✅ Fee configuration per operation — contract done | **Contract Done** |
+| ✅ Timelocked admin actions (24h delay) — contract done | **Contract Done** |
+| ✅ DAO governance (propose→vote→execute) — contract done | **Contract Done** |
+| ✅ Structured refund system (6 reason codes) — contract + API | **Contract + API** |
+| ✅ On-chain notification hooks — contract + relayer | **Contract + Relayer** |
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
 | ✅ Policy versioning (immutable config history) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
 | 🔜 Mainnet deployment | Planned |
+| 🔜 Soroban SDK v22 migration (30 errors to fix) | In Progress |
+| 🔜 Gas optimization pass (35-40% savings implemented) | In Progress |
+| 🔜 Full multisig + governance UI integration | Planned |
 
 ---
 
