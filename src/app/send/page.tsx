@@ -222,7 +222,7 @@ export default function SendPage() {
             Connect Your Wallet
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-            You need to connect your Freighter wallet to send payments.
+            You need to connect a Stellar wallet to send payments.
           </p>
           <Link
             href="/"
@@ -594,7 +594,7 @@ export default function SendPage() {
         {isSubmitting && (
           <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
             {step === "signing"
-              ? "Check your Freighter wallet to approve the transaction..."
+              ? "Check your wallet to approve the transaction..."
               : step === "submitting"
                 ? "Sending to the Stellar testnet..."
                 : step === "recording"

@@ -214,7 +214,7 @@ export default function TreasuryDashboard() {
                   </svg>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Connect your Freighter wallet
+                  Connect your Stellar wallet
                 </p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   to view accounts and balances

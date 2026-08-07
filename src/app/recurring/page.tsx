@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
-import { useWallet } from "@/hooks/useFreighter";
+import { useWallet } from "@/hooks/useMultiWallet";
 import { createRecurringPayment, cancelRecurringPayment } from "@/lib/contract-advanced";
 import { DEFAULT_CONTRACT_ID } from "@/lib/contracts";
 
