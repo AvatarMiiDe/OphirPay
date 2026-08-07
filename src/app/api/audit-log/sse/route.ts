@@ -10,7 +10,7 @@ const clients = new Map<string, ReadableStreamDefaultController>();
 let clientCounter = 0;
 
 /** Broadcast an audit event to ALL connected SSE clients */
-export function broadcastAuditEvent(event: {
+function broadcastAuditEvent(event: {
   id: number;
   timestamp: number;
   action: string;
