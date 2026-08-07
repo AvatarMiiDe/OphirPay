@@ -111,20 +111,19 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **PostgreSQL + SQLite** (provider switching) | ✅ | ⚠️ |
 | **Multisig approvals** (N-of-M signers) | ✅ | ❌ |
 | **Spending limits + escalation tiers** | ✅ | ❌ |
-| **RBAC** (Admin/Operator/Auditor roles) | 🟡 | ❌ |
+| **RBAC** (Admin/Operator/Auditor roles) | ✅ | ❌ |
 | **On-chain audit log** (immutable trail) | ✅ | ❌ |
-| **Fee configuration** (per-operation bps) | 🟡 | ❌ |
-| **Timelocked admin actions** (24h delay) | 🟡 | ❌ |
+| **Fee configuration** (per-operation bps) | ✅ | ❌ |
+| **Timelocked admin actions** (24h delay) | ✅ | ❌ |
 | **DAO governance** (propose→vote→execute) | ✅ | ❌ |
 | **Structured refund system** (6 reason codes, analytics) | ✅ | ❌ |
 | **On-chain notification hooks** (subscriber-indexed) | ✅ | ❌ |
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
-| **Policy versioning** (immutable config history) | 🟡 | ❌ |
+| **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
 
 > 🟡 = Contract complete, admin UI via CLI only (no dashboard page). ✅ = Full-stack: contract + dashboard UI. See roadmap for details.
 
-> 🟡 = Contract complete, UI not yet shipped. See roadmap for UI status. ✅ = Fully shipped end-to-end.
 | **Full CI/CD + 154 tests** | ✅ | ⚠️ |
 
 ---
@@ -628,11 +627,11 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ PWA / mobile app (offline support, install prompt) | **Done** |
 | ✅ Multisig approvals — contract complete, UI stub | **Contract Done** |
 | ✅ Spending limits + escalation tiers — contract complete | **Contract Done** |
-| ✅ RBAC (Admin/Operator/Auditor) — contract complete | **Contract Done** |
+| ✅ RBAC (Admin/Operator/Auditor) — full-stack | **Done** |
 | ✅ On-chain immutable audit log — contract complete | **Contract Done** |
 | ✅ Recurring payment scheduler — contract + API done | **Contract + API** |
-| ✅ Fee configuration per operation — contract done | **Contract Done** |
-| ✅ Timelocked admin actions (24h delay) — contract done | **Contract Done** |
+| ✅ Fee configuration per operation — full-stack | **Done** |
+| ✅ Timelocked admin actions (24h delay) — full-stack | **Done** |
 | ✅ DAO governance (propose→vote→execute) — contract done | **Contract Done** |
 | ✅ Structured refund system (6 reason codes) — contract + API | **Contract + API** |
 | ✅ On-chain notification hooks — contract + relayer | **Contract + Relayer** |
