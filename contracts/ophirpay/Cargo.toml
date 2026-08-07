@@ -12,6 +12,13 @@ soroban-sdk = "^22.0.0"
 [dev-dependencies]
 soroban-sdk = { version = "^22.0.0", features = ["testutils"] }
 
+# NOTE: cargo test on native target currently fails with:
+#   ed25519-dalek 3.0 / rand_chacha 0.3 trait incompatibility
+# This is an upstream soroban-env-host 22.1.3 issue.
+# The Wasm target compiles fine (uses soroban-env-guest, not host).
+# To run tests, use: cargo test --target wasm32-unknown-unknown
+# or wait for soroban-sdk 23+ which fixes the dependency resolution.
+
 [profile.release]
 opt-level = "z"
 lto = true
