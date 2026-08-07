@@ -4243,4 +4243,163 @@ mod tests {
         assert!(client.get_pending_owner().is_none());
     }
 
+    // ── Invariant Tests (SPEC.md) ───────────────────────────
+
+    /// INV-3: emergency_withdraw cannot drain locked escrow funds
+    #[test]
+    fn test_emergency_withdraw_locked_funds_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let depositor = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        // Fund depositor
+        sac_client.mint(&depositor, &10_000i128);
+        // Also fund the contract directly (simulates accidentally-sent tokens)
+        sac_client.mint(&contract_id, &5_000i128);
+
+        let _ = client.init(&owner);
+
+        // Create an escrow — this locks 1000 tokens
+        client.create_escrow(
+            &depositor,
+            &beneficiary,
+            &Option::<Address>::None,
+            &1000i128,
+            &sac,
+            &(env.ledger().timestamp() + 86400),
+            &String::from_str(&env, "locked"),
+        );
+
+        // The contract has 6000 tokens (5000 direct + 1000 escrowed).
+        // Locked = 1000. Unlocked = 5000.
+        // Owner tries to withdraw 5500 — should fail (only 5000 unlocked)
+        let result = client.try_emergency_withdraw(&owner, &sac, &5_500i128);
+        assert!(result.is_err());
+
+        // Owner withdraws 5000 — should succeed (all unlocked)
+        let result2 = client.try_emergency_withdraw(&owner, &sac, &5_000i128);
+        assert!(result2.is_ok());
+    }
+
+    /// INV-4: Escrow cannot be released twice
+    #[test]
+    fn test_double_release_escrow_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let depositor = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        sac_client.mint(&depositor, &10_000i128);
+
+        let _ = client.init(&owner);
+
+        client.create_escrow(
+            &depositor,
+            &beneficiary,
+            &Option::<Address>::None,
+            &1000i128,
+            &sac,
+            &(env.ledger().timestamp() + 86400),
+            &String::from_str(&env, "test"),
+        );
+
+        client.release_escrow(&owner, &1);
+        let escrow = client.get_escrow(&1);
+        assert!(escrow.released);
+
+        // Second release should fail
+        let result = client.try_release_escrow(&owner, &1);
+        assert!(result.is_err());
+    }
+
+    /// INV-4: Escrow cannot be claimed twice after deadline
+    #[test]
+    fn test_double_claim_escrow_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let depositor = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        sac_client.mint(&depositor, &10_000i128);
+
+        let _ = client.init(&owner);
+
+        let deadline = env.ledger().timestamp() + 100;
+        client.create_escrow(
+            &depositor,
+            &beneficiary,
+            &Option::<Address>::None,
+            &1000i128,
+            &sac,
+            &deadline,
+            &String::from_str(&env, "test"),
+        );
+
+        // Advance past deadline
+        env.ledger().set_timestamp(deadline + 1);
+
+        // First claim succeeds
+        client.claim_escrow(&beneficiary, &1);
+        let escrow = client.get_escrow(&1);
+        assert!(escrow.claimed);
+
+        // Second claim should fail
+        let result = client.try_claim_escrow(&beneficiary, &1);
+        assert!(result.is_err());
+    }
+
+    /// INV-10: Fee config version history is capped at 100 entries
+    #[test]
+    fn test_fee_version_history_capped() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        // Create 150 fee config changes
+        for i in 0u32..150u32 {
+            client.set_fee_config(
+                &owner,
+                &(100 + i),
+                &200,
+                &300,
+                &1000i128,
+                &100i128,
+                &true,
+            );
+        }
+
+        let history = client.get_fee_config_history();
+        // Should return at most 100 entries
+        assert!(history.len() <= 100);
+        // The most recent should have version 150
+        assert!(history.len() > 0);
+        let latest = history.get(0).unwrap();
+        assert_eq!(latest.version, 150);
+
+        // Single-version lookup should still work for older versions
+        let old_version = client.get_fee_config_at_version(&10);
+        assert!(old_version.is_some());
+        assert_eq!(old_version.unwrap().version, 10);
+    }
+
 }
