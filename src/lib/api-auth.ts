@@ -1,89 +1,132 @@
 // SPDX-License-Identifier: MIT
 
 import crypto from "crypto";
-import { timingSafeEqual } from "@/lib/crypto";
 import prisma from "@/lib/prisma";
+import { unauthorizedError } from "@/lib/api-response";
 import { NextResponse } from "next/server";
 
 /**
- * API authentication helpers.
- * Supports: Bearer API keys (validated against DB) and X-API-Key header.
+ * Consolidated API authentication module — single source of truth.
+ *
+ * Supports:
+ *   • Authorization: Bearer <api_key>
+ *   • X-API-Key: <api_key>
+ *
+ * Uses an indexed DB lookup (hash + prefix) — O(1) regardless of key count,
+ * unlike the previous pattern that fetched every key and compared in-app.
  */
 
-/** Hash a raw API key for storage/comparison */
+// ── Hashing ────────────────────────────────────────────────────
+
+/** Hash a raw API key using SHA-256 (sync, Node crypto). */
 export function hashApiKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
 }
 
-/** Validate a raw API key against a stored hash */
-export function validateApiKey(rawKey: string, storedHash: string): boolean {
-  const hash = hashApiKey(rawKey);
-  return timingSafeEqual(hash, storedHash);
-}
+// ── Header Extraction ──────────────────────────────────────────
 
-/** Extract Bearer token or X-API-Key from request headers */
+/** Extract a raw API key from Authorization: Bearer or X-API-Key headers. */
 export function extractApiKey(request: Request): string | null {
-  // Try Authorization: Bearer <key>
   const authHeader = request.headers.get("authorization");
   if (authHeader) {
     const parts = authHeader.split(" ");
-    if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
-      return parts[1];
+    if (parts.length === 2 && parts[0]!.toLowerCase() === "bearer") {
+      return parts[1]!.trim() || null;
     }
   }
-  // Try X-API-Key header
   const apiKeyHeader = request.headers.get("x-api-key");
-  if (apiKeyHeader) return apiKeyHeader;
-
+  if (apiKeyHeader) return apiKeyHeader.trim() || null;
   return null;
 }
 
-/** Authenticate a request against stored API keys in the database */
-export async function authenticateRequest(request: Request): Promise<{
-  authenticated: boolean;
-  keyId?: string;
-  keyName?: string;
-}> {
-  const rawKey = extractApiKey(request);
-  if (!rawKey) return { authenticated: false };
+// ── Core Authentication ────────────────────────────────────────
 
-  try {
-    const keys = await prisma.apiKey.findMany({
-      select: { id: true, name: true, keyHash: true, expiresAt: true },
-    });
-
-    for (const key of keys) {
-      // Check expiry
-      if (key.expiresAt && new Date(key.expiresAt) < new Date()) continue;
-      // Validate hash
-      if (validateApiKey(rawKey, key.keyHash)) {
-        // Update lastUsed atomically (fire-and-forget)
-        prisma.apiKey
-          .update({ where: { id: key.id }, data: { lastUsed: new Date() } })
-          .catch(() => {});
-        return { authenticated: true, keyId: key.id, keyName: key.name };
-      }
-    }
-  } catch {
-    // DB unavailable — reject
-    return { authenticated: false };
-  }
-
-  return { authenticated: false };
+export interface AuthResult {
+  userId: string;
+  keyId: string;
+  keyName: string;
 }
 
-/** Middleware-style wrapper: require API key auth for a route handler */
+/**
+ * Authenticate a request against stored API keys.
+ *
+ * Uses an indexed lookup on (keyHash, prefix) so the query hits an index
+ * rather than scanning every row — safe at any key volume.
+ */
+export async function authenticateRequest(
+  request: Request
+): Promise<AuthResult | null> {
+  const rawKey = extractApiKey(request);
+  if (!rawKey) return null;
+
+  const keyHash = hashApiKey(rawKey);
+  const prefix = rawKey.slice(0, 8);
+
+  try {
+    const apiKey = await prisma.apiKey.findFirst({
+      where: { keyHash, prefix },
+      select: { id: true, userId: true, name: true, expiresAt: true },
+    });
+
+    if (!apiKey) return null;
+
+    // Check expiration
+    if (apiKey.expiresAt && apiKey.expiresAt < new Date()) return null;
+
+    // Update lastUsed — fire-and-forget so auth latency is not gated on this write
+    prisma.apiKey
+      .update({ where: { id: apiKey.id }, data: { lastUsed: new Date() } })
+      .catch(() => {});
+
+    return {
+      userId: apiKey.userId,
+      keyId: apiKey.id,
+      keyName: apiKey.name,
+    };
+  } catch {
+    // DB unavailable — reject rather than fail open
+    return null;
+  }
+}
+
+// ── Route Helpers ──────────────────────────────────────────────
+
+/**
+ * Middleware wrapper: gate an entire route handler behind API-key auth.
+ * Use when the handler does not need to know *which* key was used.
+ *
+ *   export const GET = withApiAuth(async (req) => { … });
+ */
 export function withApiAuth(
   handler: (request: Request, ...args: unknown[]) => Promise<Response>
 ) {
   return async (request: Request, ...args: unknown[]): Promise<Response> => {
-    const { authenticated } = await authenticateRequest(request);
-    if (!authenticated) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Valid API key required. Use Authorization: Bearer <key> or X-API-Key header." } },
-        { status: 401 }
+    const auth = await authenticateRequest(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Valid API key required. Use Authorization: Bearer <key> or X-API-Key header."
       );
     }
     return handler(request, ...args);
   };
+}
+
+/**
+ * Require authentication and return user context to the caller.
+ * Use inside a route handler when you need the authenticated user's identity.
+ *
+ *   const auth = await requireAuth(request);
+ *   if (!("userId" in auth)) return auth;          // auth is an error Response
+ *   const { userId } = auth;                       // auth is { userId, keyId }
+ */
+export async function requireAuth(
+  request: Request
+): Promise<{ userId: string; keyId: string } | NextResponse> {
+  const auth = await authenticateRequest(request);
+  if (!auth) {
+    return unauthorizedError(
+      "Valid API key required. Provide Authorization: Bearer <key> or X-API-Key header."
+    );
+  }
+  return { userId: auth.userId, keyId: auth.keyId };
 }

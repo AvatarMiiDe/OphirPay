@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import type { PaymentStatus } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validations";
 import { successResponse, serverError, validationError } from "@/lib/api-response";
-import { requireAuth } from "@/lib/auth-middleware";
+import { requireAuth } from "@/lib/api-auth";
 
 // ── GET /api/batches — List batches with pagination ──────────
 
