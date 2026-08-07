@@ -20,7 +20,7 @@ import {
   EMITTER_CONTRACT_ID,
   classifyContractError,
 } from "@/lib/contracts";
-import { getFreighter } from "@/hooks/useFreighter";
+import { getActiveWalletConnector } from "@/lib/wallets";
 
 /** Resolve contract ID from env var or fallback to default */
 const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || DEFAULT_CONTRACT_ID;
@@ -43,9 +43,13 @@ async function signAndSubmit(
   functionName: string,
   args: xdr.ScVal[] = [],
 ): Promise<ContractCallResult> {
-  const freighter = getFreighter();
-  if (!freighter) {
-    return { success: false, error: "Freighter wallet not available" };
+  const wallet = getActiveWalletConnector();
+  if (!wallet) {
+    return {
+      success: false,
+      error:
+        "No wallet available. Install a Stellar wallet (Freighter, xBull, Rabet, Albedo, or Lobstr) and connect it.",
+    };
   }
 
   try {
@@ -60,9 +64,8 @@ async function signAndSubmit(
       return { success: false, error: "Failed to build transaction" };
     }
 
-    const signedXdr = await freighter.signTransaction(txInfo.xdr, {
+    const signedXdr = await wallet.signTransaction(txInfo.xdr, {
       network: "TESTNET",
-      networkPassphrase: undefined,
     });
 
     const result = await submitContractInvocation(signedXdr);

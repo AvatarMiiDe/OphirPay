@@ -11,7 +11,7 @@ import {
   useContext,
 } from "react";
 import type { MultiWalletState, WalletId } from "@/lib/wallets";
-import { getWalletConnector, getAvailableWallets } from "@/lib/wallets";
+import { getWalletConnector, getAvailableWallets, setActiveWalletId } from "@/lib/wallets";
 import { fetchXlmBalance } from "@/lib/stellar";
 
 // ── Context ───────────────────────────────────────────────────
@@ -82,11 +82,12 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
                 connected: true,
                 publicKey,
                 network,
-                balance: null,
-                balanceLoading: true,
-                activeWalletId: walletId,
-              });
-              loadBalanceRef.current(publicKey);
+            balance: null,
+            balanceLoading: true,
+            activeWalletId: walletId,
+          });
+          setActiveWalletId(walletId);
+          loadBalanceRef.current(publicKey);
               return; // Connected to first available wallet
             }
           }
@@ -122,6 +123,7 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
           balanceLoading: true,
           activeWalletId: walletId,
         });
+        setActiveWalletId(walletId);
 
         if (publicKey) {
           loadBalance(publicKey);
@@ -147,6 +149,7 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
       }
     }
     setWallet(initialWalletState);
+    setActiveWalletId(null);
     setError(null);
   }, [wallet.activeWalletId]);
 
