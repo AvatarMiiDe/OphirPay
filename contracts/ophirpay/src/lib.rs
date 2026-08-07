@@ -494,6 +494,17 @@ fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, detail
     );
 }
 
+/// Guard: caller must be the contract owner. Deduplicates the 15+ identical
+/// owner-check blocks, reducing Wasm code size and deployment gas.
+fn require_owner(env: &Env, caller: &Address) -> Result<(), PaymentError> {
+    let owner: Address = env.storage().instance().get(&OWNER)
+        .ok_or(PaymentError::NotInitialized)?;
+    if caller != &owner {
+        return Err(PaymentError::Unauthorized);
+    }
+    Ok(())
+}
+
 /// Guard: reject all write operations while the contract is paused.
 fn require_not_paused(env: &Env) -> Result<(), PaymentError> {
     let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
@@ -610,14 +621,7 @@ impl OphirPayContract {
         enabled: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         if threshold == 0 || threshold > signers.len() as u32 {
             return Err(PaymentError::InvalidAmount);
         }
@@ -850,14 +854,7 @@ impl OphirPayContract {
         enabled: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         if payment_fee_bps > 1000 || escrow_fee_bps > 1000 || stream_fee_bps > 1000 {
             return Err(PaymentError::FeeTooHigh);
         }
@@ -924,14 +921,7 @@ impl OphirPayContract {
         collector: Address,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         env.storage().instance().set(&FEE_COLL, &collector);
         env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
@@ -956,14 +946,7 @@ impl OphirPayContract {
         data: String,
     ) -> Result<u64, PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         let now = env.ledger().timestamp();
         let mut count: u64 = env.storage().instance().get(&TMLOCK_CNT).unwrap_or(0);
@@ -1038,14 +1021,7 @@ impl OphirPayContract {
         action_id: u64,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         let mut action: TimelockedAction = env
             .storage()
@@ -1093,14 +1069,7 @@ impl OphirPayContract {
         enabled: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         if quorum_bps > 10000 {
             return Err(PaymentError::InvalidAmount);
         }
@@ -1298,14 +1267,7 @@ impl OphirPayContract {
         is_active: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         let limit = SpendingLimit {
             daily_limit,
             monthly_limit,
@@ -1340,14 +1302,7 @@ impl OphirPayContract {
         enabled: bool,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         if small_threshold <= 0 || medium_threshold <= small_threshold {
             return Err(PaymentError::InvalidAmount);
         }
@@ -1607,14 +1562,7 @@ impl OphirPayContract {
         emitter: Address,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         env.storage().instance().set(&EMITTER_ADDR, &emitter);
         env.storage().instance().extend_ttl(5000, 50000);
         record_audit(&env, "emitter_set", &caller, 0, "Emitter contract linked");
@@ -1631,14 +1579,7 @@ impl OphirPayContract {
     /// OphirPay is paused. This mirrors FacilPay's cross-contract pause_all.
     pub fn emergency_pause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         // Pause OphirPay
         env.storage().instance().set(&PAUSED, &true);
@@ -1659,14 +1600,7 @@ impl OphirPayContract {
     /// in a single atomic transaction.
     pub fn emergency_unpause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         // Unpause OphirPay
         env.storage().instance().set(&PAUSED, &false);
@@ -1698,14 +1632,7 @@ impl OphirPayContract {
         amount: i128,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         if amount <= 0 {
             return Err(PaymentError::NoTokensToWithdraw);
         }
@@ -1727,14 +1654,7 @@ impl OphirPayContract {
         new_wasm_hash: soroban_sdk::BytesN<32>,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         let unlock_at = env.ledger().timestamp() + 86400; // 24 hours
         env.storage().instance().set(&UPGRADE_HASH, &new_wasm_hash);
         env.storage().instance().set(&UPGRADE_TIMELOCK, &unlock_at);
@@ -1778,14 +1698,7 @@ impl OphirPayContract {
     /// Cancel a pending upgrade (owner only).
     pub fn cancel_upgrade(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
         env.storage().instance().remove(&UPGRADE_HASH);
         env.storage().instance().remove(&UPGRADE_TIMELOCK);
         env.storage().instance().extend_ttl(5000, 50000);
@@ -1805,14 +1718,7 @@ impl OphirPayContract {
         new_owner: Address,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         env.storage().instance().set(&PENDING_OWNER, &new_owner);
         env.storage().instance().set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
@@ -1867,14 +1773,7 @@ impl OphirPayContract {
     /// Cancel a pending ownership transfer (current owner only).
     pub fn cancel_ownership_transfer(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         env.storage().instance().remove(&PENDING_OWNER);
         env.storage().instance().remove(&OWNER_PROPOSED_AT);
@@ -1974,17 +1873,9 @@ impl OphirPayContract {
     pub fn cancel_payment(
         env: Env,
         caller: Address,
-        payment_id: u64,
-    ) -> Result<(), PaymentError> {
+        payment_id: u64,        ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         let mut payment: Payment = env
             .storage()
@@ -2638,14 +2529,7 @@ impl OphirPayContract {
         refund_id: u64,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         let mut refund: Refund = env
             .storage()
@@ -2674,14 +2558,7 @@ impl OphirPayContract {
         refund_id: u64,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
+        require_owner(&env, &caller)?;
 
         let mut refund: Refund = env
             .storage()
