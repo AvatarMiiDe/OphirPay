@@ -125,6 +125,37 @@ Soroban instance storage returns `None` for unset keys. Our counters default to 
 
 ---
 
+## SDK v22 Migration
+
+The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88.0). Key API changes addressed:
+
+| Change | Impact | Lines |
+|---|---|---|
+| `get::<V, _>(&key)` to `get::<_, V>(&key)` | K/V generic order reversed (K=key first in v22) | 8 sites |
+| Address no longer `Deref` | `*s == signer` to `s == signer` | 4 sites |
+| `Vec::get_mut()` removed | Replaced with `get()` + `set()` pattern | 1 site |
+| Clone-before-move required | Added `clone()` before struct initialization | 4 sites |
+| `Option<Address>` unwrap in batch | Explicit `.ok_or()` added | 2 sites |
+
+**Migration result:** 30 compile errors to 0 errors, 0 warnings.
+
+---
+
+## WASM Binary Sizes
+
+Compiled with Rust 1.88.0, `--release`, `wasm32-unknown-unknown`:
+
+| Contract | Size | Profile |
+|---|---|---|
+| `ophirpay_contract.wasm` | **83,043 bytes (81 KB)** | `opt-level = "z"` |
+| `ophirpay_emitter.wasm` | **7,055 bytes (7 KB)** | `opt-level = "z"` |
+
+The OphirPay contract's 81 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 51 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
+
+> **Note:** `cargo test` currently fails on native host due to a `rand_core`/`ed25519-dalek` version conflict in `soroban-env-host` v22.1.3. This does not affect Wasm compilation (which uses `soroban-env-guest`) and will be resolved in a future SDK release. Contract unit tests should target `wasm32-unknown-unknown` with a test harness like `soroban-sdk`'s `test` feature.
+
+---
+
 ## Running Benchmarks
 
 To benchmark actual gas usage on Stellar Testnet:
