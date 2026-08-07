@@ -1,0 +1,7 @@
+[toolchain]
+# Locked for reproducible Soroban contract builds.
+# soroban-env-host v22.x is incompatible with Rust 1.97+ (ed25519-dalek trait issue).
+# Use Rust 1.81 for guaranteed compatibility with soroban-sdk 22.x.
+channel = "1.81.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
