@@ -1279,7 +1279,8 @@ impl OphirPayContract {
     }
 
     /// Calculate fee for a given amount based on bps.
-    pub fn calculate_fee(env: Env, amount: i128, fee_bps: u32) -> i128 {
+    /// Computed entirely locally — zero storage access, minimal CPU.
+    pub fn calculate_fee(amount: i128, fee_bps: u32) -> i128 {
         if fee_bps == 0 || amount <= 0 {
             return 0;
         }
