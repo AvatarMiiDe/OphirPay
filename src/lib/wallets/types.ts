@@ -5,7 +5,7 @@
  * Each Stellar wallet (Freighter, Albedo, xBull, Ledger) implements this interface.
  */
 
-export type WalletId = "freighter" | "albedo" | "xbull" | "ledger";
+export type WalletId = "freighter" | "albedo" | "xbull" | "ledger" | "rabet" | "lobstr";
 
 export interface SignOptions {
   network?: string;
@@ -84,5 +84,19 @@ export const WALLET_REGISTRY: {
     description: "Hardware wallet — requires Ledger device + Stellar app",
     icon: "🔐",
     priority: 4,
+  },
+  {
+    id: "rabet",
+    name: "Rabet",
+    description: "Simple Stellar browser extension wallet",
+    icon: "🐰",
+    priority: 5,
+  },
+  {
+    id: "lobstr",
+    name: "Lobstr",
+    description: "Popular Stellar web & mobile wallet",
+    icon: "🌊",
+    priority: 6,
   },
 ];

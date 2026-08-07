@@ -5,11 +5,17 @@ export { WALLET_REGISTRY } from "./types";
 export { freighterConnector } from "./freighter";
 export { albedoConnector } from "./albedo";
 export { xBullConnector } from "./xbull";
+export { ledgerConnector } from "./ledger";
+export { rabetConnector } from "./rabet";
+export { lobstrConnector } from "./lobstr";
 
 import type { WalletConnector, WalletId } from "./types";
 import { freighterConnector } from "./freighter";
 import { albedoConnector } from "./albedo";
 import { xBullConnector } from "./xbull";
+import { ledgerConnector } from "./ledger";
+import { rabetConnector } from "./rabet";
+import { lobstrConnector } from "./lobstr";
 
 /**
  * Map of all available wallet connectors by ID.
@@ -18,28 +24,9 @@ export const walletConnectors: Record<WalletId, WalletConnector> = {
   freighter: freighterConnector,
   albedo: albedoConnector,
   xbull: xBullConnector,
-  // Ledger requires WebUSB/HID and the Stellar Ledger app.
-  // To add Ledger support, install @ledgerhq/hw-transport-webusb and
-  // @stellar/stellar-sdk Ledger integration, then add a ledger connector here.
-  ledger: {
-    id: "ledger",
-    name: "Ledger",
-    description: "Hardware wallet — connect your Ledger device",
-    icon: "🔐",
-    isAvailable: () => typeof window !== "undefined" && "usb" in navigator,
-    connect: async () => {
-      throw new Error(
-        "Ledger support requires a Ledger device with the Stellar app open. Coming soon.",
-      );
-    },
-    disconnect: async () => {},
-    signTransaction: async () => {
-      throw new Error("Ledger signing not yet implemented.");
-    },
-    getAddress: async () => null,
-    getNetwork: async () => "PUBLIC",
-    isConnected: async () => false,
-  } as WalletConnector,
+  ledger: ledgerConnector,
+  rabet: rabetConnector,
+  lobstr: lobstrConnector,
 };
 
 /**
@@ -54,4 +41,42 @@ export function getWalletConnector(id: WalletId): WalletConnector {
  */
 export function getAvailableWallets(): WalletConnector[] {
   return Object.values(walletConnectors).filter((w) => w.isAvailable());
+}
+
+// ── Active Wallet Tracker (for non-React code) ─────────────────
+
+let activeWalletId: WalletId | null = null;
+
+/**
+ * Set the active wallet ID. Called by MultiWalletProvider on connect/disconnect.
+ */
+export function setActiveWalletId(id: WalletId | null): void {
+  activeWalletId = id;
+}
+
+/**
+ * Get the active wallet ID. Used by contract-advanced to get the signer.
+ */
+export function getActiveWalletId(): WalletId | null {
+  return activeWalletId;
+}
+
+/**
+ * Get the active wallet connector (for non-React signing code).
+ * Falls back to Freighter if no active wallet is set.
+ */
+export function getActiveWalletConnector(): WalletConnector | null {
+  if (activeWalletId) {
+    const connector = walletConnectors[activeWalletId];
+    if (connector?.isAvailable()) return connector;
+  }
+  // Fallback: try Freighter for backward compatibility
+  const freighter = walletConnectors.freighter;
+  if (freighter?.isAvailable()) return freighter;
+  // Try any available wallet
+  for (const id of ["xbull", "rabet", "albedo", "lobstr"] as WalletId[]) {
+    const c = walletConnectors[id];
+    if (c?.isAvailable()) return c;
+  }
+  return null;
 }
