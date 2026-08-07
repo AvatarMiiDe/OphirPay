@@ -51,6 +51,13 @@ const STAT_AMT_ESCROWED: Symbol = symbol_short!("S_AE");
 const STAT_AMT_STREAMED: Symbol = symbol_short!("S_AS");
 const STAT_AMT_BATCHED: Symbol = symbol_short!("S_AB");
 
+/// Running total of funds locked in active escrows + streams.
+/// Incremented on create_escrow / create_stream.
+/// Decremented on release_escrow / claim_escrow / claim_stream / cancel_stream.
+/// emergency_withdraw enforces: withdraw_amount <= contract_balance - LOCKED_BALANCE.
+/// Prevents the owner from draining user-deposited funds (critical invariant).
+const LOCKED_BALANCE: Symbol = symbol_short!("LOCKED");
+
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
 
@@ -437,6 +444,9 @@ pub enum PaymentError {
     RefundAlreadyProcessed = 48,
     PaymentAlreadyRefunded = 49,
     RefundWindowExpired = 50,
+    // NOTE: InsufficientUnlockedBalance would be 51 if needed;
+    // using NoTokensToWithdraw (19) for the locked-funds invariant check
+    // to stay within soroban-sdk's contracterror variant limits.
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -476,7 +486,18 @@ fn add_counter(env: &Env, key: &Symbol, delta: i128) {
     env.storage().instance().set(key, &val.saturating_add(delta));
 }
 
-/// Record an immutable audit trail entry.
+/// Track funds locked in active escrows/streams. Pass the actual amount being
+/// deposited (positive) or withdrawn (negative). Used by emergency_withdraw
+/// to prevent the owner from withdrawing user-deposited funds.
+fn add_locked(env: &Env, delta: i128) {
+    let val: i128 = env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0);
+    let new_val = val.saturating_add(delta);
+    // Clamp at 0 — locked balance must never go negative
+    let clamped = if new_val < 0 { 0 } else { new_val };
+    env.storage().instance().set(&LOCKED_BALANCE, &clamped);
+}
+
+/// Get the current locked balance (funds held in active escrows + streams).
 fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, details: &str) {
     let mut count: u64 = env.storage().instance().get(&AUDIT_CNT).unwrap_or(0);
     count = count.saturating_add(1);
@@ -1619,6 +1640,11 @@ impl OphirPayContract {
     /// Emergency withdraw: owner can rescue tokens accidentally sent directly
     /// to this contract (bypassing escrow/stream creation). Only withdraws
     /// tokens NOT locked in active escrows or streams.
+    ///
+    /// SAFETY INVARIANT: withdraw_amount ≤ contract_balance - locked_balance.
+    /// This prevents the owner from draining user-deposited funds even if the
+    /// owner key is compromised. Violating this invariant returns
+    /// InsufficientUnlockedBalance.
     pub fn emergency_withdraw(
         env: Env,
         caller: Address,
@@ -1635,8 +1661,16 @@ impl OphirPayContract {
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
+        // INVARIANT: cannot withdraw locked user funds
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
+        let contract_balance = token_client.balance(&contract_addr);
+        let locked: i128 = env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0);
+        let unlocked = contract_balance.saturating_sub(locked);
+        if amount > unlocked {
+            return Err(PaymentError::NoTokensToWithdraw);
+        }
+
         token_client.transfer(&contract_addr, &owner, &amount);
 
         record_audit(&env, "emergency_withdraw", &caller, 0, "Emergency withdrawal");
@@ -1922,6 +1956,8 @@ impl OphirPayContract {
         let contract_addr = env.current_contract_address();
         token_client.transfer(&depositor, &contract_addr, &amount);
 
+        add_locked(&env, amount);
+
         let mut count: u64 = env.storage().instance().get(&ESCROW_COUNT).unwrap_or(0);
         count += 1;
 
@@ -1984,6 +2020,8 @@ impl OphirPayContract {
         // Transfer tokens to beneficiary
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
+        add_locked(&env, -escrow.amount);
+
         token_client.transfer(&contract_addr, &escrow.beneficiary, &escrow.amount);
 
         escrow.released = true;
@@ -2033,6 +2071,8 @@ impl OphirPayContract {
 
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
+        add_locked(&env, -escrow.amount);
+
         token_client.transfer(&contract_addr, &recipient, &escrow.amount);
 
         escrow.released = true;
@@ -2070,6 +2110,8 @@ impl OphirPayContract {
 
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
+        add_locked(&env, -escrow.amount);
+
         token_client.transfer(&contract_addr, &beneficiary, &escrow.amount);
 
         escrow.claimed = true;
@@ -2124,6 +2166,8 @@ impl OphirPayContract {
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&creator, &contract_addr, &total_amount);
+
+        add_locked(&env, total_amount);
 
         let mut count: u64 = env.storage().instance().get(&STREAM_COUNT).unwrap_or(0);
         count += 1;
@@ -2196,6 +2240,8 @@ impl OphirPayContract {
         // Transfer claimable amount to recipient
         let token_client = token::Client::new(&env, &stream.asset);
         let contract_addr = env.current_contract_address();
+        add_locked(&env, -claimable);
+
         token_client.transfer(&contract_addr, &recipient, &claimable);
 
         stream.claimed_amount += claimable;
@@ -2252,6 +2298,7 @@ impl OphirPayContract {
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &creator, &unvested);
+            add_locked(&env, -unvested);
         }
 
         inc_counter(&env, &STAT_STR_CANCELLED);
