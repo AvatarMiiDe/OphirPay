@@ -1,7 +1,8 @@
 [toolchain]
 # Locked for reproducible Soroban contract builds.
-# soroban-env-host v22.x is incompatible with Rust 1.97+ (ed25519-dalek trait issue).
-# Use Rust 1.81 for guaranteed compatibility with soroban-sdk 22.x.
-channel = "1.81.0"
+# Minimum: 1.88.0 for MSRV of soroban-sdk 22.x transitive deps.
+# WASM builds work on any Rust >= 1.88.
+# Native tests (soroban-env-host) may need Rust < 1.97 due to ed25519-dalek.
+channel = "1.88.0"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]
