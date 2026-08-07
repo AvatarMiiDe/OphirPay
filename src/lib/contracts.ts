@@ -11,19 +11,23 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
-/** OphirPay core contract — required, no fallback to prevent mainnet accidents */
-export const OPHIRPAY_CONTRACT_ID = (() => {
-  const id = process.env.NEXT_PUBLIC_CONTRACT_ID;
-  if (!id) throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
-  return id;
-})();
+/** OphirPay core contract — lazy resolution for Vercel build compatibility */
+export const OPHIRPAY_CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
+export function requireOphirpayContractId(): string {
+  if (!OPHIRPAY_CONTRACT_ID) {
+    throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
+  }
+  return OPHIRPAY_CONTRACT_ID;
+}
 
-/** Emitter contract — required for cross-contract orchestration */
-export const EMITTER_CONTRACT_ID = (() => {
-  const id = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID;
-  if (!id) throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
-  return id;
-})();
+/** Emitter contract — lazy resolution for Vercel build compatibility */
+export const EMITTER_CONTRACT_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
+export function requireEmitterContractId(): string {
+  if (!EMITTER_CONTRACT_ID) {
+    throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
+  }
+  return EMITTER_CONTRACT_ID;
+}
 
 // Legacy alias — kept for backward compatibility in existing callers
 export const DEFAULT_CONTRACT_ID = OPHIRPAY_CONTRACT_ID;
