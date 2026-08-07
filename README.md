@@ -637,9 +637,10 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
 | ✅ Policy versioning (immutable config history) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
+| ✅ SDK v22 migration (30 errors → 0, both contracts compile) | **Done** |
+| ✅ Gas optimization (ContractStats killed, 40% storage savings) | **Done** |
+| ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
 | 🔜 Mainnet deployment | Planned |
-| 🔜 Soroban SDK v22 migration (30 errors to fix) | In Progress |
-| 🔜 Gas optimization pass (35-40% savings implemented) | In Progress |
 | 🔜 Full multisig + governance UI integration | Planned |
 
 ---
