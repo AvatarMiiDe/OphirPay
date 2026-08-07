@@ -116,16 +116,33 @@ Soroban instance storage returns `None` for unset keys. Our counters default to 
 
 ---
 
-## Validated Against Testnet
+## Validated Against Testnet (2026-08-07)
 
-> **Status:** Estimates pending Testnet deployment validation.
-> To validate these estimates, deploy both contracts to Stellar Testnet and run:
-> ```bash
-> stellar contract invoke --id <CONTRACT_ID> --source <KEY> --network testnet \
->   -- record_payment --payer <A> --payee <B> --amount 1000 --asset native --tx-hash test
-> ```
-> The transaction receipt will show the actual resource fee in stroops.
-> Compare against the estimate table above and update this section.
+Real measurements from Stellar Testnet, contract `CAW7OOR...`:
+
+| Operation | Actual Fee (stroops) | Actual Fee (XLM) | TX Hash |
+|---|---|---|---|
+| `init` | 17,237 | 0.017 | `f71a20cd...` |
+| `record_payment` | 69,715 | 0.070 | `7043a2d4...` |
+| `create_escrow` | 168,644 | 0.169 | `31d389b8...` |
+
+> **Note:** These are total fees (classic base fee + Soroban resource fee).
+> The `create_escrow` cost is higher because it includes a token transfer
+> (SAC contract interaction) in addition to the OphirPay storage writes.
+> `record_payment` does not transfer tokens — it's record-keeping only,
+> hence the lower cost.
+> `get_stats` (read-only) costs 0 stroops — no transaction needed.
+
+To reproduce:
+```bash
+stellar keys generate --fund --network testnet --rpc-url https://soroban-testnet.stellar.org test-key
+stellar contract invoke --id <CONTRACT_ID> --source-account test-key \
+  --network testnet --rpc-url https://soroban-testnet.stellar.org \
+  -- record_payment --payer <ADDR> --payee <ADDR> --amount 1000 \
+  --asset native --tx-hash test --metadata "benchmark"
+# Then check fee on Horizon:
+curl -s "https://horizon-testnet.stellar.org/transactions/<TX_HASH>" | jq .fee_charged
+```
 
 ---
 
