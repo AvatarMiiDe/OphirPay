@@ -2,11 +2,12 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getRateLimitStore } from "@/lib/rate-limit";
-import { incMetric } from "@/lib/metrics-counters";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 120; // requests per window per IP
+
+// In-memory rate limit store (Edge Runtime safe — no Redis, no ioredis)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function getClientIp(request: NextRequest): string {
   return (
@@ -20,14 +21,33 @@ function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function checkRateLimit(
+  ip: string
+): { allowed: boolean; remaining: number; resetAt: number } {
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+
+  if (!entry || entry.resetAt < now) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  }
+
+  entry.count++;
+  rateLimitMap.set(ip, entry);
+
+  // Periodic cleanup
+  if (rateLimitMap.size > 10_000) {
+    for (const [k, v] of rateLimitMap) {
+      if (v.resetAt < now) rateLimitMap.delete(k);
+    }
+  }
+
+  const remaining = Math.max(0, RATE_LIMIT_MAX - entry.count);
+  return { allowed: entry.count <= RATE_LIMIT_MAX, remaining, resetAt: entry.resetAt };
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = generateRequestId();
-
-  // Count all API requests for Prometheus
-  if (pathname.startsWith("/api/")) {
-    incMetric("http_requests_total");
-  }
 
   // Only apply API-specific logic to API routes
   if (!pathname.startsWith("/api/")) {
@@ -45,8 +65,7 @@ export async function middleware(request: NextRequest) {
 
   if (!skipRateLimit) {
     const ip = getClientIp(request);
-    const store = getRateLimitStore();
-    const result = await store.increment(ip, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
+    const result = checkRateLimit(ip);
     remaining = result.remaining;
     resetAt = result.resetAt;
 
