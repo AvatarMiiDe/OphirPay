@@ -39,7 +39,7 @@
 
   <p>
     <sub>
-      <b>15 CI checks on every PR:</b>
+      <b>15 CI checks (14 on push + 1 PR-only):</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
@@ -486,7 +486,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (154 passing)
+# All tests (203 total: 154 app + 49 contracts)
 npm test
 
 # Watch mode
@@ -525,15 +525,26 @@ Each type renders with distinct colors (yellow/red/orange) and actionable messag
 Every push to `main` triggers:
 
 ```
-Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Build → TypeScript Check
+Checkout → Node.js 20 → npm ci → Prisma → Lint → TypeCheck → Unit Tests → Coverage → Contracts → Build → E2E → Prisma → Docker → K8s → Helm → Secrets → Audit
 ```
 
 | Step | Command | Purpose |
 |---|---|---|
-| Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 154 app tests across 10 suites + 49 contract tests |
-| Build | `next build` | Generates `.next/` + `.next/types/` |
-| TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
+| Lint | `next lint --max-warnings 20` | ESLint with zero-error tolerance |
+| TypeCheck | `tsc --noEmit` | Full project strict type-checking |
+| Unit Tests | `vitest run --reporter=verbose` | 154 app tests across 10 suites |
+| Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
+| Contracts | `cargo build --target wasm32-unknown-unknown` | Both Soroban contracts to WASM |
+| Build | `next build` | Production Next.js build verification |
+| E2E | Playwright (Chromium + Firefox) | End-to-end browser automation |
+| Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
+| Docker | `docker build` (no push) | Verify Dockerfile builds correctly |
+| K8s | `kubeconform -strict` | Kubernetes manifest validation |
+| Helm | `helm lint --strict` | Chart validation + template render |
+| Secrets | Gitleaks scan | Detect committed secrets (Testnet IDs allowlisted) |
+| Audit | `npm audit` | Dependency vulnerability scan |
+| PR Labeler | Auto-label PRs | Adds labels by changed paths |
+| Scorecard | OpenSSF (weekly) | Security best-practices analysis |
 
 **→ [View latest CI run](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml)**
 
