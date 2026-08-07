@@ -317,11 +317,7 @@ export async function recordPaymentOnChain(params: {
 // ── On-Chain Reads (Public) ────────────────────────────────────
 
 /** Simulation source account for public chain reads — must be a funded account on the target network. */
-export const CHAIN_READ_SOURCE = (() => {
-  const source = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE;
-  if (!source) throw new Error("NEXT_PUBLIC_CHAIN_READ_SOURCE is required. Set a funded public key in your .env file.");
-  return source;
-})();
+export const CHAIN_READ_SOURCE = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || "";
 
 export interface OnChainPayment {
   id: number;
