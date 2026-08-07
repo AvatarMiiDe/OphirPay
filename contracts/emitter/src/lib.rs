@@ -282,7 +282,7 @@ impl PaymentEventEmitter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Ledger};
 
     #[test]
     fn test_init() {
@@ -391,7 +391,14 @@ mod tests {
         let new_owner = Address::generate(&env);
 
         let _ = client.init(&owner);
+
+        // Propose new owner — ownership should NOT change yet
         client.transfer_ownership(&owner, &new_owner);
+        assert_eq!(client.get_owner(), owner);
+
+        // Advance time past 24h timelock and accept
+        env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
+        client.accept_ownership(&new_owner);
         assert_eq!(client.get_owner(), new_owner);
     }
 }

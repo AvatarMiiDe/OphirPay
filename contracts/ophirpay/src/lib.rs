@@ -661,8 +661,6 @@ impl OphirPayContract {
         }
         history
     }
-        env.storage().instance().get(&MULTISIG_CONFIG)
-    }
 
     /// Propose a payment that requires multisig approval.
     pub fn propose_payment(
@@ -1681,41 +1679,6 @@ impl OphirPayContract {
         }
 
         record_audit(&env, "emergency_unpause_all", &caller, 0, "All contracts unpaused");
-        Ok(())
-    }
-        caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
-        env.storage().instance().set(&PAUSED, &true);
-        env.storage().instance().extend_ttl(5000, 50000);
-
-        record_audit(&env, "contract_paused", &caller, 0, "Contract paused");
-
-        Ok(())
-    }
-
-    /// Unpause all state-changing operations (owner only).
-    pub fn unpause(env: Env, caller: Address) -> Result<(), PaymentError> {
-        caller.require_auth();
-        let owner: Address = env
-            .storage()
-            .instance()
-            .get(&OWNER)
-            .ok_or(PaymentError::NotInitialized)?;
-        if caller != owner {
-            return Err(PaymentError::Unauthorized);
-        }
-        env.storage().instance().set(&PAUSED, &false);
-        env.storage().instance().extend_ttl(5000, 50000);
-
-        record_audit(&env, "contract_unpaused", &caller, 0, "Contract unpaused");
-
         Ok(())
     }
 
@@ -3521,7 +3484,7 @@ mod tests {
         let _ = client.init(&owner);
         assert!(!client.is_paused());
 
-        client.pause(&owner);
+        client.emergency_pause_all(&owner);
         assert!(client.is_paused());
 
         // record_payment should fail when paused
@@ -3535,7 +3498,7 @@ mod tests {
         );
         assert!(result.is_err());
 
-        client.unpause(&owner);
+        client.emergency_unpause_all(&owner);
         assert!(!client.is_paused());
 
         // Should work after unpause
@@ -3565,7 +3528,7 @@ mod tests {
         sac_client.mint(&depositor, &1000i128);
 
         let _ = client.init(&owner);
-        client.pause(&owner);
+        client.emergency_pause_all(&owner);
 
         client.create_escrow(
             &depositor,
@@ -3593,7 +3556,7 @@ mod tests {
 
         let now = env.ledger().timestamp();
         let _ = client.init(&owner);
-        client.pause(&owner);
+        client.emergency_pause_all(&owner);
 
         client.create_stream(
             &creator,
