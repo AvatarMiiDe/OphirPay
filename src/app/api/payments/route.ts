@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { createPaymentSchema, paginationSchema } from "@/lib/validations";
-import { successResponse, serverError, validationError, notFoundError } from "@/lib/api-response";
+import { successResponse, validationError, handleApiError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
@@ -45,8 +45,7 @@ export async function GET(request: Request) {
 
     return successResponse(payments, { page, limit, total });
   } catch (err) {
-    logger.error("Failed to fetch payments", { error: String(err) });
-    return serverError("Failed to fetch payments");
+    return handleApiError(err, "GET /api/payments");
   }
 }
 
@@ -71,7 +70,6 @@ export async function POST(request: Request) {
 
     logger.info("Payment created", { id: payment.id, amount: payment.amount });
 
-    // Fire webhook — non-blocking
     dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CREATED, {
       paymentId: payment.id,
       amount: payment.amount,
@@ -82,7 +80,6 @@ export async function POST(request: Request) {
 
     return successResponse(payment, undefined, 201);
   } catch (err) {
-    logger.error("Failed to create payment", { error: String(err) });
-    return serverError("Failed to create payment");
+    return handleApiError(err, "POST /api/payments");
   }
 }

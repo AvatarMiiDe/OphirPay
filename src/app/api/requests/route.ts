@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { createPaymentRequestSchema } from "@/lib/validations";
-import { successResponse, serverError, validationError } from "@/lib/api-response";
+import { successResponse, validationError, handleApiError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
@@ -13,8 +13,8 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
     return successResponse(requests);
-  } catch {
-    return serverError("Failed to fetch payment requests");
+  } catch (err) {
+    return handleApiError(err, "GET /api/requests");
   }
 }
 
@@ -48,7 +48,6 @@ export async function POST(request: Request) {
 
     return successResponse(req, undefined, 201);
   } catch (err) {
-    logger.error("Failed to create payment request", { error: String(err) });
-    return serverError("Failed to create payment request");
+    return handleApiError(err, "POST /api/requests");
   }
 }

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { logger } from "@/lib/logger";
+import { successResponse, handleApiError } from "@/lib/api-response";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,18 +24,8 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      data: hooks.map((h) => ({
-        id: parseInt(h.id.replace(/\D/g, "").slice(-8), 36) || h.id.charCodeAt(1),
-        subscriber: h.userId,
-        event_type: h.eventType,
-        webhook_url: h.webhookUrl,
-        active: h.active,
-        created_at: Math.floor(new Date(h.createdAt).getTime() / 1000),
-      })),
-    });
+    return successResponse(hooks);
   } catch (err) {
-    logger.error("Failed to fetch hooks", { error: String(err) });
-    return NextResponse.json({ data: [] });
+    return handleApiError(err, "GET /api/hooks");
   }
 }

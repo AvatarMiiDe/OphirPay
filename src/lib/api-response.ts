@@ -2,6 +2,8 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handlePrismaError } from "@/lib/prisma-errors";
+import { logger } from "@/lib/logger";
 
 // ── Standard Response Types ────────────────────────────────────
 
@@ -95,4 +97,48 @@ export function conflictError(message: string) {
 
 export function badRequestError(message: string) {
   return errorResponse("BAD_REQUEST", message, 400);
+}
+
+// ── Unified Error Handler ──────────────────────────────────────
+
+/**
+ * Map any caught error to a proper API error response.
+ *
+ * • Prisma errors → correct HTTP status (404, 409, 503, etc.)
+ * • Zod validation errors → 400 with field details
+ * • Generic errors → 500 (masked in production for security)
+ */
+export function handleApiError(err: unknown, context?: string): NextResponse {
+  // Log the real error for debugging
+  logger.error(context ?? "API error", {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+
+  // Prisma errors — use the mapped status code
+  if (err && typeof err === "object" && "code" in err) {
+    const prismaCode = (err as { code: string }).code;
+    if (
+      typeof prismaCode === "string" &&
+      prismaCode.startsWith("P")
+    ) {
+      const mapped = handlePrismaError(err);
+      return errorResponse(mapped.code, mapped.message, mapped.status);
+    }
+  }
+
+  // Zod validation errors
+  if (err instanceof z.ZodError) {
+    return validationError(err);
+  }
+
+  // Generic — mask the message in production
+  const message =
+    process.env.NODE_ENV === "production"
+      ? "An unexpected error occurred."
+      : err instanceof Error
+        ? err.message
+        : "An unexpected error occurred.";
+
+  return serverError(message);
 }

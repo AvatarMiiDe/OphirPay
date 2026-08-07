@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { successResponse, serverError } from "@/lib/api-response";
+import { successResponse, handleApiError } from "@/lib/api-response";
 
 /**
  * GET /api/analytics — Aggregated payment metrics
@@ -20,7 +20,6 @@ export async function GET() {
         }),
       ]);
 
-    // Daily volume breakdown (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -54,8 +53,6 @@ export async function GET() {
       volumeByDay,
     });
   } catch (err) {
-    return serverError(
-      err instanceof Error ? err.message : "Failed to fetch analytics"
-    );
+    return handleApiError(err, "GET /api/analytics");
   }
 }

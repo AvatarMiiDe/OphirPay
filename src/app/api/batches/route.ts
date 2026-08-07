@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import type { PaymentStatus } from "@prisma/client";
 import { createBatchSchema } from "@/lib/validations";
-import { successResponse, serverError, validationError } from "@/lib/api-response";
+import { successResponse, validationError, handleApiError } from "@/lib/api-response";
 import { requireAuth } from "@/lib/api-auth";
 
 // ── GET /api/batches — List batches with pagination ──────────
@@ -42,8 +41,8 @@ export async function GET(request: Request) {
       total,
       timestamp: new Date().toISOString(),
     });
-  } catch {
-    return serverError("Failed to fetch batches");
+  } catch (err) {
+    return handleApiError(err, "GET /api/batches");
   }
 }
 
@@ -53,7 +52,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Validate with Zod
     const parsed = createBatchSchema.safeParse(body);
     if (!parsed.success) {
       return validationError(parsed.error);
@@ -61,40 +59,28 @@ export async function POST(request: Request) {
 
     const { name, description, recipients: payments } = parsed.data;
 
-    // Authenticate via API key or wallet session
+    // Enforce authentication
     const auth = await requireAuth(request);
-    // If auth returned a Response (error), return it immediately in production
-    if (!("userId" in auth)) {
-      if (process.env.NODE_ENV === "production") {
-        return auth;
-      }
-      // Dev: fall through with body-provided userId
-    }
+    if (!("userId" in auth)) return auth;
 
-    const userId = ("userId" in auth) ? auth.userId : (body.userId || "dev-user");
+    const { userId } = auth;
 
-    // Create the batch
     const batch = await prisma.batch.create({
-      data: {
-        name,
-        description,
-        userId,
-      },
+      data: { name, description, userId },
     });
 
-    // Create payments linked to the batch and user
+    // Create child payments — status is CREATED (not COMPLETED)
     await prisma.payment.createMany({
       data: payments.map((p) => ({
         amount: p.amount,
         assetCode: p.assetCode || "XLM",
         memo: p.memo || "",
-        status: "COMPLETED" as PaymentStatus,
+        status: "CREATED",
         userId,
         batchId: batch.id,
       })),
     });
 
-    // Return the batch with its payments
     const result = await prisma.batch.findUnique({
       where: { id: batch.id },
       include: { payments: true },
@@ -102,8 +88,6 @@ export async function POST(request: Request) {
 
     return successResponse(result, { timestamp: new Date().toISOString() }, 201);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to create batch";
-    return serverError(message);
+    return handleApiError(err, "POST /api/batches");
   }
 }

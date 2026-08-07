@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { successResponse, serverError, notFoundError } from "@/lib/api-response";
-import { handlePrismaError } from "@/lib/prisma-errors";
+import { successResponse, notFoundError, handleApiError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
@@ -17,7 +16,7 @@ export async function GET(
     if (!payment) return notFoundError("Payment");
     return successResponse(payment);
   } catch (err) {
-    return serverError(handlePrismaError(err).message);
+    return handleApiError(err, `GET /api/payments/[id]`);
   }
 }
 
@@ -40,7 +39,6 @@ export async function PATCH(
 
     logger.info("Payment updated", { id, status: payment.status });
 
-    // Fire webhook on status transitions — non-blocking
     if (body.status === "COMPLETED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
         paymentId: payment.id,
@@ -61,8 +59,7 @@ export async function PATCH(
 
     return successResponse(payment);
   } catch (err) {
-    const errorResp = handlePrismaError(err);
-    return serverError(errorResp.message);
+    return handleApiError(err, `PATCH /api/payments/[id]`);
   }
 }
 
@@ -76,6 +73,6 @@ export async function DELETE(
     logger.info("Payment deleted", { id });
     return successResponse({ deleted: true });
   } catch (err) {
-    return serverError(handlePrismaError(err).message);
+    return handleApiError(err, `DELETE /api/payments/[id]`);
   }
 }

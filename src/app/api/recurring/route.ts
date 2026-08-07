@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { createRecurrenceSchema, paginationSchema } from "@/lib/validations";
-import { successResponse, serverError, validationError } from "@/lib/api-response";
+import { successResponse, validationError, handleApiError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 
 export async function GET(request: Request) {
@@ -27,8 +27,7 @@ export async function GET(request: Request) {
 
     return successResponse(recurrences, { page, limit, total });
   } catch (err) {
-    logger.error("Failed to fetch recurring payments", { error: String(err) });
-    return serverError("Failed to fetch recurring payments");
+    return handleApiError(err, "GET /api/recurring");
   }
 }
 
@@ -38,7 +37,6 @@ export async function POST(request: Request) {
     const parsed = createRecurrenceSchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
 
-    // Calculate next run date based on frequency
     const nextRunAt = new Date();
     switch (parsed.data.frequency) {
       case "DAILY": nextRunAt.setDate(nextRunAt.getDate() + 1); break;
@@ -65,7 +63,6 @@ export async function POST(request: Request) {
     logger.info("Recurring payment created", { id: recurrence.id });
     return successResponse(recurrence, undefined, 201);
   } catch (err) {
-    logger.error("Failed to create recurrence", { error: String(err) });
-    return serverError("Failed to create recurring payment");
+    return handleApiError(err, "POST /api/recurring");
   }
 }
