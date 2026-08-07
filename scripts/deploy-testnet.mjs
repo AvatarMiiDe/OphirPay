@@ -2,7 +2,18 @@
 // SPDX-License-Identifier: MIT
 //
 // OphirPay — Stellar Testnet Contract Deployment
-// Uses @stellar/stellar-sdk v13 Operation.uploadContractWasm / createCustomContract / invokeContractFunction
+// Uses @stellar/stellar-sdk v13 for WASM upload + contract creation.
+//
+// RECOMMENDED: Use stellar CLI v27+ for full deployment:
+//   1. stellar keys generate --fund --network testnet --rpc-url https://soroban-testnet.stellar.org <NAME>
+//   2. stellar contract deploy --wasm contracts/ophirpay/target/.../ophirpay_contract.wasm --source-account <NAME> --network testnet --rpc-url https://soroban-testnet.stellar.org
+//   3. stellar contract deploy --wasm contracts/emitter/target/.../ophirpay_emitter.wasm --source-account <NAME> --network testnet --rpc-url https://soroban-testnet.stellar.org
+//   4. stellar contract invoke --id <CONTRACT> --source-account <NAME> --network testnet --rpc-url https://soroban-testnet.stellar.org -- init --owner <ADDR>
+//   5. stellar contract invoke --id <CONTRACT> --source-account <NAME> --network testnet --rpc-url https://soroban-testnet.stellar.org -- set_emitter --caller <ADDR> --emitter <EMITTER_ID>
+//
+// This Node.js script handles WASM upload + contract creation only.
+// Contract invocation (init, set_emitter) requires stellar CLI for
+// proper Soroban auth entry assembly (SDK v13 limitation).
 //
 // Usage: node scripts/deploy-testnet.mjs
 
