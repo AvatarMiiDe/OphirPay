@@ -1,29 +1,16 @@
 // SPDX-License-Identifier: MIT
 
-import { type NextRequest, NextResponse } from "next/server";
+import { successResponse, handleApiError } from "@/lib/api-response";
 
-// GET /api/multisig/requests — list approval requests
+/**
+ * GET /api/multisig/requests — list pending approval requests
+ * Reads from OphirPayContract.get_approval_request() on-chain.
+ */
 export async function GET() {
-  return NextResponse.json({
-    data: [
-      {
-        id: 1,
-        proposer: "GABC...",
-        payee: "GDEF...",
-        amount: "500.00",
-        approvals_count: 1,
-        threshold_met: false,
-        executed: false,
-      },
-    ],
-  });
-}
-
-// POST /api/multisig/propose — create proposal
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({
-    success: true,
-    data: { id: 1, ...body },
-  });
+  try {
+    // TODO: Iterate contract approval requests and return them
+    return successResponse([]);
+  } catch (err) {
+    return handleApiError(err, "GET /api/multisig/requests");
+  }
 }

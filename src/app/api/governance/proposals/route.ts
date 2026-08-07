@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: MIT
 
-import { type NextRequest, NextResponse } from "next/server";
+import { successResponse, handleApiError } from "@/lib/api-response";
 
+/**
+ * GET /api/governance/proposals — list governance proposals
+ * Reads from OphirPayContract.get_proposal() / get_proposal_count() on-chain.
+ */
 export async function GET() {
-  return NextResponse.json({
-    data: [
-      {
-        id: 1,
-        title: "Upgrade to v3",
-        description: "Proposal to upgrade the OphirPay contract to version 3",
-        action_type: "upgrade",
-        proposer: "GABC1234...",
-        yes_votes: 120,
-        no_votes: 30,
-        voting_ends_at: Math.floor(Date.now() / 1000) + 86400,
-        executed: false,
-      },
-    ],
-  });
+  try {
+    // TODO: Read proposals from contract
+    return successResponse([]);
+  } catch (err) {
+    return handleApiError(err, "GET /api/governance/proposals");
+  }
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ success: true, data: { id: Date.now(), ...body } });
+/**
+ * POST /api/governance/proposals — create a new proposal
+ * Calls OphirPayContract.create_proposal() on-chain.
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    // TODO: Call contract.create_proposal(proposer, title, description, action_type, target, data)
+    return successResponse({ id: Date.now(), ...body }, undefined, 201);
+  } catch (err) {
+    return handleApiError(err, "POST /api/governance/proposals");
+  }
 }
