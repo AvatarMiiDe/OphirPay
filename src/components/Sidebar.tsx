@@ -166,7 +166,7 @@ export function Sidebar() {
         </span>
         Stellar Testnet
       </div>
-      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">OphirPay v0.1.0</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">OphirPay v1.0.0-rc1</p>
     </div>
   );
 
