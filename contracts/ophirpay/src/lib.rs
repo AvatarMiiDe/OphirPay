@@ -462,12 +462,15 @@ fn emit_stream_event(env: &Env, creator: &Address, recipient: &Address, amount: 
 
 /// Increment a u64 counter key by 1. Gas-optimized: single-key read+write
 /// instead of deserializing/serializing an 11-field ContractStats struct.
+/// Note: does NOT extend TTL — callers should batch TTL extensions at the end
+/// of each function to avoid redundant metadata writes.
 fn inc_counter(env: &Env, key: &Symbol) {
     let val: u64 = env.storage().instance().get(key).unwrap_or(0);
     env.storage().instance().set(key, &val.saturating_add(1));
 }
 
 /// Add delta to an i128 counter key. Same single-key optimization.
+/// Same TTL note as inc_counter.
 fn add_counter(env: &Env, key: &Symbol, delta: i128) {
     let val: i128 = env.storage().instance().get(key).unwrap_or(0);
     env.storage().instance().set(key, &val.saturating_add(delta));
