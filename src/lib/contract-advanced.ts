@@ -300,3 +300,165 @@ export async function unregisterHook(
   ];
   return signAndSubmit(caller, CONTRACT_ID, "unregister_hook", args);
 }
+
+// ── RBAC Functions ────────────────────────────────────────────
+
+/** Role enum values matching the Soroban contract (Admin=0, Operator=1, Auditor=2). */
+export const Role = {
+  Admin: 0,
+  Operator: 1,
+  Auditor: 2,
+} as const;
+
+export type RoleValue = (typeof Role)[keyof typeof Role];
+
+export async function grantRole(
+  caller: string,
+  grantee: string,
+  role: RoleValue,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(grantee, { type: "address" }),
+    nativeToScVal(role, { type: "u32" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "grant_role", args);
+}
+
+export async function revokeRole(
+  caller: string,
+  grantee: string,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(grantee, { type: "address" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "revoke_role", args);
+}
+
+/**
+ * Simulate reading a role (read-only).
+ * Note: Uses contract simulation without args; for arg-based queries, use
+ * the full invokeContractFunction flow or call via API route.
+ */
+export async function getRole(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_role", sourcePublicKey);
+}
+
+// ── Fee Config Functions ──────────────────────────────────────
+
+export async function setFeeConfig(
+  caller: string,
+  paymentFeeBps: number,
+  escrowFeeBps: number,
+  streamFeeBps: number,
+  batchBaseFee: number,
+  batchPerItemFee: number,
+  enabled: boolean,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(paymentFeeBps, { type: "u32" }),
+    nativeToScVal(escrowFeeBps, { type: "u32" }),
+    nativeToScVal(streamFeeBps, { type: "u32" }),
+    nativeToScVal(batchBaseFee, { type: "i128" }),
+    nativeToScVal(batchPerItemFee, { type: "i128" }),
+    nativeToScVal(enabled, { type: "bool" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "set_fee_config", args);
+}
+
+/**
+ * Simulate reading current fee config (read-only).
+ */
+export async function getFeeConfig(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_fee_config", sourcePublicKey);
+}
+
+/**
+ * Simulate reading fee config version history (read-only).
+ */
+export async function getFeeConfigHistory(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_fee_config_history", sourcePublicKey);
+}
+
+/**
+ * Simulate reading a specific fee config version (read-only).
+ * Note: Uses contract simulation without args; for version-specific queries,
+ * use the full invokeContractFunction flow or call via API route.
+ */
+export async function getFeeConfigAtVersion(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_fee_config_at_version", sourcePublicKey);
+}
+
+export async function setFeeCollector(
+  caller: string,
+  collector: string,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(collector, { type: "address" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "set_fee_collector", args);
+}
+
+/**
+ * Simulate reading fee collector address (read-only).
+ */
+export async function getFeeCollector(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_fee_collector", sourcePublicKey);
+}
+
+// ── Timelocked Action Functions ───────────────────────────────
+
+export async function proposeTimelockedAction(
+  caller: string,
+  actionType: string,
+  target: string,
+  data: string,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(actionType, { type: "string" }),
+    nativeToScVal(target, { type: "string" }),
+    nativeToScVal(data, { type: "string" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "propose_timelocked_action", args);
+}
+
+export async function executeTimelockedAction(
+  sourcePublicKey: string,
+  actionId: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(actionId, { type: "u64" }),
+  ];
+  return signAndSubmit(sourcePublicKey, CONTRACT_ID, "execute_timelocked_action", args);
+}
+
+export async function cancelTimelockedAction(
+  caller: string,
+  actionId: number,
+): Promise<ContractCallResult> {
+  const args: xdr.ScVal[] = [
+    nativeToScVal(caller, { type: "address" }),
+    nativeToScVal(actionId, { type: "u64" }),
+  ];
+  return signAndSubmit(caller, CONTRACT_ID, "cancel_timelocked_action", args);
+}
+
+// ── Policy Version History Functions ──────────────────────────
+
+/**
+ * Simulate reading multisig config version history (read-only).
+ */
+export async function getMultisigConfigHistory(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_multisig_config_history", sourcePublicKey);
+}
+
+/**
+ * Simulate reading fee config version history (read-only). Alias for getFeeConfigHistory.
+ */
+export async function getPolicyFeeConfigHistory(sourcePublicKey: string) {
+  return simulateContractCall(CONTRACT_ID, "get_fee_config_history", sourcePublicKey);
+}
