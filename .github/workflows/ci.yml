@@ -352,10 +352,44 @@ jobs:
         run: npm audit --audit-level=critical 2>&1 || true
 
   # ══════════════════════════════════════════════════════════════
-  # 15. PR LABELER — Auto-label PRs by changed paths
+  # 15. VERCEL DEPLOY — Production deploy on push to main
+  # ══════════════════════════════════════════════════════════════
+  vercel-deploy:
+    name: "1️⃣5️⃣ Deploy — Vercel Production"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, typecheck, unit-tests, next-build]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Deploy to Vercel
+        run: |
+          npx vercel deploy \
+            --prod \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --yes \
+            --no-wait \
+            --env NEXT_PUBLIC_CONTRACT_ID=${{ vars.NEXT_PUBLIC_CONTRACT_ID }} \
+            --env NEXT_PUBLIC_EMITTER_CONTRACT_ID=${{ vars.NEXT_PUBLIC_EMITTER_CONTRACT_ID }} \
+            --env NEXT_PUBLIC_SOROBAN_RPC_URL=${{ vars.NEXT_PUBLIC_SOROBAN_RPC_URL }} \
+            --env NEXT_PUBLIC_HORIZON_URL=${{ vars.NEXT_PUBLIC_HORIZON_URL }} \
+            --env NEXT_PUBLIC_STELLAR_NETWORK=${{ vars.NEXT_PUBLIC_STELLAR_NETWORK }}
+      - name: Verify deployment
+        run: |
+          sleep 5
+          STATUS=$(curl -sI https://ophirpay.vercel.app | grep "HTTP/2" | awk '{print $2}')
+          echo "Deploy status: HTTP $STATUS"
+          test "$STATUS" = "200" && echo "✅ Deployment verified"
+
+  # ══════════════════════════════════════════════════════════════
+  # 16. PR LABELER — Auto-label PRs by changed paths
   # ══════════════════════════════════════════════════════════════
   pr-labeler:
-    name: "1️⃣5️⃣ PR — Auto Label"
+    name: "1️⃣6️⃣ PR — Auto Label"
     runs-on: ubuntu-latest
     timeout-minutes: 3
     if: github.event_name == 'pull_request'
