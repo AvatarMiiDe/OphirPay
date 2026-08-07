@@ -14,8 +14,24 @@ title = "OphirPay Gitleaks Config"
     '''public/''',
   ]
 
-  # Demo/test private keys that are NOT real secrets
+  # Demo/test private keys and public identifiers that are NOT real secrets
   regexes = [
     '''GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U''',  # seed.ts demo address
     '''GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA''',  # burn address
+    # Public Stellar Testnet identifiers — NOT secrets, NOT private keys
+    '''GACNKEDGJYLLVQDXWYEEPB47Y3JEV5JNZ3RQANTJIVKKEOXX4NC4YWHU''',  # Testnet chain read source (public key)
+    '''CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA''',  # OphirPay Testnet contract ID
+    '''CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX''',  # Emitter Testnet contract ID
+  ]
+
+  # Also allow these in src/lib/contracts.ts (public identifiers)
+  paths = [
+    '''src/lib/contracts.ts''',
+    '''README.md''',
+    '''.env.testnet''',
+    '''contracts/ophirpay/test_snapshots/''',
+    '''contracts/emitter/test_snapshots/''',
+    '''prisma/seed.ts''',
+    '''scripts/mockups/''',
+    '''public/''',
   ]

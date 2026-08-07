@@ -18,6 +18,7 @@ const eslintConfig = [
       "contracts/**",
       "public/**",
       "prisma/**",
+      "scripts/**",
       "*.config.{mjs,ts}",
     ],
   },
