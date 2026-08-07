@@ -21,7 +21,7 @@ import {
   scValToNative,
   nativeToScVal,
 } from "@stellar/stellar-sdk";
-import { EMITTER_CONTRACT_ID } from "@/lib/contracts";
+import { EMITTER_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { SOROBAN_RPC_URL, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 export const dynamic = "force-dynamic";
@@ -107,9 +107,8 @@ export async function GET() {
       let lastKnownCount = 0;
       const server = new rpc.Server(SOROBAN_RPC_URL, { allowHttp: false });
 
-      // Use a well-known testnet address as the source for simulation
-      const sourcePublicKey =
-        "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U";
+      // Use the configured chain-read source account for simulation
+      const sourcePublicKey = CHAIN_READ_SOURCE;
 
       // Heartbeat every 15s to keep connection alive
       const heartbeat = setInterval(() => {

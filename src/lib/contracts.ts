@@ -11,14 +11,22 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
-export const DEFAULT_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_CONTRACT_ID ||
-  "CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB";
+/** OphirPay core contract — required, no fallback to prevent mainnet accidents */
+export const OPHIRPAY_CONTRACT_ID = (() => {
+  const id = process.env.NEXT_PUBLIC_CONTRACT_ID;
+  if (!id) throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
+  return id;
+})();
 
-/** Emitter contract that receives cross-contract payment events */
-export const EMITTER_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID ||
-  "CA6LAPR4OWABPWORBQGK5O5H5S62GIPQBKP3PH7H2DQ3ZNSWSH3RHFE4";
+/** Emitter contract — required for cross-contract orchestration */
+export const EMITTER_CONTRACT_ID = (() => {
+  const id = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID;
+  if (!id) throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
+  return id;
+})();
+
+// Legacy alias — kept for backward compatibility in existing callers
+export const DEFAULT_CONTRACT_ID = OPHIRPAY_CONTRACT_ID;
 
 // ── 3 Error Types ──────────────────────────────────────────────
 
@@ -304,10 +312,12 @@ export async function recordPaymentOnChain(params: {
 
 // ── On-Chain Reads (Public) ────────────────────────────────────
 
-/** Well-known testnet address used as the simulation source for public chain reads. */
-export const CHAIN_READ_SOURCE =
-  process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE ||
-  "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U";
+/** Simulation source account for public chain reads — must be a funded account on the target network. */
+export const CHAIN_READ_SOURCE = (() => {
+  const source = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE;
+  if (!source) throw new Error("NEXT_PUBLIC_CHAIN_READ_SOURCE is required. Set a funded public key in your .env file.");
+  return source;
+})();
 
 export interface OnChainPayment {
   id: number;
