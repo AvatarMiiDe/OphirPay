@@ -1,0 +1,940 @@
+openapi: "3.1.0"
+info:
+  title: OphirPay API
+  description: |
+    REST API for the OphirPay Stellar payment platform — batch payments,
+    escrow, recurring payments, webhook delivery, multisig governance,
+    and real-time event streaming.
+
+    **Authentication** — two modes:
+    - `Authorization: Bearer <api-key>` (recommended)
+    - `X-API-Key: <api-key>`
+    
+    API keys are generated at `POST /api/keys` and shown only once.
+  version: 0.1.0
+  contact:
+    name: OphirPay Team
+  license:
+    name: MIT
+    url: https://github.com/ophirpay/ophirpay/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://api.ophirpay.com
+    description: Production
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+tags:
+  - name: Payments
+    description: Individual payment operations
+  - name: Batches
+    description: Batch payment operations (authenticated)
+  - name: Recurring
+    description: Recurring / subscription payment management
+  - name: Payment Requests
+    description: Payment link / request creation
+  - name: Webhooks
+    description: Outgoing webhook registration (authenticated)
+  - name: API Keys
+    description: API key generation and revocation (authenticated)
+  - name: Multisig
+    description: Multisig configuration, proposals, approvals (on-chain)
+  - name: Governance
+    description: DAO-governed proposals and voting (on-chain)
+  - name: Analytics
+    description: Aggregated payment metrics
+  - name: Refunds
+    description: Refund tracking and analytics
+  - name: Hooks
+    description: Notification hook registry
+  - name: Audit Log
+    description: Contract audit log (authenticated)
+  - name: Events
+    description: Server-Sent Events stream for real-time payments
+  - name: Health
+    description: Service health and readiness checks
+  - name: Metrics
+    description: Prometheus metrics endpoint
+
+paths:
+  # ── Payments ──────────────────────────────────────────────
+  /api/payments:
+    get:
+      tags: [Payments]
+      summary: List payments
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, PENDING, COMPLETED, FAILED, CANCELLED]
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search in description, memo, or transaction hash
+      responses:
+        "200":
+          description: Paginated payment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPayments"
+    post:
+      tags: [Payments]
+      summary: Create a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /api/payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Get a payment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Payments]
+      summary: Update payment status or metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [CREATED, PENDING, COMPLETED, FAILED, CANCELLED]
+                description:
+                  type: string
+                memo:
+                  type: string
+      responses:
+        "200":
+          description: Payment updated
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Payments]
+      summary: Delete a payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Batches ────────────────────────────────────────────────
+  /api/batches:
+    get:
+      tags: [Batches]
+      summary: List batches with pagination
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search in name or description
+      responses:
+        "200":
+          description: Paginated batch list
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Batches]
+      summary: Create a batch payment
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBatchRequest"
+      responses:
+        "201":
+          description: Batch created with child payments
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Recurring Payments ────────────────────────────────────
+  /api/recurring:
+    get:
+      tags: [Recurring]
+      summary: List recurring payments
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Paginated recurrence list
+    post:
+      tags: [Recurring]
+      summary: Create a recurring payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecurrenceRequest"
+      responses:
+        "201":
+          description: Recurrence created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Payment Requests ──────────────────────────────────────
+  /api/requests:
+    get:
+      tags: [Payment Requests]
+      summary: List payment requests
+      responses:
+        "200":
+          description: List of payment requests
+    post:
+      tags: [Payment Requests]
+      summary: Create a payment request / payment link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequestSchema"
+      responses:
+        "201":
+          description: Payment request created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  # ── Webhooks ──────────────────────────────────────────────
+  /api/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List registered webhooks (secrets redacted)
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Webhook list
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Webhooks]
+      summary: Register a new webhook
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: Webhook registered (secret returned once)
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Webhook deleted
+        "400":
+          description: Missing webhook ID
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── API Keys ──────────────────────────────────────────────
+  /api/keys:
+    get:
+      tags: [API Keys]
+      summary: List API keys (hashes hidden)
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: API key list (id, name, prefix, timestamps only)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [API Keys]
+      summary: Generate a new API key (raw key shown once)
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, userId]
+              properties:
+                name:
+                  type: string
+                  description: Label for this key
+                userId:
+                  type: string
+                  description: Owning user ID
+      responses:
+        "201":
+          description: Key generated — store the raw key immediately
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      prefix: { type: string }
+                      key:
+                        type: string
+                        description: Raw API key — shown only once
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [API Keys]
+      summary: Revoke an API key
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Key revoked
+        "400":
+          description: Missing key ID
+
+  # ── Multisig ──────────────────────────────────────────────
+  /api/multisig:
+    get:
+      tags: [Multisig]
+      summary: Get current multisig configuration
+      responses:
+        "200":
+          description: Multisig config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      threshold: { type: integer }
+                      signers:
+                        type: array
+                        items: { type: string }
+                      enabled: { type: boolean }
+    post:
+      tags: [Multisig]
+      summary: Configure multisig (owner-only on-chain)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threshold: { type: integer }
+                signers:
+                  type: array
+                  items: { type: string }
+                enabled: { type: boolean }
+      responses:
+        "201":
+          description: Multisig configured
+
+  /api/multisig/propose:
+    post:
+      tags: [Multisig]
+      summary: Propose a payment for multisig approval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payee, amount]
+              properties:
+                payee: { type: string }
+                amount: { type: number }
+                assetCode: { type: string }
+                memo: { type: string }
+      responses:
+        "201":
+          description: Proposal created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/multisig/approve:
+    post:
+      tags: [Multisig]
+      summary: Approve a pending multisig proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId]
+              properties:
+                requestId: { type: integer }
+      responses:
+        "200":
+          description: Proposal approved
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/multisig/execute:
+    post:
+      tags: [Multisig]
+      summary: Execute a fully approved multisig payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId]
+              properties:
+                requestId: { type: integer }
+      responses:
+        "200":
+          description: Payment executed
+
+  /api/multisig/requests:
+    get:
+      tags: [Multisig]
+      summary: List pending approval requests
+      responses:
+        "200":
+          description: Pending requests list
+
+  # ── Governance ────────────────────────────────────────────
+  /api/governance/proposals:
+    get:
+      tags: [Governance]
+      summary: List governance proposals
+      responses:
+        "200":
+          description: Proposals list
+    post:
+      tags: [Governance]
+      summary: Create a governance proposal (on-chain)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                actionType: { type: string }
+                target: { type: string }
+                data: { type: string }
+      responses:
+        "201":
+          description: Proposal created
+
+  /api/governance/vote:
+    post:
+      tags: [Governance]
+      summary: Cast a vote on a proposal (on-chain)
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proposalId: { type: integer }
+                voter: { type: string }
+                support: { type: boolean }
+                weight: { type: integer }
+      responses:
+        "200":
+          description: Vote cast
+
+  /api/governance/execute:
+    post:
+      tags: [Governance]
+      summary: Execute a passed proposal
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proposalId]
+              properties:
+                proposalId:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Proposal executed
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Analytics ─────────────────────────────────────────────
+  /api/analytics:
+    get:
+      tags: [Analytics]
+      summary: Aggregated payment analytics
+      responses:
+        "200":
+          description: Payment metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      totalPayments: { type: integer }
+                      completedPayments: { type: integer }
+                      failedPayments: { type: integer }
+                      totalVolume: { type: number }
+                      averageAmount: { type: number }
+                      successRate: { type: integer }
+                      volumeByDay:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date: { type: string }
+                            volume: { type: number }
+                            count: { type: integer }
+
+  # ── Refunds ───────────────────────────────────────────────
+  /api/refunds:
+    get:
+      tags: [Refunds]
+      summary: List refunds or refund analytics
+      parameters:
+        - name: analytics
+          in: query
+          schema: { type: boolean }
+          description: Return reason-code buckets instead of full refund list
+      responses:
+        "200":
+          description: Refund data
+
+  # ── Hooks ─────────────────────────────────────────────────
+  /api/hooks:
+    get:
+      tags: [Hooks]
+      summary: List notification hooks
+      parameters:
+        - name: event_type
+          in: query
+          schema: { type: string }
+          description: Filter by event type
+      responses:
+        "200":
+          description: Hook list
+
+  # ── Audit Log ─────────────────────────────────────────────
+  /api/audit-log:
+    get:
+      tags: [Audit Log]
+      summary: Query contract audit log
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: actor
+          in: query
+          schema: { type: string }
+          description: Filter by Stellar address
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by action type
+        - name: since
+          in: query
+          schema: { type: integer }
+          description: Unix timestamp filter
+      responses:
+        "200":
+          description: Paginated audit log entries
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── SSE Events ────────────────────────────────────────────
+  /api/events:
+    get:
+      tags: [Events]
+      summary: Subscribe to real-time payment events
+      description: |
+        Server-Sent Events stream. Polls the Stellar emitter contract every 10 seconds.
+        
+        Events:
+        - `connected` — stream established
+        - `heartbeat` — keep-alive every 15s
+        - `payment:created` — new payment detected from emitter contract
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  # ── Health ────────────────────────────────────────────────
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      responses:
+        "200":
+          description: All services healthy
+        "503":
+          description: One or more services unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  # ── Metrics ───────────────────────────────────────────────
+  /api/metrics:
+    get:
+      tags: [Metrics]
+      summary: Prometheus metrics endpoint
+      responses:
+        "200":
+          description: Prometheus text format metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+# ── Components ────────────────────────────────────────────────
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key generated from POST /api/keys
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: oph_
+      description: Same API key, passed as Bearer token
+
+  schemas:
+    PaymentResponse:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        assetCode: { type: string }
+        assetIssuer: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        memo: { type: string, nullable: true }
+        status: { type: string }
+        transactionHash: { type: string, nullable: true }
+        sourceAccountId: { type: string }
+        userId: { type: string }
+        batchId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        errorMessage: { type: string, nullable: true }
+
+    PaginatedPayments:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentResponse"
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+
+    CreatePaymentRequestSchema:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Payment request amount
+        assetCode:
+          type: string
+          default: XLM
+        assetIssuer:
+          type: string
+          description: Issuer account for non-XLM assets
+        description:
+          type: string
+          maxLength: 500
+        recipientAddress:
+          type: string
+          pattern: "^G[A-Z0-9]{55}$"
+          description: Optional recipient Stellar address
+
+    CreatePaymentRequest:
+      type: object
+      required: [amount, sourceAccountId, destAddress]
+      properties:
+        amount:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Payment amount in stroops for XLM, or smallest unit for other assets
+        assetCode:
+          type: string
+          default: XLM
+        assetIssuer:
+          type: string
+          description: Issuer account for non-XLM assets
+        description:
+          type: string
+          maxLength: 200
+        memo:
+          type: string
+          maxLength: 28
+        sourceAccountId:
+          type: string
+          description: Source Stellar account
+        destAddress:
+          type: string
+          pattern: "^G[A-Z0-9]{55}$"
+          description: Destination Stellar address (56 chars, starts with G)
+
+    CreateBatchRequest:
+      type: object
+      required: [name, recipients, sourceAccountId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [address, amount]
+            properties:
+              address:
+                type: string
+                pattern: "^G[A-Z0-9]{55}$"
+              amount:
+                type: number
+                minimum: 0
+                exclusiveMinimum: true
+              assetCode:
+                type: string
+                default: XLM
+              memo:
+                type: string
+                maxLength: 28
+        sourceAccountId:
+          type: string
+
+    CreateRecurrenceRequest:
+      type: object
+      required: [name, frequency, amount, destAddress, sourceAccountId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        frequency:
+          type: string
+          enum: [DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY]
+        amount:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        assetCode:
+          type: string
+          default: XLM
+        destAddress:
+          type: string
+          pattern: "^G[A-Z0-9]{55}$"
+        description:
+          type: string
+          maxLength: 500
+        sourceAccountId:
+          type: string
+
+    CreateWebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: Event types to subscribe to
+        isActive:
+          type: boolean
+          default: true
+
+    HealthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            version: { type: string }
+            services:
+              type: object
+              properties:
+                database:
+                  type: object
+                  properties:
+                    status: { type: string, enum: [ok, error] }
+                    latencyMs: { type: integer, nullable: true }
+                redis:
+                  type: object
+                  properties:
+                    status: { type: string, enum: [ok, error, disabled] }
+                    latencyMs: { type: integer, nullable: true }
+                stellar:
+                  type: object
+                  properties:
+                    network: { type: string }
+                    rpcUrl: { type: string }
+                    rpc:
+                      type: object
+                      properties:
+                        status: { type: string, enum: [ok, error, unchecked] }
+                        latencyMs: { type: integer, nullable: true }
+            uptime: { type: number }
+        meta:
+          type: object
+          properties:
+            timestamp: { type: string }
+
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+  responses:
+    ValidationError:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

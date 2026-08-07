@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-import { type NextRequest } from "next/server";
 import { withApiAuth } from "@/lib/api-auth";
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
 import { z } from "zod";
@@ -52,7 +51,7 @@ async function _GET(request: Request) {
           id: 5,
           timestamp: Math.floor(Date.now() / 1000) - 60,
           action: "payment_recorded",
-          actor: "GABC1234DEF5678EFGH9012IJKL3456MNOP7890",
+          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
           target_id: 42,
           details: "Payment recorded on-chain",
         },
@@ -60,7 +59,7 @@ async function _GET(request: Request) {
           id: 4,
           timestamp: Math.floor(Date.now() / 1000) - 120,
           action: "escrow_created",
-          actor: "GDEF5678EFGH9012IJKL3456MNOP7890ABCD1234",
+          actor: "GDJ3ZQ2IV4LSCDKI4COZBY2NFCB5TFPL7MLHXZMGJCSPPYFJJZPELKMH",
           target_id: 3,
           details: "Escrow created and funded",
         },
@@ -68,7 +67,7 @@ async function _GET(request: Request) {
           id: 3,
           timestamp: Math.floor(Date.now() / 1000) - 300,
           action: "multisig_configured",
-          actor: "GABC1234DEF5678EFGH9012IJKL3456MNOP7890",
+          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
           target_id: 0,
           details: "Multisig threshold updated",
         },
@@ -76,7 +75,7 @@ async function _GET(request: Request) {
           id: 2,
           timestamp: Math.floor(Date.now() / 1000) - 600,
           action: "fee_config_set",
-          actor: "GABC1234DEF5678EFGH9012IJKL3456MNOP7890",
+          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
           target_id: 0,
           details: "Fee configuration updated",
         },
@@ -84,7 +83,7 @@ async function _GET(request: Request) {
           id: 1,
           timestamp: Math.floor(Date.now() / 1000) - 900,
           action: "contract_unpaused",
-          actor: "GABC1234DEF5678EFGH9012IJKL3456MNOP7890",
+          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
           target_id: 0,
           details: "Contract unpaused after maintenance",
         },
