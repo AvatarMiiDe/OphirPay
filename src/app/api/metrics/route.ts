@@ -1,70 +1,50 @@
 // SPDX-License-Identifier: MIT
 
 import { NextResponse } from "next/server";
-
-// In-memory counters for Prometheus scraping
-const counters = {
-  http_requests_total: 0,
-  payments_created_total: 0,
-  payments_failed_total: 0,
-  batches_processed_total: 0,
-  webhooks_delivered_total: 0,
-  webhooks_failed_total: 0,
-  db_query_duration_seconds_sum: 0,
-  db_query_duration_seconds_count: 0,
-};
-
-/** Increment a named counter (called from middleware or API routes) */
-export function incMetric(name: keyof typeof counters, delta = 1) {
-  counters[name] += delta;
-}
-
-/** Record a duration observation (in seconds) */
-export function observeDbQuery(durationSeconds: number) {
-  counters.db_query_duration_seconds_sum += durationSeconds;
-  counters.db_query_duration_seconds_count += 1;
-}
+import { getMetricsSnapshot } from "@/lib/metrics-counters";
 
 function buildMetrics(): string {
+  const c = getMetricsSnapshot();
+
   const lines: string[] = [
     "# HELP ophirpay_http_requests_total Total HTTP requests served",
     "# TYPE ophirpay_http_requests_total counter",
-    `ophirpay_http_requests_total ${counters.http_requests_total}`,
+    `ophirpay_http_requests_total ${c.http_requests_total}`,
     "",
-    "# HELP ophirpay_payments_created_total Total payments recorded on-chain",
+    "# HELP ophirpay_payments_created_total Total payments created",
     "# TYPE ophirpay_payments_created_total counter",
-    `ophirpay_payments_created_total ${counters.payments_created_total}`,
+    `ophirpay_payments_created_total ${c.payments_created_total}`,
     "",
     "# HELP ophirpay_payments_failed_total Total failed payment attempts",
     "# TYPE ophirpay_payments_failed_total counter",
-    `ophirpay_payments_failed_total ${counters.payments_failed_total}`,
+    `ophirpay_payments_failed_total ${c.payments_failed_total}`,
     "",
     "# HELP ophirpay_batches_processed_total Total batch payments processed",
     "# TYPE ophirpay_batches_processed_total counter",
-    `ophirpay_batches_processed_total ${counters.batches_processed_total}`,
+    `ophirpay_batches_processed_total ${c.batches_processed_total}`,
     "",
-    "# HELP ophirpay_webhooks_delivered_total Total webhooks successfully delivered",
+    "# HELP ophirpay_webhooks_delivered_total Total webhooks delivered",
     "# TYPE ophirpay_webhooks_delivered_total counter",
-    `ophirpay_webhooks_delivered_total ${counters.webhooks_delivered_total}`,
+    `ophirpay_webhooks_delivered_total ${c.webhooks_delivered_total}`,
     "",
     "# HELP ophirpay_webhooks_failed_total Total webhooks that failed delivery",
     "# TYPE ophirpay_webhooks_failed_total counter",
-    `ophirpay_webhooks_failed_total ${counters.webhooks_failed_total}`,
+    `ophirpay_webhooks_failed_total ${c.webhooks_failed_total}`,
     "",
-    "# HELP ophirpay_db_query_duration_seconds Database query duration histogram",
-    "# TYPE ophirpay_db_query_duration_seconds summary",
-    `ophirpay_db_query_duration_seconds_sum ${counters.db_query_duration_seconds_sum}`,
-    `ophirpay_db_query_duration_seconds_count ${counters.db_query_duration_seconds_count}`,
+    "# HELP ophirpay_db_query_duration_seconds_sum Database query duration sum",
+    "# TYPE ophirpay_db_query_duration_seconds_sum summary",
+    `ophirpay_db_query_duration_seconds_sum ${c.db_query_duration_seconds_sum}`,
+    `ophirpay_db_query_duration_seconds_count ${c.db_query_duration_seconds_count}`,
     "",
     "# HELP ophirpay_info OphirPay build information",
     "# TYPE ophirpay_info gauge",
     "ophirpay_info{version=\"1.0.0\"} 1",
   ];
+
   return lines.join("\n") + "\n";
 }
 
 export async function GET() {
-  incMetric("http_requests_total");
   return new NextResponse(buildMetrics(), {
     status: 200,
     headers: {

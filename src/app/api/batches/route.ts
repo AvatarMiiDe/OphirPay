@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { createBatchSchema } from "@/lib/validations";
 import { successResponse, validationError, handleApiError } from "@/lib/api-response";
 import { requireAuth } from "@/lib/api-auth";
+import { incMetric } from "@/lib/metrics-counters";
 
 // ── GET /api/batches — List batches with pagination ──────────
 
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
       where: { id: batch.id },
       include: { payments: true },
     });
+
+    incMetric("batches_processed_total");
 
     return successResponse(result, { timestamp: new Date().toISOString() }, 201);
   } catch (err) {

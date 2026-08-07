@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore } from "@/lib/rate-limit";
+import { incMetric } from "@/lib/metrics-counters";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 120; // requests per window per IP
@@ -22,6 +23,11 @@ function generateRequestId(): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = generateRequestId();
+
+  // Count all API requests for Prometheus
+  if (pathname.startsWith("/api/")) {
+    incMetric("http_requests_total");
+  }
 
   // Only apply API-specific logic to API routes
   if (!pathname.startsWith("/api/")) {

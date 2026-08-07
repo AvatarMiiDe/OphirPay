@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { logger } from "@/lib/logger";
+import { incMetric } from "@/lib/metrics-counters";
 import crypto from "crypto";
 
 interface WebhookPayload {
@@ -53,6 +54,7 @@ export async function deliverWebhook(
 
       if (response.ok) {
         logger.info("Webhook delivered", { url, event: payload.event, attempt });
+        incMetric("webhooks_delivered_total");
         return true;
       }
 
@@ -68,5 +70,6 @@ export async function deliverWebhook(
   }
 
   logger.error("Webhook delivery exhausted retries", { url, event: payload.event });
+  incMetric("webhooks_failed_total");
   return false;
 }

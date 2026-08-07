@@ -6,6 +6,7 @@ import { successResponse, validationError, handleApiError } from "@/lib/api-resp
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
+import { incMetric } from "@/lib/metrics-counters";
 
 export async function GET(request: Request) {
   try {
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
       status: payment.status,
       createdAt: payment.createdAt.toISOString(),
     });
+
+    incMetric("payments_created_total");
 
     return successResponse(payment, undefined, 201);
   } catch (err) {
