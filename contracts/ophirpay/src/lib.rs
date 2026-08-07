@@ -680,6 +680,7 @@ impl OphirPayContract {
         count += 1;
 
         let approvals: Vec<Address> = Vec::new(&env);
+        let proposer_clone = proposer.clone();
         let request = ApprovalRequest {
             id: count,
             proposer,
@@ -702,7 +703,7 @@ impl OphirPayContract {
             count,
         );
 
-        record_audit(&env, "multisig_proposed", &proposer, count, "Multisig payment proposed");
+        record_audit(&env, "multisig_proposed", &proposer_clone, count, "Multisig payment proposed");
 
         Ok(count)
     }
@@ -723,7 +724,7 @@ impl OphirPayContract {
             .ok_or(PaymentError::MultisigNotConfigured)?;
 
         // Verify signer is in the list
-        let is_signer = config.signers.iter().any(|s| *s == signer);
+        let is_signer = config.signers.iter().any(|s| s == signer);
         if !is_signer {
             return Err(PaymentError::NotASigner);
         }
@@ -739,7 +740,7 @@ impl OphirPayContract {
         }
 
         // Check for duplicate approval
-        if request.approvals.iter().any(|a| *a == signer) {
+        if request.approvals.iter().any(|a| a == signer) {
             return Err(PaymentError::AlreadyApproved);
         }
 
@@ -1281,7 +1282,7 @@ impl OphirPayContract {
     /// Get spending limit for a user.
     pub fn get_spending_limit(env: Env, user: Address) -> Option<SpendingLimit> {
         let key = (SPEND_LIMIT_KEY, user);
-        env.storage().persistent().get(&key)
+        env.storage().persistent().get::<_, SpendingLimit>(&key)
     }
 
     /// Configure escalation rules (owner only).
@@ -1314,7 +1315,7 @@ impl OphirPayContract {
         amount: i128,
     ) -> SpendCheckResult {
         // Check escalation rules
-        if let Some(rules) = env.storage().instance().get::<EscalationRules>(&ESCALATION_KEY) {
+        if let Some(rules) = env.storage().instance().get::<_, EscalationRules>(&ESCALATION_KEY) {
             if rules.enabled {
                 if amount >= rules.medium_threshold {
                     return SpendCheckResult::Escalated;
@@ -1327,7 +1328,7 @@ impl OphirPayContract {
 
         // Check per-user spending limits
         let key = (SPEND_LIMIT_KEY, user.clone());
-        if let Some(mut limit) = env.storage().persistent().get::<SpendingLimit>(&key) {
+        if let Some(mut limit) = env.storage().persistent().get::<_, SpendingLimit>(&key) {
             if !limit.is_active {
                 return SpendCheckResult::Rejected;
             }
@@ -1385,7 +1386,7 @@ impl OphirPayContract {
 
         // Check spending limits with expiry enforcement
         let key = (SPEND_LIMIT_KEY, payer.clone());
-        if let Some(mut limit) = env.storage().persistent().get::<SpendingLimit>(&key) {
+        if let Some(mut limit) = env.storage().persistent().get::<_, SpendingLimit>(&key) {
             if !limit.is_active {
                 return Err(PaymentError::SpendingLimitExpired);
             }
@@ -1461,13 +1462,15 @@ impl OphirPayContract {
         role: Role,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        Self::require_role(&env, &caller, &Role::Admin)?;
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
+        let grantee_clone = grantee.clone();
+        let role_clone = role.clone();
         let key = (ROLE_KEY, grantee);
         env.storage().persistent().set(&key, &role);
         env.storage().persistent().extend_ttl(&key, 5000, 50000);
         env.events().publish(
             (Symbol::new(&env, "rbac"), Symbol::new(&env, "grant")),
-            (grantee, role),
+            (grantee_clone, role_clone),
         );
 
         record_audit(&env, "role_granted", &caller, 0, "Role granted");
@@ -1482,7 +1485,7 @@ impl OphirPayContract {
         grantee: Address,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        Self::require_role(&env, &caller, &Role::Admin)?;
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
         let key = (ROLE_KEY, grantee);
         env.storage().persistent().remove(&key);
 
@@ -1494,23 +1497,23 @@ impl OphirPayContract {
     /// Get the role for an address.
     pub fn get_role(env: Env, addr: Address) -> Option<Role> {
         let key = (ROLE_KEY, addr);
-        env.storage().persistent().get(&key)
+        env.storage().persistent().get::<_, Role>(&key)
     }
 
     /// Check that `caller` holds at least `required` role.
     /// Admin > Operator > Auditor. Admin can do anything.
-    pub fn require_role(env: &Env, caller: &Address, required: &Role) -> Result<(), PaymentError> {
+    pub fn require_role(env: &Env, caller: Address, required: Role) -> Result<(), PaymentError> {
         let key = (ROLE_KEY, caller.clone());
-        let role: Option<Role> = env.storage().persistent().get(&key);
+        let role: Option<Role> = env.storage().persistent().get::<_, Role>(&key);
         match role {
             Some(Role::Admin) => Ok(()), // Admin can do anything
-            Some(Role::Operator) if *required == Role::Operator || *required == Role::Auditor => Ok(()),
-            Some(Role::Auditor) if *required == Role::Auditor => Ok(()),
-            Some(ref r) if r == required => Ok(()),
+            Some(Role::Operator) if required == Role::Operator || required == Role::Auditor => Ok(()),
+            Some(Role::Auditor) if required == Role::Auditor => Ok(()),
+            Some(ref r) if r == &required => Ok(()),
             _ => {
                 // Fallback: check legacy owner
                 let owner: Option<Address> = env.storage().instance().get(&OWNER);
-                if owner.as_ref() == Some(caller) {
+                if owner.as_ref() == Some(&caller) {
                     return Ok(());
                 }
                 Err(PaymentError::NotARoleHolder)
@@ -1538,7 +1541,7 @@ impl OphirPayContract {
             if entries.len() >= 100 {
                 break;
             }
-            if let Some(e) = env.storage().persistent().get(&id) {
+            if let Some(e) = env.storage().persistent().get::<_, AuditEntry>(&id) {
                 entries.push_back(e);
             }
         }
@@ -1577,9 +1580,9 @@ impl OphirPayContract {
         env.storage().instance().extend_ttl(5000, 50000);
 
         // Cross-contract call: pause the Emitter if linked
-        if let Some(emitter) = env.storage().instance().get::<Address>(&EMITTER_ADDR) {
+        if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
-            let args = soroban_sdk::vec![&env, caller.clone()];
+            let args = soroban_sdk::vec![&env, caller.to_val()];
             let _: () = env.invoke_contract(&emitter, &pause_fn, args);
         }
 
@@ -1598,9 +1601,9 @@ impl OphirPayContract {
         env.storage().instance().extend_ttl(5000, 50000);
 
         // Cross-contract call: unpause the Emitter if linked
-        if let Some(emitter) = env.storage().instance().get::<Address>(&EMITTER_ADDR) {
+        if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
-            let args = soroban_sdk::vec![&env, caller.clone()];
+            let args = soroban_sdk::vec![&env, caller.to_val()];
             let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
         }
 
@@ -1623,7 +1626,11 @@ impl OphirPayContract {
         amount: i128,
     ) -> Result<(), PaymentError> {
         caller.require_auth();
-        require_owner(&env, &caller)?;
+        let owner: Address = env.storage().instance().get(&OWNER)
+            .ok_or(PaymentError::NotInitialized)?;
+        if caller != owner {
+            return Err(PaymentError::Unauthorized);
+        }
         if amount <= 0 {
             return Err(PaymentError::NoTokensToWithdraw);
         }
@@ -1853,7 +1860,7 @@ impl OphirPayContract {
     pub fn get_payments_range(env: Env, start_id: u64, end_id: u64) -> Vec<Payment> {
         let mut payments = Vec::new(&env);
         for id in start_id..=end_id {
-            if let Some(p) = env.storage().persistent().get(&id) {
+            if let Some(p) = env.storage().persistent().get::<_, Payment>(&id) {
                 payments.push_back(p);
             }
         }
@@ -1918,6 +1925,7 @@ impl OphirPayContract {
         let mut count: u64 = env.storage().instance().get(&ESCROW_COUNT).unwrap_or(0);
         count += 1;
 
+        let depositor_clone = depositor.clone();
         let escrow = Escrow {
             id: count,
             depositor,
@@ -1941,7 +1949,7 @@ impl OphirPayContract {
         inc_counter(&env, &STAT_ESC_CREATED);
         add_counter(&env, &STAT_AMT_ESCROWED, amount);
 
-        record_audit(&env, "escrow_created", &depositor, count, "Escrow created");
+        record_audit(&env, "escrow_created", &depositor_clone, count, "Escrow created");
 
         Ok(count)
     }
@@ -2120,6 +2128,7 @@ impl OphirPayContract {
         let mut count: u64 = env.storage().instance().get(&STREAM_COUNT).unwrap_or(0);
         count += 1;
 
+        let creator_clone = creator.clone();
         let stream = Stream {
             id: count,
             creator,
@@ -2143,7 +2152,7 @@ impl OphirPayContract {
         inc_counter(&env, &STAT_STR_CREATED);
         add_counter(&env, &STAT_AMT_STREAMED, total_amount);
 
-        record_audit(&env, "stream_created", &creator, count, "Stream created");
+        record_audit(&env, "stream_created", &creator_clone, count, "Stream created");
 
         Ok(count)
     }
@@ -2631,7 +2640,7 @@ impl OphirPayContract {
         }
 
         for id in 1..=total {
-            if let Some(refund) = env.storage().persistent().get::<Refund>(&id) {
+            if let Some(refund) = env.storage().persistent().get::<_, Refund>(&id) {
                 let code_idx = match refund.reason_code {
                     RefundReasonCode::ProductDefect => 0,
                     RefundReasonCode::NonDelivery => 1,
@@ -2640,8 +2649,10 @@ impl OphirPayContract {
                     RefundReasonCode::CustomerRequest => 4,
                     RefundReasonCode::Other => 5,
                 };
-                if let Some(entry) = counts.get_mut(code_idx as u32) {
-                    entry.1 = entry.1.saturating_add(1);
+                let idx = code_idx as u32;
+                if idx < counts.len() {
+                    let old_entry = counts.get(idx).unwrap();
+                    counts.set(idx, (old_entry.0, old_entry.1.saturating_add(1)));
                 }
             }
         }
@@ -2684,6 +2695,7 @@ impl OphirPayContract {
         env.storage().persistent().extend_ttl(&count, 5000, 50000);
 
         // Index: subscriber → hook IDs (for management)
+        let subscriber_clone = subscriber.clone();
         let sub_key = (Symbol::new(&env, "HOOK_SUB"), subscriber);
         let mut subscriber_hooks: Vec<u64> = env
             .storage()
@@ -2702,7 +2714,7 @@ impl OphirPayContract {
             (count, event_type),
         );
 
-        record_audit(&env, "hook_registered", &subscriber, count, "Notification hook registered");
+        record_audit(&env, "hook_registered", &subscriber_clone, count, "Notification hook registered");
 
         Ok(count)
     }
@@ -2750,7 +2762,7 @@ impl OphirPayContract {
         let mut results = Vec::new(&env);
 
         for id in 1..=total {
-            if let Some(hook) = env.storage().persistent().get::<NotificationHook>(&id) {
+            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&id) {
                 if hook.active && hook.event_type == event_type {
                     results.push_back((id, hook.webhook_url));
                 }
@@ -2765,7 +2777,7 @@ impl OphirPayContract {
 
     /// Get all hooks for a specific subscriber.
     pub fn get_subscriber_hooks(env: Env, subscriber: Address) -> Vec<NotificationHook> {
-        let sub_key = (Symbol::new(&env, "HOOK_SUB"), subscriber);
+        let sub_key = (Symbol::new(&env, "HOOK_SUB"), subscriber.clone());
         let hook_ids: Vec<u64> = env
             .storage()
             .persistent()
@@ -2774,7 +2786,7 @@ impl OphirPayContract {
 
         let mut hooks = Vec::new(&env);
         for id in hook_ids.iter() {
-            if let Some(hook) = env.storage().persistent().get(&id) {
+            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&id) {
                 hooks.push_back(hook);
             }
         }
@@ -2839,10 +2851,11 @@ impl OphirPayContract {
             actual_recipients += 1;
             payment_ids.push_back(pay_count);
 
+            let payee_addr = payee.clone().ok_or(PaymentError::InvalidAmount)?;
             let payment = Payment {
                 id: pay_count,
                 payer: creator.clone(),
-                payee: payee.clone(),
+                payee: payee_addr.clone(),
                 amount,
                 asset: asset.clone(),
                 tx_hash: tx_hash.clone(),
@@ -2854,7 +2867,7 @@ impl OphirPayContract {
             env.storage().persistent().set(&pay_count, &payment);
             env.storage().persistent().extend_ttl(&pay_count, 5000, 50000);
 
-            emit_payment_event(&env, &creator, &payee, &amount);
+            emit_payment_event(&env, &creator, &payee_addr, &amount);
         }
 
         successful = actual_recipients;
@@ -2871,6 +2884,7 @@ impl OphirPayContract {
         let mut batch_count: u64 = env.storage().instance().get(&BATCH_COUNT).unwrap_or(0);
         batch_count += 1;
 
+        let creator_clone = creator.clone();
         let batch = BatchPayment {
             id: batch_count,
             creator,
@@ -2890,7 +2904,7 @@ impl OphirPayContract {
         inc_counter(&env, &STAT_BATCHES);
         add_counter(&env, &STAT_AMT_BATCHED, total_amount);
 
-        record_audit(&env, "batch_created", &creator, batch_count, "Batch payment created");
+        record_audit(&env, "batch_created", &creator_clone, batch_count, "Batch payment created");
 
         Ok(BatchCreateResult {
             batch_id: batch_count,

@@ -56,3 +56,4 @@ contracts/**/Cargo.lock
 
 # Soroban
 .soroban/
+contracts/*/target/
