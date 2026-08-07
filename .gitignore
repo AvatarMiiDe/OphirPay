@@ -22,7 +22,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env
+# local env (use .env.example as template; .env.testnet has public deployment info)
+.env
 .env*.local
 
 # vercel
