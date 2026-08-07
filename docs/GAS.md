@@ -114,6 +114,55 @@ Soroban instance storage returns `None` for unset keys. Our counters default to 
 
 ---
 
+---
+
+## Validated Against Testnet
+
+> **Status:** Estimates pending Testnet deployment validation.
+> To validate these estimates, deploy both contracts to Stellar Testnet and run:
+> ```bash
+> stellar contract invoke --id <CONTRACT_ID> --source <KEY> --network testnet \
+>   -- record_payment --payer <A> --payee <B> --amount 1000 --asset native --tx-hash test
+> ```
+> The transaction receipt will show the actual resource fee in stroops.
+> Compare against the estimate table above and update this section.
+
+---
+
+## Locked-Funds Invariant (Gas Impact)
+
+The `LOCKED_BALANCE` tracking system (see `docs/SPEC.md` INV-3) adds one
+extra instance storage read + write per fund-movement operation:
+
+| Operation | Extra gas (locked tracking) | Percentage overhead |
+|---|---|---|
+| `create_escrow` / `create_stream` | ~300 gas (1 read + 1 write, 16 bytes each) | ~2% |
+| `release_escrow` / `claim_escrow` | ~300 gas | ~2% |
+| `claim_stream` | ~300 gas | ~2% |
+| `cancel_stream` | ~300 gas | ~2% |
+| `emergency_withdraw` | ~450 gas (1 read + 1 balance check + 1 transfer) | N/A (admin-only) |
+
+**Tradeoff accepted:** ~2% gas overhead per fund-movement operation in exchange
+for preventing the owner from draining user-deposited funds. This is the
+correct security/gas tradeoff per the Stellar Drips Wave Bot review.
+
+---
+
+## Operational Notes
+
+- **Contracterror variant limit:** soroban-sdk v22 supports at most 50
+  `#[contracterror]` variants. The 51st variant causes a macro panic.
+  OphirPay uses 50 variants; if more are needed, consider hierarchical
+  error codes or splitting into multiple error enums.
+
+- **Host test compilation:** `cargo test` on native target fails due to
+  `ed25519-dalek` 3.0 / `rand_chacha` 0.3 trait incompatibility in
+  `soroban-env-host` 22.1.3. This is an upstream issue. Use
+  `cargo test --target wasm32-unknown-unknown` as a workaround.
+
+- **WASM size:** OphirPay contract is 83 KB (81,043 bytes) with `opt-level="z"`.
+  The Soroban mainnet upload limit is ~200 KB. Headroom: 117 KB for future features.
+
 ## Future Optimizations (Not Yet Implemented)
 
 | Optimization | Est. Savings | Priority | Effort |
