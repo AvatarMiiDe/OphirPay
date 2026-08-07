@@ -21,7 +21,7 @@
       <img src="https://img.shields.io/badge/CI%20jobs-15-blue.svg?logo=githubactions" alt="15 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-114%20passed-brightgreen.svg" alt="114 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-154%20passed-brightgreen.svg" alt="154 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -121,7 +121,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
 | **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
-| **Full CI/CD + 114 tests** | ✅ | ⚠️ |
+| **Full CI/CD + 154 tests** | ✅ | ⚠️ |
 
 ---
 
@@ -510,7 +510,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | Step | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 0` | Zero-tolerance linting |
-| Test | `vitest run --reporter=verbose` | 68 tests across 7 suites + 46 contract tests |
+| Test | `vitest run --reporter=verbose` | 154 tests across 10 suites + 46 contract tests |
 | Build | `next build` | Generates `.next/` + `.next/types/` |
 | TypeScript | `tsc --noEmit` | Full project type-check (post-build for generated types) |
 
@@ -545,7 +545,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 <img src="./public/screenshots/mobile-responsive.png" alt="Mobile UI" width="40%" />
 
 ### Test Suite
-*114 tests (68 frontend + 46 contract), all green*
+*200 tests (154 integration + 46 contract), all green*
 <img src="./public/screenshots/test-output.png" alt="Test Output" width="80%" />
 
 </div>
@@ -615,7 +615,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 114 tests | **Done** |
+| ✅ CI/CD pipeline + 154 tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |

@@ -103,7 +103,7 @@ ophirpay/
 | Frontend | Next.js 15, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (68 frontend), Rust `#[test]` (46 contract), Playwright (15 E2E) |
+| Testing | Vitest (154), Rust `#[test]` (46), Playwright (31 E2E+API) |
 | CI/CD | GitHub Actions (15 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |
