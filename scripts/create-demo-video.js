@@ -1,11 +1,11 @@
 /**
- * OphirPay Demo Video Generator
+ * OphirPay Demo Video Generator v2.0
  *
- * Creates a ~2 minute demo video by:
- * 1. Capturing screenshots of key app pages via Puppeteer
+ * Creates a ~2.5 minute demo video by:
+ * 1. Capturing the live Vercel deployment (ophirpay.vercel.app) via Puppeteer
  * 2. Compiling frames into MP4 with FFmpeg
  *
- * Math: 12 slides × 10 frames each = 120 frames @ 1fps = 120s = 2 minutes
+ * Math: 15 slides × 10 frames each = 150 frames @ 1fps = 150s = 2.5 minutes
  */
 
 const puppeteer = require("puppeteer");
@@ -17,72 +17,92 @@ const OUTPUT_DIR = path.join(__dirname, "..", "public");
 const FRAMES_DIR = path.join(__dirname, "..", ".demo-frames");
 const VIDEO_OUTPUT = path.join(OUTPUT_DIR, "demo.mp4");
 
-// Demo slides - each is an HTML page that we scroll through
+const FFMPEG = "/tmp/ffmpeg-7.0.2-amd64-static/ffmpeg";
+
+const BASE_URL = "https://ophirpay.vercel.app";
+
+// Demo slides — capturing the live Vercel deployment
 const DEMO_SLIDES = [
   {
-    file: "mockups/wallet-options.html",
-    label: "Wallet Options",
-    description: "Connect Freighter wallet on Stellar Testnet",
+    path: "/",
+    label: "OphirPay Dashboard",
+    description: "Treasury overview with real-time balance, stats, and recent on-chain payments",
   },
   {
-    file: "mockups/dashboard.html",
-    label: "Treasury Dashboard",
-    description: "Real-time balance, stats, recent payments",
-  },
-  {
-    file: "mockups/send-form.html",
+    path: "/send",
     label: "Send Payment",
-    description: "Send XLM with destination, amount, memo",
+    description: "Send XLM to any Stellar address with memo, asset selection, and instant signing",
   },
   {
-    file: "mockups/tx-success.html",
-    label: "Transaction Success",
-    description: "TX hash with Stellar Explorer link",
-  },
-  {
-    file: "mockups/payments-list.html",
+    path: "/payments",
     label: "Payment History",
-    description: "Search, filter, status badges",
+    description: "Searchable, filterable on-chain payment records with status badges",
   },
   {
-    file: "mockups/contracts-page.html",
+    path: "/escrows",
+    label: "Escrow Management",
+    description: "Create, release, and claim time-locked escrow payments with full lifecycle",
+  },
+  {
+    path: "/batches",
+    label: "Batch Payments",
+    description: "Send to multiple recipients in a single transaction — CSV import supported",
+  },
+  {
+    path: "/recurring",
+    label: "Recurring Streams",
+    description: "Create and manage Soroban streaming payment contracts",
+  },
+  {
+    path: "/multisig",
+    label: "Multisig Approvals",
+    description: "Propose, approve, and execute multi-signature treasury payments",
+  },
+  {
+    path: "/governance",
+    label: "DAO Governance",
+    description: "On-chain proposal creation, voting, and execution with timelock",
+  },
+  {
+    path: "/contracts",
     label: "Smart Contracts",
-    description: "Two deployed Soroban contracts on Testnet",
+    description: "Two deployed Soroban contracts on Stellar Testnet with cross-contract invocation",
   },
   {
-    file: "mockups/inter-contract.html",
-    label: "Inter-Contract Communication",
-    description: "Cross-contract invoke: OphirPay → PaymentEventEmitter",
+    path: "/rbac",
+    label: "Role-Based Access Control",
+    description: "Grant and revoke admin, operator, and auditor roles on-chain",
   },
   {
-    file: "mockups/events-feed.html",
+    path: "/fee-config",
+    label: "Fee Configuration",
+    description: "Configure payment, escrow, stream, and batch fees with version history",
+  },
+  {
+    path: "/timelock",
+    label: "Timelocked Actions",
+    description: "Propose admin actions with mandatory delay before execution",
+  },
+  {
+    path: "/events",
     label: "Live Event Streaming",
-    description: "SSE real-time payment lifecycle events",
+    description: "SSE real-time payment lifecycle events from the Soroban emitter contract",
   },
   {
-    file: "mockups/mobile-responsive.html",
+    path: "/analytics",
+    label: "Analytics Dashboard",
+    description: "Gas usage, payment volume, and contract metrics with chart visualizations",
+  },
+  {
+    path: "/",
     label: "Mobile Responsive",
-    description: "iPhone 375px viewport with hamburger menu",
-  },
-  {
-    file: "mockups/ci-pipeline.html",
-    label: "CI/CD Pipeline",
-    description: "GitHub Actions: typecheck, lint, test, build",
-  },
-  {
-    file: "mockups/test-output.html",
-    label: "Test Suite",
-    description: "23 passing tests across 3 suites",
-  },
-  {
-    file: "mockups/architecture.html",
-    label: "Production Architecture",
-    description: "Next.js 15 + Stellar + Soroban + Vercel",
+    description: "Full mobile experience — iPhone 375px with hamburger navigation",
+    isMobile: true,
   },
 ];
 
 async function captureFrames() {
-  console.log("📸 Capturing demo frames...");
+  console.log("📸 Capturing demo frames from live Vercel deployment...\n");
 
   // Clean up and recreate frames dir
   if (fs.existsSync(FRAMES_DIR)) {
@@ -90,94 +110,136 @@ async function captureFrames() {
   }
   fs.mkdirSync(FRAMES_DIR, { recursive: true });
 
+  // Set library path for bundled Chrome dependencies
+  const CHROME_LIBS = "/tmp/chrome-libs/usr/lib/x86_64-linux-gnu";
+  const CHROME_BIN = "/home/codespace/.cache/puppeteer/chrome/linux-151.0.7922.47/chrome-linux64/chrome";
+
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-gpu"],
+    executablePath: CHROME_BIN,
+    args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    env: {
+      ...process.env,
+      LD_LIBRARY_PATH: `${CHROME_LIBS}:${process.env.LD_LIBRARY_PATH || ""}`,
+    },
   });
 
   let frameIndex = 0;
+  const totalSlides = DEMO_SLIDES.length;
 
-  for (const slide of DEMO_SLIDES) {
-    const filePath = `file://${path.resolve(__dirname, slide.file)}`;
-    console.log(`  Capturing: ${slide.label}`);
+  for (let s = 0; s < totalSlides; s++) {
+    const slide = DEMO_SLIDES[s];
+    const url = `${BASE_URL}${slide.path}`;
+    const isMobile = slide.isMobile || false;
 
-    // Capture 10 frames per slide (~10 seconds at 1fps)
+    console.log(`  [${s + 1}/${totalSlides}] ${slide.label}`);
+
     const tab = await browser.newPage();
-    const isMobile = slide.file.includes("mobile");
 
     await tab.setViewport({
       width: isMobile ? 375 : 1280,
       height: isMobile ? 812 : 720,
     });
-    await tab.goto(filePath, {
-      waitUntil: "networkidle0",
-      timeout: 15000,
-    });
 
-    // Frame 1: base page (1s)
-    await tab.screenshot({
-      path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
-    });
-    frameIndex++;
+    try {
+      await tab.goto(url, {
+        waitUntil: "networkidle2",
+        timeout: 30000,
+      });
 
-    // Frame 2-5: gradual overlay fade in
-    for (let i = 0; i < 4; i++) {
-      const opacity = (i + 1) * 0.25;
-      await tab.evaluate((label, desc, op) => {
-        const existing = document.getElementById("__demo_overlay");
-        if (existing) existing.remove();
-        const overlay = document.createElement("div");
-        overlay.id = "__demo_overlay";
-        overlay.innerHTML = `
-          <div style="position:fixed;bottom:24px;left:24px;right:24px;background:rgba(0,0,0,${op * 0.85});color:white;padding:16px 24px;border-radius:12px;z-index:9999;font-family:system-ui,sans-serif;transition:opacity 0.5s">
-            <div style="font-size:20px;font-weight:700;margin-bottom:4px">${label}</div>
-            <div style="font-size:14px;opacity:0.8">${desc}</div>
-          </div>`;
-        document.body.appendChild(overlay);
-      }, slide.label, slide.description, opacity);
+      // Let the page fully render
+      await new Promise((r) => setTimeout(r, 2000));
 
+      // Frame 1: clean page (1s)
       await tab.screenshot({
         path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
       });
       frameIndex++;
-    }
 
-    // Frame 6-10: hold with full overlay
-    for (let i = 0; i < 5; i++) {
-      await tab.screenshot({
-        path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
-      });
-      frameIndex++;
+      // Frames 2-5: overlay fades in
+      for (let i = 0; i < 4; i++) {
+        const opacity = (i + 1) * 0.25;
+        await tab.evaluate((label, desc, op) => {
+          const existing = document.getElementById("__demo_overlay");
+          if (existing) existing.remove();
+          const overlay = document.createElement("div");
+          overlay.id = "__demo_overlay";
+          overlay.innerHTML = `
+            <div style="
+              position:fixed; bottom:32px; left:24px; right:24px;
+              background:linear-gradient(135deg, rgba(99,102,241,${op * 0.92}) 0%, rgba(139,92,246,${op * 0.92}) 100%);
+              color:white; padding:20px 28px; border-radius:16px;
+              z-index:9999; font-family:system-ui,-apple-system,sans-serif;
+              backdrop-filter:blur(12px);
+              box-shadow:0 8px 32px rgba(99,102,241,${op * 0.3});
+              border:1px solid rgba(255,255,255,${op * 0.15});
+            ">
+              <div style="font-size:22px;font-weight:700;margin-bottom:6px;letter-spacing:-0.3px">${label}</div>
+              <div style="font-size:14px;opacity:0.85;line-height:1.5">${desc}</div>
+            </div>`;
+          document.body.appendChild(overlay);
+        }, slide.label, slide.description, opacity);
+
+        await tab.screenshot({
+          path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
+        });
+        frameIndex++;
+      }
+
+      // Frames 6-10: hold with full overlay
+      for (let i = 0; i < 5; i++) {
+        await tab.screenshot({
+          path: path.join(FRAMES_DIR, `frame_${String(frameIndex).padStart(4, "0")}.png`),
+        });
+        frameIndex++;
+      }
+
+      console.log(`       ✅ ${slide.label}`);
+    } catch (err) {
+      console.log(`       ⚠️  ${err.message} — skipping`);
     }
 
     await tab.close();
   }
 
   await browser.close();
-  console.log(`  ✅ ${frameIndex} frames captured`);
+  console.log(`\n  ✅ ${frameIndex} frames captured across ${totalSlides} slides`);
 }
 
 function compileVideo() {
-  console.log("🎬 Compiling video with FFmpeg...");
+  console.log("\n🎬 Compiling video with FFmpeg...");
 
-  // 120 frames @ 1fps = 120 seconds = 2 minutes
   const framesPattern = path.join(FRAMES_DIR, "frame_%04d.png");
 
   execSync(
-    `ffmpeg -y -framerate 1 -i ${framesPattern} -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" -r 30 -preset ultrafast -movflags +faststart ${VIDEO_OUTPUT}`,
+    `${FFMPEG} -y -framerate 1 -i ${framesPattern} ` +
+      `-c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 ` +
+      `-vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" ` +
+      `-r 30 -preset ultrafast -movflags +faststart ${VIDEO_OUTPUT}`,
     { stdio: "inherit" }
   );
 
+  // Verify output
+  if (!fs.existsSync(VIDEO_OUTPUT)) {
+    console.error("  ❌ Video file not created!");
+    process.exit(1);
+  }
+
   const stats = fs.statSync(VIDEO_OUTPUT);
-  console.log(`  ✅ Video created: ${(stats.size / 1024 / 1024).toFixed(1)}MB`);
+  const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+  console.log(`  ✅ Video created: ${sizeMB}MB`);
   console.log(`  📁 ${VIDEO_OUTPUT}`);
 }
 
 async function main() {
-  console.log("🎥 OphirPay Demo Video Generator\n");
+  console.log("🎥 OphirPay Demo Video Generator v2.0\n");
+  console.log(`   Source: ${BASE_URL}\n`);
+
   await captureFrames();
   compileVideo();
+
   console.log("\n✅ Demo video complete!");
+  console.log("   Push to main to auto-deploy to Vercel.");
 }
 
 main().catch((err) => {

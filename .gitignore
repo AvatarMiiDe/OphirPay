@@ -58,3 +58,4 @@ contracts/**/Cargo.lock
 # Soroban
 .soroban/
 contracts/*/target/
+.demo-frames/
