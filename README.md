@@ -103,7 +103,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Real-time event streaming** (SSE) | ✅ | ❌ |
 | **Webhook delivery** (HMAC signed, retries) | ✅ | ❌ |
 | **Cross-contract communication** | ✅ | ❌ |
-| **Multi-wallet support** (Freighter, Albedo, xBull) | ✅ | ❌ |
+| **Multi-wallet support** (6 wallets: Freighter, xBull, Rabet, Albedo, Lobstr, Ledger) | ✅ | ❌ |
 | **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
 | **PWA with offline support** | ✅ | ❌ |
 | **Classified error handling** (3 types) | ✅ | ❌ |
@@ -136,9 +136,14 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 *Deployed on Vercel — automatic builds from `main` on every push.*
 
-### ▶️ [Watch the 2-Minute Demo](./public/demo.mp4)
+### 🎥 Demo Video (2.5 min)
 
-*Walkthrough: wallet connection → treasury dashboard → send payment → smart contracts → inter-contract comms → live events → mobile UI → CI/CD pipeline → test suite*
+<video src="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/demo.mp4" controls width="720" poster="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/ophirpay-banner.svg" style="max-width:100%;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.15)">
+  Your browser does not support embedded video.
+  <a href="https://ophirpay.vercel.app/demo.mp4">Watch on Vercel →</a>
+</video>
+
+*15 slides: Dashboard → Send → Payments → Escrows → Batches → Recurring → Multisig → Governance → Contracts → RBAC → Fee Config → Timelock → Events → Analytics → Mobile*
 
 </div>
 
@@ -293,10 +298,12 @@ OphirPay supports multiple Stellar wallets through a unified connector abstracti
 
 | Wallet | Type | Status |
 |---|---|---|
-| Freighter | Browser extension | ✅ Fully supported |
-| Albedo | Web-based (no extension) | ✅ Supported |
+| Freighter | Browser extension | ✅ Supported |
 | xBull | Browser extension | ✅ Supported |
-| Ledger | Hardware (WebUSB/HID) | 🔜 Coming soon |
+| Rabet | Browser extension | ✅ Supported |
+| Albedo | Web-based (no extension) | ✅ Supported |
+| Lobstr | Web-based (SEP-7) | ✅ Supported |
+| Ledger | Hardware (WebUSB/HID) | ✅ Supported |
 
 ```tsx
 // Consuming the wallet anywhere in your app
@@ -564,7 +571,7 @@ Checkout → Node.js 20 → npm ci → Prisma Generate → Lint → Test → Bui
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com) | Utility-first, dark mode, custom theme |
 | **Blockchain** | [Stellar SDK v13](https://stellar.org) + [Soroban](https://soroban.stellar.org) | Horizon, Soroban RPC, TX building |
 | **Contracts** | [Rust](https://www.rust-lang.org) + `soroban-sdk` | WASM compilation, cross-contract invocation |
-| **Wallet** | [Freighter](https://freighter.app) · [Albedo](https://albedo.link) · [xBull](https://xbull.app) | Multi-wallet connector abstraction |
+| **Wallet** | [Freighter](https://freighter.app) · [xBull](https://xbull.app) · [Rabet](https://rabet.io) · [Albedo](https://albedo.link) · [Lobstr](https://lobstr.co) · [Ledger](https://ledger.com) | 6-wallet connector abstraction |
 | **Database** | [Prisma](https://prisma.io) + SQLite / PostgreSQL | Type-safe ORM, provider switching |
 | **Testing** | [Vitest](https://vitest.dev) + React Testing Library | Fast, Vite-native test runner |
 | **CI/CD** | [GitHub Actions](https://github.com/features/actions) | Build, lint, test, typecheck on push |
