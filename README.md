@@ -109,18 +109,20 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Classified error handling** (3 types) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
 | **PostgreSQL + SQLite** (provider switching) | ✅ | ⚠️ |
-| **Multisig approvals** (N-of-M signers) | ✅ | ❌ |
+| **Multisig approvals** (N-of-M signers) | 🟡 | ❌ |
 | **Spending limits + escalation tiers** | ✅ | ❌ |
-| **RBAC** (Admin/Operator/Auditor roles) | ✅ | ❌ |
-| **On-chain audit log** (immutable trail) | ✅ | ❌ |
-| **Fee configuration** (per-operation bps) | ✅ | ❌ |
-| **Timelocked admin actions** (24h delay) | ✅ | ❌ |
-| **DAO governance** (propose→vote→execute) | ✅ | ❌ |
+| **RBAC** (Admin/Operator/Auditor roles) | 🟡 | ❌ |
+| **On-chain audit log** (immutable trail) | 🟡 | ❌ |
+| **Fee configuration** (per-operation bps) | 🟡 | ❌ |
+| **Timelocked admin actions** (24h delay) | 🟡 | ❌ |
+| **DAO governance** (propose→vote→execute) | 🟡 | ❌ |
 | **Structured refund system** (6 reason codes, analytics) | ✅ | ❌ |
-| **On-chain notification hooks** (subscriber-indexed) | ✅ | ❌ |
+| **On-chain notification hooks** (subscriber-indexed) | 🟡 | ❌ |
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
-| **Policy versioning** (immutable config history) | ✅ | ❌ |
+| **Policy versioning** (immutable config history) | 🟡 | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
+
+> 🟡 = Contract complete, UI not yet shipped. See roadmap for UI status. ✅ = Fully shipped end-to-end.
 | **Full CI/CD + 154 tests** | ✅ | ⚠️ |
 
 ---
