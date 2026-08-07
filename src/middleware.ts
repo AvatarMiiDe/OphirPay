@@ -32,10 +32,14 @@ export async function middleware(request: NextRequest) {
 
   const ip = getClientIp(request);
   const store = getRateLimitStore();
-  const { count, resetAt } = await store.increment(ip, RATE_LIMIT_WINDOW_MS);
+  const { allowed, remaining, resetAt } = await store.increment(
+    ip,
+    RATE_LIMIT_WINDOW_MS,
+    RATE_LIMIT_MAX
+  );
 
   // Rate limit exceeded
-  if (count > RATE_LIMIT_MAX) {
+  if (!allowed) {
     const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
     return NextResponse.json(
       {
@@ -61,7 +65,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set("X-RateLimit-Limit", String(RATE_LIMIT_MAX));
-  response.headers.set("X-RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX - count)));
+  response.headers.set("X-RateLimit-Remaining", String(remaining));
   response.headers.set("X-RateLimit-Reset", String(Math.ceil(resetAt / 1000)));
 
   // Production CORS — restrict origins in production
