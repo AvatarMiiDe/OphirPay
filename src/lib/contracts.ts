@@ -11,24 +11,20 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
-/** OphirPay core contract */
-export function getOphirpayContractId(): string {
-  const id = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
-  if (!id) throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env file.");
-  return id;
-}
-/** @deprecated Use getOphirpayContractId() for runtime safety */
-export const OPHIRPAY_CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
+// Hardcoded Stellar Testnet contract IDs — always available as fallback.
+// These are public identifiers, NOT secrets. Override via env vars for mainnet.
+const TESTNET_OPHIRPAY = "CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA";
+const TESTNET_EMITTER = "CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX";
+const TESTNET_READ_SOURCE = "GACNKEDGJYLLVQDXWYEEPB47Y3JEV5JNZ3RQANTJIVKKEOXX4NC4YWHU";
 
-/** Emitter contract */
-export function getEmitterContractId(): string {
-  const id = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
-  if (!id) throw new Error("NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env file.");
-  return id;
-}
-export const EMITTER_CONTRACT_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
+export const OPHIRPAY_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_CONTRACT_ID || TESTNET_OPHIRPAY;
+export const EMITTER_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || TESTNET_EMITTER;
+export const CHAIN_READ_SOURCE =
+  process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || TESTNET_READ_SOURCE;
 
-// Legacy alias — kept for backward compatibility in existing callers
+// Legacy alias
 export const DEFAULT_CONTRACT_ID = OPHIRPAY_CONTRACT_ID;
 
 // ── 3 Error Types ──────────────────────────────────────────────
@@ -315,13 +311,7 @@ export async function recordPaymentOnChain(params: {
 
 // ── On-Chain Reads (Public) ────────────────────────────────────
 
-/** Simulation source account for public chain reads — must be a funded account on the target network. */
-export function getChainReadSource(): string {
-  const src = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || "";
-  if (!src) throw new Error("NEXT_PUBLIC_CHAIN_READ_SOURCE is required.");
-  return src;
-}
-export const CHAIN_READ_SOURCE = process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || "";
+
 
 export interface OnChainPayment {
   id: number;
@@ -341,8 +331,8 @@ export async function fetchOnChainPayments(
   limit = 20,
   sourcePublicKey?: string
 ): Promise<{ payments: OnChainPayment[]; total: number }> {
-  const src = sourcePublicKey || getChainReadSource();
-  const contractId = getOphirpayContractId();
+  const src = sourcePublicKey || CHAIN_READ_SOURCE;
+  const contractId = OPHIRPAY_CONTRACT_ID;
   const server = getSorobanServer();
   const contract = new Contract(contractId);
   const account = await server.getAccount(src);

@@ -31,11 +31,6 @@ export default function TreasuryDashboard() {
     setLoading(true);
     setError(null);
     try {
-      // Skip if contract ID not configured (graceful degradation)
-      if (!process.env.NEXT_PUBLIC_CONTRACT_ID || !process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE) {
-        setLoading(false);
-        return;
-      }
       const result = await fetchOnChainPayments(20);
       setPayments(result.payments);
       setTotalCount(result.total);

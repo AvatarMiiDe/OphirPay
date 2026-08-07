@@ -22,9 +22,9 @@ import {
 } from "@/lib/contracts";
 import { getActiveWalletConnector } from "@/lib/wallets";
 
-/** Resolve contract ID from env var or fallback to default */
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || DEFAULT_CONTRACT_ID;
-export const EMITTER_ID = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || EMITTER_CONTRACT_ID;
+/** Resolve contract ID — env var or hardcoded Testnet fallback */
+const CONTRACT_ID = DEFAULT_CONTRACT_ID;
+export const EMITTER_ID = EMITTER_CONTRACT_ID;
 
 // ── Types ──────────────────────────────────────────────────────
 
