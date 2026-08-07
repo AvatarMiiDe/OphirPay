@@ -638,11 +638,13 @@ impl OphirPayContract {
         config
     }
 
-    /// Get full multisig configuration version history.
+    /// Get multisig configuration version history (most recent first, capped at 100).
+    /// Returns the latest 100 versions to prevent unbounded storage reads.
     pub fn get_multisig_config_history(env: Env) -> Vec<MultisigVersion> {
         let total = env.storage().instance().get(&MSIG_VER_CNT).unwrap_or(0);
         let mut history = Vec::new(&env);
-        for v in 1..=total {
+        let start = if total > 100 { total - 99 } else { 1 };
+        for v in (start..=total).rev() {
             if let Some(entry) = env.storage().persistent().get(&(MSIG_VER_CNT, v)) {
                 history.push_back(entry);
             }
@@ -878,11 +880,13 @@ impl OphirPayContract {
         config
     }
 
-    /// Get full fee configuration version history.
+    /// Get fee configuration version history (most recent first, capped at 100).
+    /// Returns the latest 100 versions to prevent unbounded storage reads.
     pub fn get_fee_config_history(env: Env) -> Vec<FeeConfigVersion> {
         let total = env.storage().instance().get(&FEE_VER_CNT).unwrap_or(0);
         let mut history = Vec::new(&env);
-        for v in 1..=total {
+        let start = if total > 100 { total - 99 } else { 1 };
+        for v in (start..=total).rev() {
             if let Some(entry) = env.storage().persistent().get(&(FEE_VER_CNT, v)) {
                 history.push_back(entry);
             }
