@@ -38,14 +38,14 @@
   </p>
 
   <p>
-    <sub>      <b>12 CI checks — all under 1 minute:</b>
+    <sub>      <b>12 CI checks:</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/build-Next.js-black.svg?logo=nextdotjs" />
-      <img src="https://img.shields.io/badge/e2e-Vercel%20Live-000.svg?logo=vercel" />
+      <img src="https://img.shields.io/badge/smoke-19%20pages-000.svg?logo=vercel" />
       <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
       <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
       <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
@@ -519,7 +519,7 @@ Every push to `main` triggers:
 
 ```
 ┌─ Frontend ──────────────────────────────────────────┐  ┌─ Backend ───────────────┐
-│ Lint → TypeCheck → Unit Tests → Coverage → Build → E2E │  │ Contracts → Prisma → Audit │
+│ Lint → TypeCheck → Unit Tests → Coverage → Build → Smoke │  │ Contracts → Prisma → Audit │
 └─────────────────────────────────────────────────────┘  └──────────────────────────┘
                               ┌─ Infra ──┐
                               │ K8s → Helm │
@@ -535,7 +535,7 @@ Every push to `main` triggers:
 | Unit Tests | `vitest run --reporter=verbose` | 154 app tests across 10 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
 | Build | `next build` | Production Next.js build verification |
-| E2E | Playwright (Chromium) | Tests against live Vercel — no dev server needed |
+| Smoke | curl (19 pages) | HTTP 200 check against live Vercel — ~3s |
 
 ### Backend (3 jobs)
 

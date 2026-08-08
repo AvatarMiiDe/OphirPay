@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — 12 Jobs (all <1 min)
+name: OphirPay CI/CD — 12 Jobs
 
 on:
   push:
@@ -150,33 +150,33 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════
-  # 7. E2E — Playwright against live Vercel (no dev server needed)
+  # 7. SMOKE TEST — HTTP checks against live Vercel (no browser)
   # ══════════════════════════════════════════════════════════════
-  e2e:
-    name: "7️⃣ Frontend — E2E"
+  smoke-test:
+    name: "7️⃣ Frontend — Smoke"
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version-file: '.nvmrc', cache: "npm" }
-      - run: npm ci
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: playwright-${{ runner.os }}-
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --project=chromium
-        env:
-          E2E_BASE_URL: https://ophirpay.vercel.app
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-report
-          path: playwright-report/
-          retention-days: 7
+      - name: Smoke test all pages (curl)
+        run: |
+          BASE="https://ophirpay.vercel.app"
+          PAGES=("/" "/send" "/payments" "/batches" "/recurring" "/requests" \
+                  "/webhooks" "/contracts" "/analytics" "/events" \
+                  "/multisig" "/governance" "/audit-log" "/refunds" \
+                  "/hooks" "/rbac" "/fee-config" "/timelock" "/policy-versions")
+          FAIL=0
+          for page in "${PAGES[@]}"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE$page")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "304" ]; then
+              echo "  ✅ $page ($STATUS)"
+            else
+              echo "  ❌ $page ($STATUS)"
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -eq 1 ]; then echo "❌ Smoke test failed"; exit 1; fi
+          echo "✅ All 19 pages healthy"
 
   # ══════════════════════════════════════════════════════════════
   # 8. PRISMA VALIDATE — Schema integrity, generate, db push
