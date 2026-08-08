@@ -27,8 +27,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const PASSPHRASE = Networks.TESTNET;
-const OPHIRPAY_WASM = join(ROOT, "contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm");
-const EMITTER_WASM = join(ROOT, "contracts/emitter/target/wasm32-unknown-unknown/release/ophirpay_emitter.wasm");
+const OPHIRPAY_WASM = join(ROOT, "contracts/ophirpay/target/wasm32v1-none/release/ophirpay_contract.wasm");
+const EMITTER_WASM = join(ROOT, "contracts/emitter/target/wasm32v1-none/release/ophirpay_emitter.wasm");
 
 // ── Helpers ──────────────────────────────────────────────────
 const log = (e, m) => console.log(`\n${e} ${m}`);

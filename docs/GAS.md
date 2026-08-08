@@ -30,7 +30,7 @@ Soroban uses a **resource-fee model** with three cost tiers:
 
 ## Per-Operation Gas Benchmarks
 
-Estimates based on Soroban v22 resource model (~100 gas/byte write, ~50 gas/byte read, ~30K gas/cross-contract call, ~2K gas/event).
+Estimates based on the Soroban resource model (~100 gas/byte write, ~50 gas/byte read, ~30K gas/cross-contract call, ~2K gas/event). Benchmarked on soroban-sdk 27 (protocol 25+); stroop figures are SDK-version-agnostic at this granularity.
 
 ### OphirPay Contract
 
@@ -193,15 +193,16 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 
 ## Operational Notes
 
-- **Contracterror variant limit:** soroban-sdk v22 supports at most 50
+- **Contracterror variant limit:** soroban-sdk v27 supports at most 50
   `#[contracterror]` variants. The 51st variant causes a macro panic.
   OphirPay uses 50 variants; if more are needed, consider hierarchical
   error codes or splitting into multiple error enums.
 
-- **Host test compilation:** `cargo test` on native target fails due to
-  `ed25519-dalek` 3.0 / `rand_chacha` 0.3 trait incompatibility in
-  `soroban-env-host` 22.1.3. This is an upstream issue. Use
-  `cargo test --target wasm32-unknown-unknown` as a workaround.
+- **Host test compilation:** Fixed. The `ed25519-dalek` 3.0 / `rand_chacha`
+  0.3 trait incompatibility that broke `cargo test` on `soroban-env-host`
+  22.1.3 is resolved in soroban-sdk 27 (env-host pins `ed25519-dalek = "2.0.0"`).
+  All 56 contract unit tests (50 ophirpay + 6 emitter) now run in CI via plain
+  `cargo test`.
 
 - **WASM size:** OphirPay contract is 83 KB (81,043 bytes) with `opt-level="z"`.
   The Soroban mainnet upload limit is ~200 KB. Headroom: 117 KB for future features.
@@ -217,7 +218,9 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 
 ---
 
-## SDK v22 Migration
+## SDK Migration History
+
+### v22 migration (historical)
 
 The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88.0). Key API changes addressed:
 
@@ -229,16 +232,31 @@ The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88
 | Clone-before-move required | Added `clone()` before struct initialization | 4 sites |
 | `Option<Address>` unwrap in batch | Explicit `.ok_or()` added | 2 sites |
 
-**Migration result:** 30 compile errors to 0 errors, 0 warnings.
+**Migration result:** 30 compile errors to 0 errors.
+
+### v27 upgrade (current)
+
+Upgraded both contracts from v22 to **soroban-sdk 27.0.5** (Rust 1.91.0,
+`wasm32v1-none` target). This fixed the env-host dependency conflict that
+blocked `cargo test` — all **56 contract unit tests** (50 ophirpay + 6 emitter)
+now run in CI. It also surfaced and fixed a **critical storage bug**: all record
+types previously shared the same plain `u64` persistent key space, so e.g. the
+first audit entry silently overwrote the first payment. Records are now
+namespaced under `(PREFIX, id)` tuple keys.
+
+Known follow-up: `env.events().publish` is deprecated in v27 in favor of the
+`#[contractevent]` macro (19 warnings). Migration deferred — it changes the
+on-chain event topic format that the app's event parser consumes; tracked as a
+separate change with frontend compatibility tests.
 
 ---## WASM Binary Sizes
 
-Compiled with Rust 1.88.0, `--release`, `wasm32-unknown-unknown`, `opt-level = "z"`:
+Compiled with Rust 1.91.0, soroban-sdk 27.0.5, `--release`, `wasm32v1-none`, `opt-level = "z"`:
 
 | Contract | Size | Headroom |
 |---|---|---|
-| `ophirpay_contract.wasm` | **83,846 bytes (82 KB)** | 116 KB (mainnet limit: 200 KB) |
-| `ophirpay_emitter.wasm` | **7,055 bytes (7 KB)** | 193 KB |
+| `ophirpay_contract.wasm` | **84,522 bytes (82.5 KB)** | 115.5 KB (mainnet limit: 200 KB) |
+| `ophirpay_emitter.wasm` | **7,031 bytes (6.9 KB)** | 193 KB |
 
 The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 51 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
 
@@ -258,7 +276,9 @@ The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ fu
 
 **Verdict:** The OphirPay contract is production-ready for gas efficiency. All write operations cost under 0.17 XLM, most under 0.10 XLM. The 82 KB WASM leaves ample headroom for future features. The cross-contract emergency pause (~80K gas estimate) is the only operation above 0.20 XLM and is justified by its atomicity guarantee.
 
-> **Note:** `cargo test` currently fails on native host due to a `rand_core`/`ed25519-dalek` version conflict in `soroban-env-host` v22.1.3. This does not affect Wasm compilation (which uses `soroban-env-guest`) and will be resolved in a future SDK release. Contract unit tests should target `wasm32-unknown-unknown` with a test harness like `soroban-sdk`'s `test` feature.
+> **Note:** Contract unit tests run natively with `cargo test` (soroban-sdk 27
+> fixed the `rand_core`/`ed25519-dalek` conflict from env-host 22.1.3). The
+> WASM builds target `wasm32v1-none` (the protocol-25+ Soroban target).
 
 ---
 

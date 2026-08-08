@@ -411,8 +411,8 @@ OphirPayContract.create_payment(payer, payee, amount, tx_hash)
 
 ```bash
 # Build both contracts to WASM
-cd contracts/ophirpay && cargo build --target wasm32-unknown-unknown --release
-cd contracts/emitter && cargo build --target wasm32-unknown-unknown --release
+cd contracts/ophirpay && cargo build --target wasm32v1-none --release
+cd contracts/emitter && cargo build --target wasm32v1-none --release
 ```
 </details>
 
@@ -422,7 +422,7 @@ cd contracts/emitter && cargo build --target wasm32-unknown-unknown --release
 ```bash
 # 1. Deploy emitter
 stellar contract deploy \
-  --wasm contracts/emitter/target/wasm32-unknown-unknown/release/ophirpay_emitter.wasm \
+  --wasm contracts/emitter/target/wasm32v1-none/release/ophirpay_emitter.wasm \
   --source-account <SECRET_KEY> \
   --rpc-url "https://soroban-testnet.stellar.org:443" \
   --network-passphrase "Test SDF Network ; September 2015"
@@ -435,7 +435,7 @@ stellar contract invoke --id <EMITTER_ID> --source-account <SECRET_KEY> \
 
 # 3. Deploy main contract
 stellar contract deploy \
-  --wasm contracts/ophirpay/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm \
+  --wasm contracts/ophirpay/target/wasm32v1-none/release/ophirpay_contract.wasm \
   --source-account <SECRET_KEY> \
   --rpc-url "https://soroban-testnet.stellar.org:443" \
   --network-passphrase "Test SDF Network ; September 2015"
@@ -541,7 +541,7 @@ Every push to `main` triggers:
 
 | Job | Command | Purpose |
 |---|---|---|
-| Contracts | `cargo build --target wasm32-unknown-unknown` | Both Soroban contracts to WASM |
+| Contracts | `cargo build --target wasm32v1-none` | Both Soroban contracts to WASM |
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
 | Audit | `npm audit` | Dependency vulnerability scan |
 
@@ -657,7 +657,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
 | ✅ Policy versioning (immutable config history, capped at 100) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
-| ✅ SDK v22 migration (30 errors → 0, both contracts compile) | **Done** |
+| ✅ soroban-sdk 27 upgrade — 56 contract unit tests green in CI (was 0) | **Done** |
 | ✅ Gas optimization (92% storage savings, avg 90K stroops) | **Done** |
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
 | ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |

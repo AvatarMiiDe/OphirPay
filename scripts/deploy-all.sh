@@ -6,7 +6,7 @@
 # to Stellar Testnet.
 #
 # Prerequisites:
-#   - Rust toolchain with wasm32-unknown-unknown target
+#   - Rust toolchain with wasm32v1-none target (soroban-sdk 27)
 #   - Stellar CLI (stellar) or soroban CLI installed
 #   - A funded testnet account
 #
@@ -44,11 +44,11 @@ echo ""
 
 echo "  → OphirPay contract..."
 (cd "$PROJECT_DIR/contracts/ophirpay" && \
-  cargo build --target wasm32-unknown-unknown --release 2>&1 | tail -3)
+  cargo build --target wasm32v1-none --release 2>&1 | tail -3)
 
 echo "  → Emitter contract..."
 (cd "$PROJECT_DIR/contracts/emitter" && \
-  cargo build --target wasm32-unknown-unknown --release 2>&1 | tail -3)
+  cargo build --target wasm32v1-none --release 2>&1 | tail -3)
 
 echo ""
 echo "✅ Both contracts built"
@@ -93,7 +93,7 @@ async function deploy() {
   const pubKey = keypair.publicKey();
 
   // Load Emitter WASM
-  const wasmPath = path.join('$PROJECT_DIR', 'contracts', 'emitter', 'target', 'wasm32-unknown-unknown', 'release', 'emitter_contract.wasm');
+  const wasmPath = path.join('$PROJECT_DIR', 'contracts', 'emitter', 'target', 'wasm32v1-none', 'release', 'emitter_contract.wasm');
   const wasmBuffer = fs.readFileSync(wasmPath);
   console.log('WASM size: ' + wasmBuffer.length + ' bytes');
 

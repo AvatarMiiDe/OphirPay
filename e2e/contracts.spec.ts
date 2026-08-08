@@ -16,7 +16,7 @@ test.describe("Contract WASM Artifacts", () => {
       "contracts",
       "ophirpay",
       "target",
-      "wasm32-unknown-unknown",
+      "wasm32v1-none",
       "release",
       "ophirpay_contract.wasm"
     );
@@ -39,7 +39,7 @@ test.describe("Contract WASM Artifacts", () => {
       "contracts",
       "emitter",
       "target",
-      "wasm32-unknown-unknown",
+      "wasm32v1-none",
       "release",
       "ophirpay_emitter.wasm"
     );
@@ -61,7 +61,7 @@ test.describe("Contract WASM Artifacts", () => {
       "contracts",
       "ophirpay",
       "target",
-      "wasm32-unknown-unknown",
+      "wasm32v1-none",
       "release",
       "ophirpay_contract.wasm"
     );

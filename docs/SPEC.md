@@ -223,15 +223,10 @@ changes, only the latest 100 are returned.
 Each invariant is verified by at least one unit test in the contract's
 `#[test]` module. See `contracts/ophirpay/src/lib.rs` (lines ~2960+).
 
-To run tests:
+To run tests (soroban-sdk 27 — the env-host conflict from v22.1.3 is fixed):
 ```bash
-cd contracts/ophirpay
-# Wasm target (compiles and runs, no native host needed):
-cargo test --target wasm32-unknown-unknown
-
-# Native target (requires soroban-env-host, currently blocked by upstream
-# ed25519-dalek/rand_chacha dependency conflict in v22.1.3):
-cargo test  # will fail — see Cargo.toml for details
+cd contracts/ophirpay && cargo test   # 50 unit tests, native host
+cd contracts/emitter && cargo test    # 6 unit tests, native host
 ```
 
 ## Future Verification Work

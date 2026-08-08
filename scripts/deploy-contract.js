@@ -79,7 +79,7 @@ async function main() {
     "contracts",
     "ophirpay",
     "target",
-    "wasm32-unknown-unknown",
+    "wasm32v1-none",
     "release",
     "ophirpay_contract.wasm"
   );

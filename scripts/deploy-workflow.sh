@@ -25,7 +25,7 @@ echo ""
 RPC_URL="${RPC_URL:-https://soroban-testnet.stellar.org:443}"
 NETWORK_PASSPHRASE="${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
 CONTRACT_DIR="contracts/ophirpay"
-WASM_PATH="$CONTRACT_DIR/target/wasm32-unknown-unknown/release/ophirpay_contract.wasm"
+WASM_PATH="$CONTRACT_DIR/target/wasm32v1-none/release/ophirpay_contract.wasm"
 
 # ── Validate inputs ──────────────────────────────────────────
 if [ $# -lt 2 ]; then
@@ -65,7 +65,7 @@ fi
 echo -e "${YELLOW}[1/5] Building contract WASM...${NC}"
 if [ "$SKIP_BUILD" = false ]; then
   cd "$CONTRACT_DIR"
-  cargo build --target wasm32-unknown-unknown --release
+  cargo build --target wasm32v1-none --release
   cd - > /dev/null
   WASM_SIZE=$(wc -c < "$WASM_PATH" | tr -d ' ')
   echo -e "${GREEN}  ✓ Built ${WASM_SIZE} bytes${NC}"

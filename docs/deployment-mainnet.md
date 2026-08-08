@@ -53,16 +53,16 @@ DATABASE_URL="postgresql://..." npx prisma migrate deploy
 
 ```bash
 cd contracts/ophirpay
-cargo build --target wasm32-unknown-unknown --release
+cargo build --target wasm32v1-none --release
 cd ../emitter
-cargo build --target wasm32-unknown-unknown --release
+cargo build --target wasm32v1-none --release
 ```
 
 ### 2.2 Deploy OphirPay contract
 
 ```bash
 stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/ophirpay.wasm \
+  --wasm target/wasm32v1-none/release/ophirpay.wasm \
   --source <MAINNET_KEY> \
   --network public \
   --fee 10000000
@@ -74,7 +74,7 @@ stellar contract deploy \
 
 ```bash
 stellar contract deploy \
-  --wasm ../emitter/target/wasm32-unknown-unknown/release/emitter.wasm \
+  --wasm ../emitter/target/wasm32v1-none/release/emitter.wasm \
   --source <MAINNET_KEY> \
   --network public \
   --fee 10000000
