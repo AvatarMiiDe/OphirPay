@@ -18,7 +18,7 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/badge/CI%20jobs-15-blue.svg?logo=githubactions" alt="15 CI Jobs" />
+      <img src="https://img.shields.io/badge/CI%20jobs-14-blue.svg?logo=githubactions" alt="14 CI Jobs" />
     </a>
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-203%20passed%20(154%20app%20%2B%2049%20contracts)-brightgreen.svg" alt="203 Tests Passing" />
@@ -39,7 +39,7 @@
 
   <p>
     <sub>
-      <b>15 CI checks (14 on push + 1 PR-only):</b>
+      <b>14 CI checks (13 on push + 1 PR-only):</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
@@ -49,7 +49,7 @@
       <img src="https://img.shields.io/badge/e2e-Chromium-4285F4.svg?logo=googlechrome" />
       <img src="https://img.shields.io/badge/e2e-Firefox-FF7139.svg?logo=firefox" />
       <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
-      <img src="https://img.shields.io/badge/container-Docker-2496ED.svg?logo=docker" />
+
       <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
       <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
       <img src="https://img.shields.io/badge/secrets-Gitleaks-FFA500.svg?logo=github" />
@@ -538,7 +538,6 @@ Checkout → Node.js 20 → npm ci → Prisma → Lint → TypeCheck → Unit Te
 | Build | `next build` | Production Next.js build verification |
 | E2E | Playwright (Chromium + Firefox) | End-to-end browser automation |
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
-| Docker | `docker build` (no push) | Verify Dockerfile builds correctly |
 | K8s | `kubeconform -strict` | Kubernetes manifest validation |
 | Helm | `helm lint --strict` | Chart validation + template render |
 | Secrets | Gitleaks scan | Detect committed secrets (Testnet IDs allowlisted) |
