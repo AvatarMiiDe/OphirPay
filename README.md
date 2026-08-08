@@ -55,9 +55,6 @@
   </p>
       <img src="https://img.shields.io/badge/version-v1.0.0--rc1-orange.svg" alt="v1.0.0-rc1" />
     </a>
-    <a href="https://github.com/OphirPay/OphirPay">
-      <img src="https://img.shields.io/github/stars/OphirPay/OphirPay?style=social" alt="GitHub Stars" />
-    </a>
   </p>
 </div>
 
@@ -703,8 +700,6 @@ Special thanks to the **Stellar Development Foundation** for their excellent doc
 ---
 
 <div align="center">
-
-**⭐ Star this repo if you find it useful!**
 
 **[🐛 Report a Bug](https://github.com/OphirPay/OphirPay/issues)** · **[💡 Request a Feature](https://github.com/OphirPay/OphirPay/issues)** · **[📖 Read the Docs](https://github.com/OphirPay/OphirPay#readme)**
 
