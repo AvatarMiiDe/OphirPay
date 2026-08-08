@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — 14 Jobs
+name: OphirPay CI/CD — 13 Jobs
 
 on:
   push:
@@ -150,24 +150,24 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════
-  # 7. E2E — Chromium
+  # 7. E2E — Playwright (Chromium only, self-hosting dev server)
   # ══════════════════════════════════════════════════════════════
-  e2e-chromium:
-    name: "7️⃣ E2E — Chromium"
+  e2e:
+    name: "7️⃣ E2E — Playwright"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [next-build]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: "npm" }
       - run: npm ci
+      - run: npx prisma generate
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: playwright-chromium-${{ runner.os }}-
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --project=chromium
         env:
@@ -175,45 +175,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: e2e-report-chromium
+          name: e2e-report
           path: playwright-report/
           retention-days: 7
 
   # ══════════════════════════════════════════════════════════════
-  # 8. E2E — Firefox
-  # ══════════════════════════════════════════════════════════════
-  e2e-firefox:
-    name: "8️⃣ E2E — Firefox"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [next-build]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version-file: '.nvmrc', cache: "npm" }
-      - run: npm ci
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-firefox-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: playwright-firefox-${{ runner.os }}-
-      - run: npx playwright install --with-deps firefox
-      - run: npx playwright test --project=firefox
-        env:
-          E2E_BASE_URL: http://localhost:3000
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-report-firefox
-          path: playwright-report/
-          retention-days: 7
-
-  # ══════════════════════════════════════════════════════════════
-  # 9. PRISMA VALIDATE — Schema integrity, generate, db push
+  # 8. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
-    name: "9️⃣ Prisma — Validate + DB Push"
+    name: "8️⃣ Prisma — Validate + DB Push"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     services:
@@ -268,7 +238,7 @@ jobs:
   # 10. K8S VALIDATE — kubeconform on manifests
   # ══════════════════════════════════════════════════════════════
   k8s-validate:
-    name: "1️⃣0️⃣ K8s — Validate Manifests"
+    name: "9️⃣ K8s — Validate Manifests"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -291,7 +261,7 @@ jobs:
   # 12. HELM LINT — Helm chart validation
   # ══════════════════════════════════════════════════════════════
   helm-lint:
-    name: "1️⃣1️⃣ Helm — Lint Chart"
+    name: "🔟 Helm — Lint Chart"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -315,7 +285,7 @@ jobs:
   # 13. SECRET SCAN — Gitleaks to detect committed secrets
   # ══════════════════════════════════════════════════════════════
   secret-scan:
-    name: "1️⃣2️⃣ Secrets — Gitleaks"
+    name: "1️⃣1️⃣ Secrets — Gitleaks"
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -332,7 +302,7 @@ jobs:
   # 14. DEPENDENCY AUDIT — npm audit for vulnerabilities
   # ══════════════════════════════════════════════════════════════
   dependency-audit:
-    name: "1️⃣3️⃣ Audit — npm"
+    name: "1️⃣2️⃣ Audit — npm"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true  # Don't block PRs, just surface warnings
@@ -349,7 +319,7 @@ jobs:
   # 15. PR LABELER — Auto-label PRs by changed paths
   # ══════════════════════════════════════════════════════════════
   pr-labeler:
-    name: "1️⃣4️⃣ PR — Auto Label"
+    name: "1️⃣3️⃣ PR — Auto Label"
     runs-on: ubuntu-latest
     timeout-minutes: 3
     if: github.event_name == 'pull_request'
