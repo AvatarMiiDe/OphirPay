@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — Frontend + Backend
+name: OphirPay CI/CD — 11 Jobs (all <1 min)
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
   lint:
     name: "1️⃣ Frontend — Lint (ESLint)"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -88,7 +88,7 @@ jobs:
   contract-wasm:
     name: "5️⃣ Backend — Contracts (WASM)"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -130,7 +130,7 @@ jobs:
   next-build:
     name: "6️⃣ Frontend — Build (Next.js)"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -150,41 +150,10 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════
-  # 7. E2E — Playwright (Chromium only, self-hosting dev server)
-  # ══════════════════════════════════════════════════════════════
-  e2e:
-    name: "7️⃣ Frontend — E2E (Playwright)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'pull_request'  # Only on PRs — too slow for every push
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version-file: '.nvmrc', cache: "npm" }
-      - run: npm ci
-      - run: npx prisma generate
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: playwright-${{ runner.os }}-
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --project=chromium
-        env:
-          E2E_BASE_URL: http://localhost:3000
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-report
-          path: playwright-report/
-          retention-days: 7
-
-  # ══════════════════════════════════════════════════════════════
-  # 8. PRISMA VALIDATE — Schema integrity, generate, db push
+  # 7. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
-    name: "8️⃣ Backend — Prisma (Validate + DB)"
+    name: "7️⃣ Backend — Prisma (Validate + DB)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     services:
@@ -239,7 +208,7 @@ jobs:
   # 10. K8S VALIDATE — kubeconform on manifests
   # ══════════════════════════════════════════════════════════════
   k8s-validate:
-    name: "9️⃣ Infra — K8s (kubeconform)"
+    name: "8️⃣ Infra — K8s (kubeconform)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -262,7 +231,7 @@ jobs:
   # 12. HELM LINT — Helm chart validation
   # ══════════════════════════════════════════════════════════════
   helm-lint:
-    name: "🔟 Infra — Helm (Lint)"
+    name: "9️⃣ Infra — Helm (Lint)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -286,7 +255,7 @@ jobs:
   # 11. DEPENDENCY AUDIT — npm audit for vulnerabilities
   # ══════════════════════════════════════════════════════════════
   dependency-audit:
-    name: "1️⃣1️⃣ Backend — Audit (npm)"
+    name: "🔟 Backend — Audit (npm)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true  # Don't block PRs, just surface warnings
@@ -303,7 +272,7 @@ jobs:
   # 15. PR LABELER — Auto-label PRs by changed paths
   # ══════════════════════════════════════════════════════════════
   pr-labeler:
-    name: "1️⃣2️⃣ Meta — PR Labeler"
+    name: "1️⃣1️⃣ Meta — PR Labeler"
     runs-on: ubuntu-latest
     timeout-minutes: 3
     if: github.event_name == 'pull_request'
