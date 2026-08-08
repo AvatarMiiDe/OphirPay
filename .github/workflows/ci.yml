@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — 11 Jobs (all <1 min)
+name: OphirPay CI/CD — 12 Jobs (all <1 min)
 
 on:
   push:
@@ -150,10 +150,39 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════
-  # 7. PRISMA VALIDATE — Schema integrity, generate, db push
+  # 7. E2E — Playwright against live Vercel (no dev server needed)
+  # ══════════════════════════════════════════════════════════════
+  e2e:
+    name: "7️⃣ Frontend — E2E"
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=chromium
+        env:
+          E2E_BASE_URL: https://ophirpay.vercel.app
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
+  # 8. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
-    name: "7️⃣ Backend — Prisma (Validate + DB)"
+    name: "8️⃣ Backend — Prisma (Validate + DB)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     services:
@@ -208,7 +237,7 @@ jobs:
   # 10. K8S VALIDATE — kubeconform on manifests
   # ══════════════════════════════════════════════════════════════
   k8s-validate:
-    name: "8️⃣ Infra — K8s (kubeconform)"
+    name: "9️⃣ Infra — K8s (kubeconform)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -231,7 +260,7 @@ jobs:
   # 12. HELM LINT — Helm chart validation
   # ══════════════════════════════════════════════════════════════
   helm-lint:
-    name: "9️⃣ Infra — Helm (Lint)"
+    name: "🔟 Infra — Helm (Lint)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -255,7 +284,7 @@ jobs:
   # 11. DEPENDENCY AUDIT — npm audit for vulnerabilities
   # ══════════════════════════════════════════════════════════════
   dependency-audit:
-    name: "🔟 Backend — Audit (npm)"
+    name: "1️⃣1️⃣ Backend — Audit (npm)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true  # Don't block PRs, just surface warnings
@@ -272,7 +301,7 @@ jobs:
   # 15. PR LABELER — Auto-label PRs by changed paths
   # ══════════════════════════════════════════════════════════════
   pr-labeler:
-    name: "1️⃣1️⃣ Meta — PR Labeler"
+    name: "1️⃣2️⃣ Meta — PR Labeler"
     runs-on: ubuntu-latest
     timeout-minutes: 3
     if: github.event_name == 'pull_request'

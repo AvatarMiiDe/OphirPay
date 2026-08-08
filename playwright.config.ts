@@ -27,10 +27,6 @@ export default defineConfig({
       use: { ...devices["Pixel 5"] },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // No webServer — E2E runs against live Vercel deployment.
+  // Set E2E_BASE_URL env var to override (default: localhost for local dev).
 });
