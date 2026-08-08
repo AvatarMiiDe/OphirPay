@@ -21,6 +21,23 @@ const SPEND_LIMIT_KEY: Symbol = symbol_short!("SPNDLIM");
 const ESCALATION_KEY: Symbol = symbol_short!("ESCLATN");
 const ROLE_KEY: Symbol = symbol_short!("ROLE");
 const AUDIT_CNT: Symbol = symbol_short!("AUDIT");
+
+// ── Persistent record key namespaces ─────────────────────────────
+// Each record type is stored under a (PREFIX, id) tuple key so that
+// sequence numbers never collide across types (e.g. payment #1 vs
+// audit #1 both writing plain u64 key 1, which silently overwrote
+// each other).
+const AUDIT_LOG_KEY: Symbol = symbol_short!("A_LOG");
+const PAYMENT_KEY: Symbol = symbol_short!("P_REC");
+const ESCROW_KEY: Symbol = symbol_short!("E_REC");
+const STREAM_KEY: Symbol = symbol_short!("S_REC");
+const RECURRING_KEY: Symbol = symbol_short!("R_REC");
+const REFUND_KEY: Symbol = symbol_short!("RF_REC");
+const TIMELOCK_KEY: Symbol = symbol_short!("T_REC");
+const PROPOSAL_KEY: Symbol = symbol_short!("G_REC");
+const APPROVAL_KEY: Symbol = symbol_short!("A_REQ");
+const HOOK_KEY: Symbol = symbol_short!("H_REC");
+const BATCH_KEY: Symbol = symbol_short!("B_REC");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
 const REFUND_CNT: Symbol = symbol_short!("REF_CNT");
 const FEE_KEY: Symbol = symbol_short!("FEE_CONF");
@@ -509,8 +526,8 @@ fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, detail
         target_id,
         details: String::from_str(env, details),
     };
-    env.storage().persistent().set(&count, &entry);
-    env.storage().persistent().extend_ttl(&count, 5000, 50000);
+    env.storage().persistent().set(&(AUDIT_LOG_KEY, count), &entry);
+    env.storage().persistent().extend_ttl(&(AUDIT_LOG_KEY, count), 5000, 50000);
     env.storage().instance().set(&AUDIT_CNT, &count);
     env.storage().instance().extend_ttl(5000, 50000);
     env.events().publish(
@@ -665,7 +682,7 @@ impl OphirPayContract {
     /// Get multisig configuration version history (most recent first, capped at 100).
     /// Returns the latest 100 versions to prevent unbounded storage reads.
     pub fn get_multisig_config_history(env: Env) -> Vec<MultisigVersion> {
-        let total = env.storage().instance().get(&MSIG_VER_CNT).unwrap_or(0);
+        let total: u32 = env.storage().instance().get(&MSIG_VER_CNT).unwrap_or(0);
         let mut history = Vec::new(&env);
         let start = if total > 100 { total - 99 } else { 1 };
         for v in (start..=total).rev() {
@@ -714,8 +731,8 @@ impl OphirPayContract {
             created_at: env.ledger().timestamp(),
         };
 
-        env.storage().persistent().set(&count, &request);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(APPROVAL_KEY, count), &request);
+        env.storage().persistent().extend_ttl(&(APPROVAL_KEY, count), 5000, 50000);
         env.storage().instance().set(&APPROVAL_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -753,7 +770,7 @@ impl OphirPayContract {
         let mut request: ApprovalRequest = env
             .storage()
             .persistent()
-            .get(&request_id)
+            .get(&(APPROVAL_KEY, request_id))
             .ok_or(PaymentError::PaymentNotFound)?;
 
         if request.executed {
@@ -766,8 +783,8 @@ impl OphirPayContract {
         }
 
         request.approvals.push_back(signer.clone());
-        env.storage().persistent().set(&request_id, &request);
-        env.storage().persistent().extend_ttl(&request_id, 5000, 50000);
+        env.storage().persistent().set(&(APPROVAL_KEY, request_id), &request);
+        env.storage().persistent().extend_ttl(&(APPROVAL_KEY, request_id), 5000, 50000);
 
         let threshold_met = request.approvals.len() >= config.threshold as u32;
 
@@ -797,7 +814,7 @@ impl OphirPayContract {
         let mut request: ApprovalRequest = env
             .storage()
             .persistent()
-            .get(&request_id)
+            .get(&(APPROVAL_KEY, request_id))
             .ok_or(PaymentError::PaymentNotFound)?;
 
         if request.executed {
@@ -823,14 +840,14 @@ impl OphirPayContract {
             cancelled: false,
         };
 
-        env.storage().persistent().set(&pay_count, &payment);
-        env.storage().persistent().extend_ttl(&pay_count, 5000, 50000);
+        env.storage().persistent().set(&(PAYMENT_KEY, pay_count), &payment);
+        env.storage().persistent().extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
         env.storage().instance().extend_ttl(5000, 50000);
 
         request.executed = true;
-        env.storage().persistent().set(&request_id, &request);
-        env.storage().persistent().extend_ttl(&request_id, 5000, 50000);
+        env.storage().persistent().set(&(APPROVAL_KEY, request_id), &request);
+        env.storage().persistent().extend_ttl(&(APPROVAL_KEY, request_id), 5000, 50000);
 
         inc_counter(&env, &STAT_PAYMENTS);
 
@@ -846,7 +863,7 @@ impl OphirPayContract {
 
     /// Get an approval request by ID.
     pub fn get_approval_request(env: Env, request_id: u64) -> Option<ApprovalRequest> {
-        env.storage().persistent().get(&request_id)
+        env.storage().persistent().get(&(APPROVAL_KEY, request_id))
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -908,7 +925,7 @@ impl OphirPayContract {
     /// Get fee configuration version history (most recent first, capped at 100).
     /// Returns the latest 100 versions to prevent unbounded storage reads.
     pub fn get_fee_config_history(env: Env) -> Vec<FeeConfigVersion> {
-        let total = env.storage().instance().get(&FEE_VER_CNT).unwrap_or(0);
+        let total: u32 = env.storage().instance().get(&FEE_VER_CNT).unwrap_or(0);
         let mut history = Vec::new(&env);
         let start = if total > 100 { total - 99 } else { 1 };
         for v in (start..=total).rev() {
@@ -976,8 +993,8 @@ impl OphirPayContract {
             executed: false,
         };
 
-        env.storage().persistent().set(&count, &action);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(TIMELOCK_KEY, count), &action);
+        env.storage().persistent().extend_ttl(&(TIMELOCK_KEY, count), 5000, 50000);
         env.storage().instance().set(&TMLOCK_CNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -1001,7 +1018,7 @@ impl OphirPayContract {
         let mut action: TimelockedAction = env
             .storage()
             .persistent()
-            .get(&action_id)
+            .get(&(TIMELOCK_KEY, action_id))
             .ok_or(PaymentError::TimelockNotFound)?;
 
         if action.executed {
@@ -1014,8 +1031,8 @@ impl OphirPayContract {
         }
 
         action.executed = true;
-        env.storage().persistent().set(&action_id, &action);
-        env.storage().persistent().extend_ttl(&action_id, 5000, 50000);
+        env.storage().persistent().set(&(TIMELOCK_KEY, action_id), &action);
+        env.storage().persistent().extend_ttl(&(TIMELOCK_KEY, action_id), 5000, 50000);
 
         env.events().publish(
             (Symbol::new(&env, "timelock"), Symbol::new(&env, "executed")),
@@ -1039,7 +1056,7 @@ impl OphirPayContract {
         let mut action: TimelockedAction = env
             .storage()
             .persistent()
-            .get(&action_id)
+            .get(&(TIMELOCK_KEY, action_id))
             .ok_or(PaymentError::TimelockNotFound)?;
 
         if action.executed {
@@ -1047,8 +1064,8 @@ impl OphirPayContract {
         }
 
         action.executed = true; // mark as "cancelled" via execution flag
-        env.storage().persistent().set(&action_id, &action);
-        env.storage().persistent().extend_ttl(&action_id, 5000, 50000);
+        env.storage().persistent().set(&(TIMELOCK_KEY, action_id), &action);
+        env.storage().persistent().extend_ttl(&(TIMELOCK_KEY, action_id), 5000, 50000);
 
         record_audit(&env, "timelock_cancelled", &caller, action_id, "Timelocked action cancelled");
 
@@ -1059,7 +1076,7 @@ impl OphirPayContract {
     pub fn get_timelocked_action(env: Env, action_id: u64) -> Result<TimelockedAction, PaymentError> {
         env.storage()
             .persistent()
-            .get(&action_id)
+            .get(&(TIMELOCK_KEY, action_id))
             .ok_or(PaymentError::TimelockNotFound)
     }
 
@@ -1142,8 +1159,8 @@ impl OphirPayContract {
             created_at: now,
         };
 
-        env.storage().persistent().set(&count, &proposal);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(PROPOSAL_KEY, count), &proposal);
+        env.storage().persistent().extend_ttl(&(PROPOSAL_KEY, count), 5000, 50000);
         env.storage().instance().set(&GOV_CNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -1176,7 +1193,7 @@ impl OphirPayContract {
         let mut proposal: Proposal = env
             .storage()
             .persistent()
-            .get(&proposal_id)
+            .get(&(PROPOSAL_KEY, proposal_id))
             .ok_or(PaymentError::ProposalNotFound)?;
 
         if proposal.executed {
@@ -1194,8 +1211,8 @@ impl OphirPayContract {
             proposal.no_votes = proposal.no_votes.saturating_add(weight);
         }
 
-        env.storage().persistent().set(&proposal_id, &proposal);
-        env.storage().persistent().extend_ttl(&proposal_id, 5000, 50000);
+        env.storage().persistent().set(&(PROPOSAL_KEY, proposal_id), &proposal);
+        env.storage().persistent().extend_ttl(&(PROPOSAL_KEY, proposal_id), 5000, 50000);
 
         env.events().publish(
             (Symbol::new(&env, "governance"), Symbol::new(&env, "vote")),
@@ -1214,7 +1231,7 @@ impl OphirPayContract {
         let mut proposal: Proposal = env
             .storage()
             .persistent()
-            .get(&proposal_id)
+            .get(&(PROPOSAL_KEY, proposal_id))
             .ok_or(PaymentError::ProposalNotFound)?;
 
         if proposal.executed {
@@ -1228,8 +1245,8 @@ impl OphirPayContract {
 
         let passed = proposal.yes_votes > proposal.no_votes;
         proposal.executed = true;
-        env.storage().persistent().set(&proposal_id, &proposal);
-        env.storage().persistent().extend_ttl(&proposal_id, 5000, 50000);
+        env.storage().persistent().set(&(PROPOSAL_KEY, proposal_id), &proposal);
+        env.storage().persistent().extend_ttl(&(PROPOSAL_KEY, proposal_id), 5000, 50000);
 
         env.events().publish(
             (Symbol::new(&env, "governance"), Symbol::new(&env, "executed")),
@@ -1251,7 +1268,7 @@ impl OphirPayContract {
     pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, PaymentError> {
         env.storage()
             .persistent()
-            .get(&proposal_id)
+            .get(&(PROPOSAL_KEY, proposal_id))
             .ok_or(PaymentError::ProposalNotFound)
     }
 
@@ -1459,8 +1476,8 @@ impl OphirPayContract {
             cancelled: false,
         };
 
-        env.storage().persistent().set(&count, &payment);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(PAYMENT_KEY, count), &payment);
+        env.storage().persistent().extend_ttl(&(PAYMENT_KEY, count), 5000, 50000);
         env.storage().instance().set(&PAYMENT_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -1551,7 +1568,7 @@ impl OphirPayContract {
     pub fn get_audit_entry(env: Env, entry_id: u64) -> Result<AuditEntry, PaymentError> {
         env.storage()
             .persistent()
-            .get(&entry_id)
+            .get(&(AUDIT_LOG_KEY, entry_id))
             .ok_or(PaymentError::AuditEntryNotFound)
     }
 
@@ -1562,7 +1579,7 @@ impl OphirPayContract {
             if entries.len() >= 100 {
                 break;
             }
-            if let Some(e) = env.storage().persistent().get::<_, AuditEntry>(&id) {
+            if let Some(e) = env.storage().persistent().get::<_, AuditEntry>(&(AUDIT_LOG_KEY, id)) {
                 entries.push_back(e);
             }
         }
@@ -1862,8 +1879,8 @@ impl OphirPayContract {
             cancelled: false,
         };
 
-        env.storage().persistent().set(&count, &payment);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(PAYMENT_KEY, count), &payment);
+        env.storage().persistent().extend_ttl(&(PAYMENT_KEY, count), 5000, 50000);
         env.storage().instance().set(&PAYMENT_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -1881,7 +1898,7 @@ impl OphirPayContract {
     pub fn get_payment(env: Env, payment_id: u64) -> Result<Payment, PaymentError> {
         env.storage()
             .persistent()
-            .get(&payment_id)
+            .get(&(PAYMENT_KEY, payment_id))
             .ok_or(PaymentError::PaymentNotFound)
     }
 
@@ -1894,7 +1911,7 @@ impl OphirPayContract {
     pub fn get_payments_range(env: Env, start_id: u64, end_id: u64) -> Vec<Payment> {
         let mut payments = Vec::new(&env);
         for id in start_id..=end_id {
-            if let Some(p) = env.storage().persistent().get::<_, Payment>(&id) {
+            if let Some(p) = env.storage().persistent().get::<_, Payment>(&(PAYMENT_KEY, id)) {
                 payments.push_back(p);
             }
         }
@@ -1912,7 +1929,7 @@ impl OphirPayContract {
         let mut payment: Payment = env
             .storage()
             .persistent()
-            .get(&payment_id)
+            .get(&(PAYMENT_KEY, payment_id))
             .ok_or(PaymentError::PaymentNotFound)?;
 
         if payment.cancelled {
@@ -1920,8 +1937,8 @@ impl OphirPayContract {
         }
 
         payment.cancelled = true;
-        env.storage().persistent().set(&payment_id, &payment);
-        env.storage().persistent().extend_ttl(&payment_id, 5000, 50000);
+        env.storage().persistent().set(&(PAYMENT_KEY, payment_id), &payment);
+        env.storage().persistent().extend_ttl(&(PAYMENT_KEY, payment_id), 5000, 50000);
 
         record_audit(&env, "payment_cancelled", &caller, payment_id, "Payment cancelled");
 
@@ -1975,8 +1992,8 @@ impl OphirPayContract {
             metadata,
         };
 
-        env.storage().persistent().set(&count, &escrow);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(ESCROW_KEY, count), &escrow);
+        env.storage().persistent().extend_ttl(&(ESCROW_KEY, count), 5000, 50000);
         env.storage().instance().set(&ESCROW_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2010,7 +2027,7 @@ impl OphirPayContract {
         let mut escrow: Escrow = env
             .storage()
             .persistent()
-            .get(&escrow_id)
+            .get(&(ESCROW_KEY, escrow_id))
             .ok_or(PaymentError::EscrowNotFound)?;
 
         if escrow.released || escrow.claimed {
@@ -2026,8 +2043,8 @@ impl OphirPayContract {
 
         escrow.released = true;
         escrow.claimed = true;
-        env.storage().persistent().set(&escrow_id, &escrow);
-        env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
+        env.storage().persistent().set(&(ESCROW_KEY, escrow_id), &escrow);
+        env.storage().persistent().extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2050,7 +2067,7 @@ impl OphirPayContract {
         let mut escrow: Escrow = env
             .storage()
             .persistent()
-            .get(&escrow_id)
+            .get(&(ESCROW_KEY, escrow_id))
             .ok_or(PaymentError::EscrowNotFound)?;
 
         // Verify caller is the designated arbiter
@@ -2077,8 +2094,8 @@ impl OphirPayContract {
 
         escrow.released = true;
         escrow.claimed = true;
-        env.storage().persistent().set(&escrow_id, &escrow);
-        env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
+        env.storage().persistent().set(&(ESCROW_KEY, escrow_id), &escrow);
+        env.storage().persistent().extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2095,7 +2112,7 @@ impl OphirPayContract {
         let mut escrow: Escrow = env
             .storage()
             .persistent()
-            .get(&escrow_id)
+            .get(&(ESCROW_KEY, escrow_id))
             .ok_or(PaymentError::EscrowNotFound)?;
 
         if beneficiary != escrow.beneficiary {
@@ -2115,8 +2132,8 @@ impl OphirPayContract {
         token_client.transfer(&contract_addr, &beneficiary, &escrow.amount);
 
         escrow.claimed = true;
-        env.storage().persistent().set(&escrow_id, &escrow);
-        env.storage().persistent().extend_ttl(&escrow_id, 5000, 50000);
+        env.storage().persistent().set(&(ESCROW_KEY, escrow_id), &escrow);
+        env.storage().persistent().extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
 
         inc_counter(&env, &STAT_ESC_CLAIMED);
 
@@ -2129,7 +2146,7 @@ impl OphirPayContract {
     pub fn get_escrow(env: Env, escrow_id: u64) -> Result<Escrow, PaymentError> {
         env.storage()
             .persistent()
-            .get(&escrow_id)
+            .get(&(ESCROW_KEY, escrow_id))
             .ok_or(PaymentError::EscrowNotFound)
     }
 
@@ -2186,8 +2203,8 @@ impl OphirPayContract {
             metadata,
         };
 
-        env.storage().persistent().set(&count, &stream);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(STREAM_KEY, count), &stream);
+        env.storage().persistent().extend_ttl(&(STREAM_KEY, count), 5000, 50000);
         env.storage().instance().set(&STREAM_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2209,7 +2226,7 @@ impl OphirPayContract {
         let mut stream: Stream = env
             .storage()
             .persistent()
-            .get(&stream_id)
+            .get(&(STREAM_KEY, stream_id))
             .ok_or(PaymentError::StreamNotFound)?;
 
         if recipient != stream.recipient {
@@ -2245,8 +2262,8 @@ impl OphirPayContract {
         token_client.transfer(&contract_addr, &recipient, &claimable);
 
         stream.claimed_amount += claimable;
-        env.storage().persistent().set(&stream_id, &stream);
-        env.storage().persistent().extend_ttl(&stream_id, 5000, 50000);
+        env.storage().persistent().set(&(STREAM_KEY, stream_id), &stream);
+        env.storage().persistent().extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
         inc_counter(&env, &STAT_STR_CLAIMED);
 
@@ -2267,7 +2284,7 @@ impl OphirPayContract {
         let mut stream: Stream = env
             .storage()
             .persistent()
-            .get(&stream_id)
+            .get(&(STREAM_KEY, stream_id))
             .ok_or(PaymentError::StreamNotFound)?;
 
         if creator != stream.creator {
@@ -2291,8 +2308,8 @@ impl OphirPayContract {
             .saturating_sub(stream.claimed_amount);
 
         stream.cancelled = true;
-        env.storage().persistent().set(&stream_id, &stream);
-        env.storage().persistent().extend_ttl(&stream_id, 5000, 50000);
+        env.storage().persistent().set(&(STREAM_KEY, stream_id), &stream);
+        env.storage().persistent().extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
         if unvested > 0 {
             let token_client = token::Client::new(&env, &stream.asset);
@@ -2312,7 +2329,7 @@ impl OphirPayContract {
     pub fn get_stream(env: Env, stream_id: u64) -> Result<Stream, PaymentError> {
         env.storage()
             .persistent()
-            .get(&stream_id)
+            .get(&(STREAM_KEY, stream_id))
             .ok_or(PaymentError::StreamNotFound)
     }
 
@@ -2369,8 +2386,8 @@ impl OphirPayContract {
             metadata,
         };
 
-        env.storage().persistent().set(&count, &recurring);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(RECURRING_KEY, count), &recurring);
+        env.storage().persistent().extend_ttl(&(RECURRING_KEY, count), 5000, 50000);
         env.storage().instance().set(&RECUR_CNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2393,7 +2410,7 @@ impl OphirPayContract {
         let mut recurring: RecurringPayment = env
             .storage()
             .persistent()
-            .get(&recurring_id)
+            .get(&(RECURRING_KEY, recurring_id))
             .ok_or(PaymentError::RecurringNotFound)?;
 
         if !recurring.active {
@@ -2421,8 +2438,8 @@ impl OphirPayContract {
             cancelled: false,
         };
 
-        env.storage().persistent().set(&pay_count, &payment);
-        env.storage().persistent().extend_ttl(&pay_count, 5000, 50000);
+        env.storage().persistent().set(&(PAYMENT_KEY, pay_count), &payment);
+        env.storage().persistent().extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2445,8 +2462,8 @@ impl OphirPayContract {
             }
         }
 
-        env.storage().persistent().set(&recurring_id, &recurring);
-        env.storage().persistent().extend_ttl(&recurring_id, 5000, 50000);
+        env.storage().persistent().set(&(RECURRING_KEY, recurring_id), &recurring);
+        env.storage().persistent().extend_ttl(&(RECURRING_KEY, recurring_id), 5000, 50000);
 
         inc_counter(&env, &STAT_PAYMENTS);
 
@@ -2466,7 +2483,7 @@ impl OphirPayContract {
         let mut recurring: RecurringPayment = env
             .storage()
             .persistent()
-            .get(&recurring_id)
+            .get(&(RECURRING_KEY, recurring_id))
             .ok_or(PaymentError::RecurringNotFound)?;
 
         if !recurring.active {
@@ -2485,8 +2502,8 @@ impl OphirPayContract {
 
         recurring.active = false;
         recurring.remaining = 0;
-        env.storage().persistent().set(&recurring_id, &recurring);
-        env.storage().persistent().extend_ttl(&recurring_id, 5000, 50000);
+        env.storage().persistent().set(&(RECURRING_KEY, recurring_id), &recurring);
+        env.storage().persistent().extend_ttl(&(RECURRING_KEY, recurring_id), 5000, 50000);
 
         record_audit(&env, "recurring_cancelled", &caller, recurring_id, "Recurring payment cancelled");
 
@@ -2497,7 +2514,7 @@ impl OphirPayContract {
     pub fn get_recurring(env: Env, recurring_id: u64) -> Result<RecurringPayment, PaymentError> {
         env.storage()
             .persistent()
-            .get(&recurring_id)
+            .get(&(RECURRING_KEY, recurring_id))
             .ok_or(PaymentError::RecurringNotFound)
     }
 
@@ -2531,7 +2548,7 @@ impl OphirPayContract {
         let payment: Payment = env
             .storage()
             .persistent()
-            .get(&payment_id)
+            .get(&(PAYMENT_KEY, payment_id))
             .ok_or(PaymentError::PaymentNotFound)?;
 
         if payment.cancelled {
@@ -2554,8 +2571,8 @@ impl OphirPayContract {
             resolved_at: 0,
         };
 
-        env.storage().persistent().set(&count, &refund);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(REFUND_KEY, count), &refund);
+        env.storage().persistent().extend_ttl(&(REFUND_KEY, count), 5000, 50000);
         env.storage().instance().set(&REFUND_CNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2581,7 +2598,7 @@ impl OphirPayContract {
         let mut refund: Refund = env
             .storage()
             .persistent()
-            .get(&refund_id)
+            .get(&(REFUND_KEY, refund_id))
             .ok_or(PaymentError::RefundNotFound)?;
 
         if refund.status != RefundStatus::Requested {
@@ -2590,8 +2607,8 @@ impl OphirPayContract {
 
         refund.status = RefundStatus::Approved;
         refund.resolved_at = env.ledger().timestamp();
-        env.storage().persistent().set(&refund_id, &refund);
-        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+        env.storage().persistent().set(&(REFUND_KEY, refund_id), &refund);
+        env.storage().persistent().extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
 
         record_audit(&env, "refund_approved", &caller, refund_id, "Refund approved");
 
@@ -2610,7 +2627,7 @@ impl OphirPayContract {
         let mut refund: Refund = env
             .storage()
             .persistent()
-            .get(&refund_id)
+            .get(&(REFUND_KEY, refund_id))
             .ok_or(PaymentError::RefundNotFound)?;
 
         if refund.status != RefundStatus::Requested {
@@ -2619,8 +2636,8 @@ impl OphirPayContract {
 
         refund.status = RefundStatus::Rejected;
         refund.resolved_at = env.ledger().timestamp();
-        env.storage().persistent().set(&refund_id, &refund);
-        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+        env.storage().persistent().set(&(REFUND_KEY, refund_id), &refund);
+        env.storage().persistent().extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
 
         record_audit(&env, "refund_rejected", &caller, refund_id, "Refund rejected");
 
@@ -2635,7 +2652,7 @@ impl OphirPayContract {
         let mut refund: Refund = env
             .storage()
             .persistent()
-            .get(&refund_id)
+            .get(&(REFUND_KEY, refund_id))
             .ok_or(PaymentError::RefundNotFound)?;
 
         if refund.status != RefundStatus::Approved {
@@ -2648,8 +2665,8 @@ impl OphirPayContract {
 
         refund.status = RefundStatus::Processed;
         refund.resolved_at = env.ledger().timestamp();
-        env.storage().persistent().set(&refund_id, &refund);
-        env.storage().persistent().extend_ttl(&refund_id, 5000, 50000);
+        env.storage().persistent().set(&(REFUND_KEY, refund_id), &refund);
+        env.storage().persistent().extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "processed")),
@@ -2665,7 +2682,7 @@ impl OphirPayContract {
     pub fn get_refund(env: Env, refund_id: u64) -> Result<Refund, PaymentError> {
         env.storage()
             .persistent()
-            .get(&refund_id)
+            .get(&(REFUND_KEY, refund_id))
             .ok_or(PaymentError::RefundNotFound)
     }
 
@@ -2677,7 +2694,7 @@ impl OphirPayContract {
     /// Analytics: count refunds grouped by reason code.
     /// Returns a sorted list of (reason_code, count) pairs.
     pub fn get_reason_code_analytics(env: Env) -> Vec<(u32, u64)> {
-        let total = env.storage().instance().get(&REFUND_CNT).unwrap_or(0);
+        let total: u64 = env.storage().instance().get(&REFUND_CNT).unwrap_or(0);
         let mut counts: Vec<(u32, u64)> = Vec::new(&env);
 
         // Initialize buckets for each reason code
@@ -2687,7 +2704,7 @@ impl OphirPayContract {
         }
 
         for id in 1..=total {
-            if let Some(refund) = env.storage().persistent().get::<_, Refund>(&id) {
+            if let Some(refund) = env.storage().persistent().get::<_, Refund>(&(REFUND_KEY, id)) {
                 let code_idx = match refund.reason_code {
                     RefundReasonCode::ProductDefect => 0,
                     RefundReasonCode::NonDelivery => 1,
@@ -2738,8 +2755,8 @@ impl OphirPayContract {
         };
 
         // Store hook by ID
-        env.storage().persistent().set(&count, &hook);
-        env.storage().persistent().extend_ttl(&count, 5000, 50000);
+        env.storage().persistent().set(&(HOOK_KEY, count), &hook);
+        env.storage().persistent().extend_ttl(&(HOOK_KEY, count), 5000, 50000);
 
         // Index: subscriber → hook IDs (for management)
         let subscriber_clone = subscriber.clone();
@@ -2777,7 +2794,7 @@ impl OphirPayContract {
         let mut hook: NotificationHook = env
             .storage()
             .persistent()
-            .get(&hook_id)
+            .get(&(HOOK_KEY, hook_id))
             .ok_or(PaymentError::AuditEntryNotFound)?; // reuse closest error
 
         if hook.subscriber != caller {
@@ -2785,8 +2802,8 @@ impl OphirPayContract {
         }
 
         hook.active = false;
-        env.storage().persistent().set(&hook_id, &hook);
-        env.storage().persistent().extend_ttl(&hook_id, 5000, 50000);
+        env.storage().persistent().set(&(HOOK_KEY, hook_id), &hook);
+        env.storage().persistent().extend_ttl(&(HOOK_KEY, hook_id), 5000, 50000);
 
         env.events().publish(
             (Symbol::new(&env, "hook"), Symbol::new(&env, "unregistered")),
@@ -2805,11 +2822,11 @@ impl OphirPayContract {
         env: Env,
         event_type: String,
     ) -> Vec<(u64, String)> {
-        let total = env.storage().instance().get(&HOOK_CNT).unwrap_or(0);
+        let total: u64 = env.storage().instance().get(&HOOK_CNT).unwrap_or(0);
         let mut results = Vec::new(&env);
 
         for id in 1..=total {
-            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&id) {
+            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&(HOOK_KEY, id)) {
                 if hook.active && hook.event_type == event_type {
                     results.push_back((id, hook.webhook_url));
                 }
@@ -2833,7 +2850,7 @@ impl OphirPayContract {
 
         let mut hooks = Vec::new(&env);
         for id in hook_ids.iter() {
-            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&id) {
+            if let Some(hook) = env.storage().persistent().get::<_, NotificationHook>(&(HOOK_KEY, id)) {
                 hooks.push_back(hook);
             }
         }
@@ -2911,8 +2928,8 @@ impl OphirPayContract {
                 cancelled: false,
             };
 
-            env.storage().persistent().set(&pay_count, &payment);
-            env.storage().persistent().extend_ttl(&pay_count, 5000, 50000);
+            env.storage().persistent().set(&(PAYMENT_KEY, pay_count), &payment);
+            env.storage().persistent().extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
 
             emit_payment_event(&env, &creator, &payee_addr, &amount);
         }
@@ -2943,8 +2960,8 @@ impl OphirPayContract {
             payment_ids,
         };
 
-        env.storage().persistent().set(&batch_count, &batch);
-        env.storage().persistent().extend_ttl(&batch_count, 5000, 50000);
+        env.storage().persistent().set(&(BATCH_KEY, batch_count), &batch);
+        env.storage().persistent().extend_ttl(&(BATCH_KEY, batch_count), 5000, 50000);
         env.storage().instance().set(&BATCH_COUNT, &batch_count);
         env.storage().instance().extend_ttl(5000, 50000);
 
@@ -2966,7 +2983,7 @@ impl OphirPayContract {
     pub fn get_batch(env: Env, batch_id: u64) -> Result<BatchPayment, PaymentError> {
         env.storage()
             .persistent()
-            .get(&batch_id)
+            .get(&(BATCH_KEY, batch_id))
             .ok_or(PaymentError::PaymentNotFound)
     }
 
@@ -2977,12 +2994,12 @@ impl OphirPayContract {
 
     /// Get all payment IDs belonging to a batch, then fetch each payment.
     pub fn get_payments_by_batch(env: Env, batch_id: u64) -> Vec<Payment> {
-        let batch: Option<BatchPayment> = env.storage().persistent().get(&batch_id);
+        let batch: Option<BatchPayment> = env.storage().persistent().get(&(BATCH_KEY, batch_id));
         let mut payments = Vec::new(&env);
 
         if let Some(b) = batch {
             for pid in b.payment_ids.iter() {
-                if let Some(p) = env.storage().persistent().get(&pid) {
+                if let Some(p) = env.storage().persistent().get(&(PAYMENT_KEY, pid)) {
                     payments.push_back(p);
                 }
             }
@@ -2998,6 +3015,7 @@ impl OphirPayContract {
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger as _};
+    use soroban_sdk::{vec, String};
 
     fn create_token_contract(e: &Env, admin: &Address) -> Address {
         e.register_stellar_asset_contract(admin.clone())
@@ -3020,7 +3038,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "AlreadyInitialized")]
     fn test_init_twice_fails() {
         let env = Env::default();
         env.mock_all_auths();
@@ -3029,7 +3046,11 @@ mod tests {
         let owner = Address::generate(&env);
 
         let _ = client.init(&owner);
-        let _ = client.init(&owner); // should panic
+        // v27 client try_ variant surfaces the exact contract error
+        assert_eq!(
+            client.try_init(&owner),
+            Err(Ok(PaymentError::AlreadyInitialized))
+        );
     }
 
     #[test]
@@ -3041,8 +3062,16 @@ mod tests {
         let owner = Address::generate(&env);
         let new_owner = Address::generate(&env);
 
+        let now = env.ledger().timestamp();
         let _ = client.init(&owner);
+
+        // transfer_ownership is now a two-step proposal: the owner does not
+        // change until the proposed new owner accepts after the timelock.
         client.transfer_ownership(&owner, &new_owner);
+        assert_eq!(client.get_owner(), owner);
+
+        env.ledger().set_timestamp(now + 86401);
+        client.accept_ownership(&new_owner);
         assert_eq!(client.get_owner(), new_owner);
     }
 
@@ -3066,6 +3095,7 @@ mod tests {
     fn test_record_payment() {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(1000);
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -3095,7 +3125,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "InvalidAmount")]
     fn test_record_payment_zero_amount_fails() {
         let env = Env::default();
         env.mock_all_auths();
@@ -3107,13 +3136,16 @@ mod tests {
         let sac = create_token_contract(&env, &owner);
 
         let _ = client.init(&owner);
-        client.record_payment(
-            &payer,
-            &payee,
-            &0i128,
-            &sac,
-            &String::from_str(&env, "tx"),
-            &String::from_str(&env, ""),
+        assert_eq!(
+            client.try_record_payment(
+                &payer,
+                &payee,
+                &0i128,
+                &sac,
+                &String::from_str(&env, "tx"),
+                &String::from_str(&env, ""),
+            ),
+            Err(Ok(PaymentError::InvalidAmount))
         );
     }
 
@@ -3205,6 +3237,7 @@ mod tests {
         let _ = client.create_escrow(
             &depositor,
             &beneficiary,
+            &None::<Address>,
             &500i128,
             &sac,
             &(now + 100),
@@ -3238,6 +3271,7 @@ mod tests {
         let _ = client.create_escrow(
             &depositor,
             &beneficiary,
+            &None::<Address>,
             &500i128,
             &sac,
             &(now + 10000),
@@ -3463,6 +3497,7 @@ mod tests {
         client.create_escrow(
             &depositor,
             &beneficiary,
+            &None::<Address>,
             &100i128,
             &sac,
             &(env.ledger().timestamp() + 100),
@@ -3611,7 +3646,7 @@ mod tests {
         let user = Address::generate(&env);
 
         let _ = client.init(&owner);
-        client.set_spending_limit(&owner, &user, &1000i128, &5000i128, &true);
+        client.set_spending_limit(&owner, &user, &1000i128, &5000i128, &(env.ledger().timestamp() + 86400), &true);
 
         let result = client.check_spending(&user, &500i128);
         assert!(matches!(result, SpendCheckResult::Approved));
@@ -3627,7 +3662,7 @@ mod tests {
         let user = Address::generate(&env);
 
         let _ = client.init(&owner);
-        client.set_spending_limit(&owner, &user, &100i128, &1000i128, &true);
+        client.set_spending_limit(&owner, &user, &100i128, &1000i128, &0u64, &true);
 
         let result = client.check_spending(&user, &500i128);
         assert!(matches!(result, SpendCheckResult::Rejected));
@@ -3694,7 +3729,7 @@ mod tests {
         assert!(count >= 1);
 
         let entry = client.get_audit_entry(&1);
-        assert!(entry.is_ok());
+        assert!(entry.id >= 1);
     }
 
     // ── Recurring Payment Tests ─────────────────────────────
@@ -3720,8 +3755,7 @@ mod tests {
         assert_eq!(client.get_recurring_count(), 1);
 
         let rec = client.get_recurring(&1);
-        assert!(rec.is_ok());
-        assert!(rec.unwrap().active);
+        assert!(rec.active);
     }
 
     #[test]
@@ -3767,7 +3801,7 @@ mod tests {
         );
 
         client.cancel_recurring(&creator, &id);
-        let rec = client.get_recurring(&id).unwrap();
+        let rec = client.get_recurring(&id);
         assert!(!rec.active);
     }
 
@@ -3828,13 +3862,12 @@ mod tests {
         assert_eq!(client.get_timelock_count(), 1);
 
         let action = client.get_timelocked_action(&1);
-        assert!(action.is_ok());
-        assert!(!action.unwrap().executed);
+        assert!(!action.executed);
 
         env.ledger().set_timestamp(now + TMLOCK_DELAY + 1);
         client.execute_timelocked_action(&1);
 
-        let action = client.get_timelocked_action(&1).unwrap();
+        let action = client.get_timelocked_action(&1);
         assert!(action.executed);
     }
 
@@ -3855,7 +3888,7 @@ mod tests {
         );
 
         client.cancel_timelocked_action(&owner, &id);
-        let action = client.get_timelocked_action(&id).unwrap();
+        let action = client.get_timelocked_action(&id);
         assert!(action.executed);
     }
 
@@ -3889,7 +3922,7 @@ mod tests {
 
         client.vote_on_proposal(&voter, &1, &true, &100i128);
 
-        let prop = client.get_proposal(&1).unwrap();
+        let prop = client.get_proposal(&1);
         assert_eq!(prop.yes_votes, 100);
         assert_eq!(prop.no_votes, 0);
 
@@ -3931,7 +3964,7 @@ mod tests {
         assert_eq!(client.get_refund_count(), 1);
 
         let refund = client.get_refund(&1);
-        assert_eq!(refund.unwrap().reason_code, RefundReasonCode::ProductDefect);
+        assert_eq!(refund.reason_code, RefundReasonCode::ProductDefect);
     }
 
     #[test]
@@ -3969,17 +4002,17 @@ mod tests {
         // Approve as owner
         client.approve_refund(&owner, &rid);
 
-        let refund = client.get_refund(&rid).unwrap();
+        let refund = client.get_refund(&rid);
         assert!(matches!(refund.status, RefundStatus::Approved));
 
         // Transfer tokens to contract so process_refund can send them back
-        let contract_addr = env.current_contract_address();
+        let contract_addr = contract_id.clone();
         sac_client.transfer(&owner, &contract_addr, &500i128);
 
         // Process refund
         client.process_refund(&rid);
 
-        let refund = client.get_refund(&rid).unwrap();
+        let refund = client.get_refund(&rid);
         assert!(matches!(refund.status, RefundStatus::Processed));
     }
 
@@ -3992,7 +4025,7 @@ mod tests {
         let owner = Address::generate(&env);
 
         let _ = client.init(&owner);
-        let result = client.get_refund(&999);
+        let result = client.try_get_refund(&999);
         assert!(result.is_err());
     }
 

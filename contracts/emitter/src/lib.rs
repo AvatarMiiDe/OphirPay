@@ -315,6 +315,7 @@ mod tests {
     fn test_emit_payment() {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(1000);
         let addr = env.register(PaymentEventEmitter, ());
         let client = PaymentEventEmitterClient::new(&env, &addr);
         let owner = Address::generate(&env);
