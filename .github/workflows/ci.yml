@@ -156,6 +156,7 @@ jobs:
     name: "7️⃣ Frontend — E2E (Playwright)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'pull_request'  # Only on PRs — too slow for every push
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

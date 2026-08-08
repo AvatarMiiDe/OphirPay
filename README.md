@@ -38,7 +38,7 @@
   </p>
 
   <p>
-    <sub>      <b>12 CI checks (11 on push + 1 PR-only):</b>
+    <sub>      <b>12 CI checks (10 on push + 2 PR-only):</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
