@@ -18,7 +18,7 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/badge/CI%20jobs-13-blue.svg?logo=githubactions" alt="13 CI Jobs" />
+      <img src="https://img.shields.io/badge/CI%20jobs-12-blue.svg?logo=githubactions" alt="12 CI Jobs" />
     </a>
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-203%20passed%20(154%20app%20%2B%2049%20contracts)-brightgreen.svg" alt="203 Tests Passing" />
@@ -38,7 +38,7 @@
   </p>
 
   <p>
-    <sub>      <b>13 CI checks (12 on push + 1 PR-only):</b>
+    <sub>      <b>12 CI checks (11 on push + 1 PR-only):</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
@@ -49,7 +49,6 @@
       <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
       <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
       <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
-      <img src="https://img.shields.io/badge/secrets-Gitleaks-FFA500.svg?logo=github" />
       <img src="https://img.shields.io/badge/audit-npm-CB3837.svg?logo=npm" />
       <img src="https://img.shields.io/badge/labels-auto-lightgrey.svg?logo=github" />
     </sub>
@@ -537,10 +536,9 @@ Checkout → Node.js 20 → npm ci → Prisma → Lint → TypeCheck → Unit Te
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
 | K8s | `kubeconform -strict` | Kubernetes manifest validation |
 | Helm | `helm lint --strict` | Chart validation + template render |
-| Secrets | Gitleaks scan | Detect committed secrets (Testnet IDs allowlisted) |
 | Audit | `npm audit` | Dependency vulnerability scan |
-| PR Labeler | Auto-label PRs | Adds labels by changed paths |
 | Scorecard | OpenSSF (weekly) | Security best-practices analysis |
+| PR Labeler | Auto-label PRs | Adds labels by changed paths |
 
 **→ [View latest CI run](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml)**
 
