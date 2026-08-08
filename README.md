@@ -521,22 +521,39 @@ Each type renders with distinct colors (yellow/red/orange) and actionable messag
 Every push to `main` triggers:
 
 ```
-Checkout → Node.js 20 → npm ci → Prisma → Lint → TypeCheck → Unit Tests → Coverage → Contracts → Build → E2E → Prisma → Docker → K8s → Helm → Secrets → Audit
+┌─ Frontend ──────────────────────────────────────────┐  ┌─ Backend ───────────────┐
+│ Lint → TypeCheck → Unit Tests → Coverage → Build → E2E │  │ Contracts → Prisma → Audit │
+└─────────────────────────────────────────────────────┘  └──────────────────────────┘
+                              ┌─ Infra ──┐
+                              │ K8s → Helm │
+                              └───────────┘
 ```
 
-| Step | Command | Purpose |
+### Frontend (6 jobs)
+
+| Job | Command | Purpose |
 |---|---|---|
 | Lint | `next lint --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
 | Unit Tests | `vitest run --reporter=verbose` | 154 app tests across 10 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
-| Contracts | `cargo build --target wasm32-unknown-unknown` | Both Soroban contracts to WASM |
 | Build | `next build` | Production Next.js build verification |
 | E2E | Playwright (Chromium) | Self-hosting dev server, browser cached |
+
+### Backend (3 jobs)
+
+| Job | Command | Purpose |
+|---|---|---|
+| Contracts | `cargo build --target wasm32-unknown-unknown` | Both Soroban contracts to WASM |
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
+| Audit | `npm audit` | Dependency vulnerability scan |
+
+### Infra + Meta (3 jobs)
+
+| Job | Command | Purpose |
+|---|---|---|
 | K8s | `kubeconform -strict` | Kubernetes manifest validation |
 | Helm | `helm lint --strict` | Chart validation + template render |
-| Audit | `npm audit` | Dependency vulnerability scan |
 | Scorecard | OpenSSF (weekly) | Security best-practices analysis |
 | PR Labeler | Auto-label PRs | Adds labels by changed paths |
 
