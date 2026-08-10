@@ -326,16 +326,14 @@ mod tests {
 
         let _ = client.init(&owner);
 
-        let id = client
-            .emit_payment(
-                &owner,
-                &String::from_str(&env, "OphirPay"),
-                &payer,
-                &payee,
-                &2500i128,
-                &String::from_str(&env, "abc123def456"),
-            )
-            .unwrap();
+        let id = client.emit_payment(
+            &owner,
+            &String::from_str(&env, "OphirPay"),
+            &payer,
+            &payee,
+            &2500i128,
+            &String::from_str(&env, "abc123def456"),
+        );
         assert_eq!(id, 1);
         assert_eq!(client.get_event_count(), 1);
 

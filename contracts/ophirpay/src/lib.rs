@@ -4061,7 +4061,7 @@ mod tests {
         let analytics = client.get_reason_code_analytics();
         // 6 buckets (ProductDefect..Other), one should have 1
         let mut found = false;
-        for (code, count) in analytics.iter() {
+        for (_code, count) in analytics.iter() {
             if count >= 1 {
                 found = true;
             }
@@ -4435,14 +4435,13 @@ mod tests {
         assert_eq!(old_version.unwrap().version, 10);
     }
 
-}
-
     // ── Refund Tests ────────────────────────────────────────
 
     #[test]
     fn test_refund_lifecycle() {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(1000);
         let contract_id = env.register(OphirPayContract, ());
         let client = OphirPayContractClient::new(&env, &contract_id);
 
@@ -4450,6 +4449,9 @@ mod tests {
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
         let sac = create_token_contract(&env, &owner);
+        // Fund the contract so process_refund can transfer tokens back
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        sac_client.mint(&contract_id, &10_000i128);
 
         let _ = client.init(&owner);
 
@@ -4481,7 +4483,7 @@ mod tests {
         assert_eq!(refund2.status, RefundStatus::Approved);
 
         // Process refund
-        client.process_refund(&owner, &1);
+        client.process_refund(&1);
         let refund3 = client.get_refund(&1);
         assert_eq!(refund3.status, RefundStatus::Processed);
         assert!(refund3.resolved_at > 0);
