@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { setMultisigConfig } from "@/lib/contract-advanced";
 
@@ -44,10 +44,7 @@ export async function POST(request: Request) {
     const { caller, threshold, signers, enabled } = body;
 
     if (!caller) {
-      return Response.json(
-        { success: false, error: { code: "BAD_REQUEST", message: "caller (public key) is required" } },
-        { status: 400 }
-      );
+      return badRequestError("caller (public key) is required");
     }
 
     const result = await setMultisigConfig(
@@ -58,10 +55,7 @@ export async function POST(request: Request) {
     );
 
     if (!result.success) {
-      return Response.json(
-        { success: false, error: { code: "CONTRACT_ERROR", message: result.error } },
-        { status: 400 }
-      );
+      return badRequestError(result.error || "Contract error");
     }
 
     return successResponse({ txHash: result.txHash, ...body }, undefined, 200);
