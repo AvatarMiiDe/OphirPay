@@ -9,26 +9,6 @@ import { DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 const clients = new Map<string, ReadableStreamDefaultController>();
 let clientCounter = 0;
 
-/** Broadcast an audit event to ALL connected SSE clients */
-function broadcastAuditEvent(event: {
-  id: number;
-  timestamp: number;
-  action: string;
-  actor: string;
-  target_id: number;
-  details: string;
-}) {
-  const data = `data: ${JSON.stringify(event)}\n\n`;
-  const encoder = new TextEncoder();
-  clients.forEach((controller) => {
-    try {
-      controller.enqueue(encoder.encode(data));
-    } catch {
-      // client disconnected, will be cleaned up on next poll
-    }
-  });
-}
-
 /**
  * Poll the Soroban OphirPayContract for new audit log entries.
  * Compares the latest on-chain entry ID with our last-seen ID.

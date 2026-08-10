@@ -5,9 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { Badge } from "@/components/ui/Badge";
-import { ExplorerLink } from "@/components/ui/ExplorerLink";
-import { useWallet } from "@/hooks/useMultiWallet";
+
 import {
   fetchOnChainPayments,
   type OnChainPayment,
@@ -27,7 +25,6 @@ interface SseEvent {
 }
 
 export default function EventsPage() {
-  const { wallet } = useWallet();
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);
   const [onChainPayments, setOnChainPayments] = useState<OnChainPayment[]>([]);

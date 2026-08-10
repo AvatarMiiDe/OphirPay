@@ -84,7 +84,7 @@ export const ledgerConnector: WalletConnector = {
     }
   },
 
-  async signTransaction(xdr: string, opts?: SignOptions) {
+  async signTransaction(_xdr: string, _opts?: SignOptions) {
     if (!ledgerConnected) {
       throw new Error(
         "Ledger not connected. Connect your device and open the Stellar app.",

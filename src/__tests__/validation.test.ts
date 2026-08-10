@@ -97,7 +97,7 @@ describe("createBatchSchema", () => {
   });
 
   it("rejects more than 100 recipients", () => {
-    const recipients = Array.from({ length: 101 }, (_, i) => ({
+    const recipients = Array.from({ length: 101 }, (_) => ({
       address: VALID_STELLAR,
       amount: 1,
     }));

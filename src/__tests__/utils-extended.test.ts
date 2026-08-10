@@ -3,8 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeHtml, escapeHtml, sanitizeStellarAddress } from "@/lib/sanitize";
 import { hashMemoSync, verifyMemo } from "@/lib/memo";
-import { XLM_ASSET, USDC_TESTNET, getAssetInfo, formatAssetAmount } from "@/lib/assets";
-import { exportToCsv } from "@/lib/csv";
+import { XLM_ASSET, getAssetInfo, formatAssetAmount } from "@/lib/assets";
 import { handlePrismaError } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
 
