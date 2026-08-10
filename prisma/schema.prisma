@@ -72,7 +72,7 @@ model Payment {
   userId            String
 
   // Payment details
-  amount            Float
+  amount            Decimal   @db.Decimal(18, 7)
   assetCode         String    @default("XLM")
   assetIssuer       String?
   description       String?
@@ -148,7 +148,7 @@ model Recurrence {
   userId      String
   name        String
   frequency   Frequency
-  amount      Float
+  amount      Decimal       @db.Decimal(18, 7)
   assetCode   String        @default("XLM")
   assetIssuer String?
   destAddress String
@@ -176,7 +176,7 @@ enum Frequency {
 model PaymentRequest {
   id            String   @id @default(cuid())
   userId        String
-  amount        Float
+  amount        Decimal  @db.Decimal(18, 7)
   assetCode     String   @default("XLM")
   assetIssuer   String?
   description   String?
@@ -215,7 +215,7 @@ model Refund {
   id          String       @id @default(cuid())
   userId      String
   paymentId   String
-  amount      Float
+  amount      Decimal      @db.Decimal(18, 7)
   asset       String       @default("native")
   reason      String
   reasonCode  Int          @default(0)
