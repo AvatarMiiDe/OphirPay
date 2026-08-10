@@ -2,6 +2,7 @@
 
 import { successResponse, handleApiError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/timelock — list pending timelocked actions from the Soroban contract.
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
       const result = await simulateContractCall(
         DEFAULT_CONTRACT_ID,
         "get_timelocked_action",
-        CHAIN_READ_SOURCE
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(actionId, { type: "u64" })]
       );
 
       if (result.status === "SIMULATION_FAILED") {

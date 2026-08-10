@@ -2,10 +2,11 @@
 
 import { successResponse, handleApiError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
- * GET /api/rbac — list role assignments from the Soroban contract.
- * Reads from OphirPayContract.get_role() for a specific address.
+ * GET /api/rbac — look up role assignments from the Soroban contract.
+ * Reads from OphirPayContract.get_role(addr) for a specific address.
  * Use query param `addr` to look up a specific address's role.
  */
 export async function GET(request: Request) {
@@ -29,11 +30,12 @@ export async function GET(request: Request) {
     const result = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
       "get_role",
-      CHAIN_READ_SOURCE
+      CHAIN_READ_SOURCE,
+      [nativeToScVal(addr, { type: "address" })]
     );
 
     if (result.status === "SIMULATION_FAILED") {
-      return successResponse({ available: false });
+      return successResponse({ available: false, address: addr });
     }
 
     return successResponse({ address: addr, role: result.returnValue });
