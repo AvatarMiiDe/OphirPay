@@ -17,7 +17,7 @@ async function main() {
   });
 
   // Create sample payment records
-  const payments = [
+  const paymentSeeds = [
     { amount: 500, description: "Monthly subscription payment", status: "COMPLETED" as const },
     { amount: 250, description: "Freelance invoice #42", status: "COMPLETED" as const },
     { amount: 1500, description: "Vendor payment — cloud hosting", status: "COMPLETED" as const },
@@ -25,8 +25,9 @@ async function main() {
     { amount: 75, description: "Coffee fund contribution", status: "FAILED" as const },
   ];
 
-  for (const p of payments) {
-    await prisma.payment.create({
+  const createdPayments: { id: string; amount: number }[] = [];
+  for (const p of paymentSeeds) {
+    const payment = await prisma.payment.create({
       data: {
         amount: p.amount,
         assetCode: "XLM",
@@ -36,6 +37,7 @@ async function main() {
         transactionHash: "seed-tx-hash",
       },
     });
+    createdPayments.push({ id: payment.id, amount: payment.amount });
   }
 
   // Create a sample batch
@@ -48,25 +50,27 @@ async function main() {
     },
   });
 
-  // Create sample refunds
+  // Create sample refunds (using actual CUIDs from created payments)
   const refunds = [
-    { paymentId: 1, amount: 500, reason: "Product arrived defective", reasonCode: 0, status: "Processed" as const },
-    { paymentId: 2, amount: 250, reason: "Never received the service", reasonCode: 1, status: "Approved" as const },
-    { paymentId: 3, amount: 1500, reason: "Charged twice by mistake", reasonCode: 2, status: "Requested" as const },
-    { paymentId: 4, amount: 100, reason: "Unauthorized transaction", reasonCode: 3, status: "Rejected" as const },
+    { idx: 0, reason: "Product arrived defective", reasonCode: 0, status: "PROCESSED" as const },
+    { idx: 1, reason: "Never received the service", reasonCode: 1, status: "APPROVED" as const },
+    { idx: 2, reason: "Charged twice by mistake", reasonCode: 2, status: "REQUESTED" as const },
+    { idx: 3, reason: "Unauthorized transaction", reasonCode: 3, status: "REJECTED" as const },
   ];
 
   for (const r of refunds) {
+    const payment = createdPayments[r.idx];
+    if (!payment) continue;
     await prisma.refund.create({
       data: {
         userId: user.id,
-        paymentId: r.paymentId,
-        amount: BigInt(r.amount),
+        paymentId: payment.id,
+        amount: payment.amount,
         reason: r.reason,
         reasonCode: r.reasonCode,
         status: r.status,
         asset: "native",
-        resolvedAt: r.status === "Processed" || r.status === "Rejected" ? new Date() : null,
+        resolvedAt: r.status === "PROCESSED" || r.status === "REJECTED" ? new Date() : null,
       },
     });
   }
@@ -89,7 +93,7 @@ async function main() {
     });
   }
 
-  console.log(`Seeded: 1 user, ${payments.length} payments, 1 batch, ${refunds.length} refunds, ${hooks.length} hooks`);
+  console.log(`Seeded: 1 user, ${createdPayments.length} payments, 1 batch, ${refunds.length} refunds, ${hooks.length} hooks`);
 }
 
 main()

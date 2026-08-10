@@ -22,10 +22,11 @@ generator client {
 // }
 
 // ── PostgreSQL (production) ────────────────────────────────
+// For connection pooling (Supabase, Neon, PgBouncer), add:
+//   directUrl = env("DIRECT_DATABASE_URL")
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")
   relationMode = "prisma"
 }
 
@@ -106,6 +107,7 @@ model Payment {
   destAccount       Account?  @relation("PaymentDestinationAccount", fields: [destAccountId], references: [id])
   batch             Batch?    @relation(fields: [batchId], references: [id])
   recurrence        Recurrence? @relation(fields: [recurrenceId], references: [id])
+  refunds           Refund[]
 }
 
 enum PaymentStatus {
@@ -210,23 +212,32 @@ model Webhook {
 // ── Refunds ───────────────────────────────────────────────────
 
 model Refund {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   userId      String
-  paymentId   Int
-  amount      BigInt
-  asset       String   @default("native")
+  paymentId   String
+  amount      Float
+  asset       String       @default("native")
   reason      String
-  reasonCode  Int      @default(0)
-  status      String   @default("Requested") // Requested | Approved | Rejected | Processed
-  requestedAt DateTime @default(now())
+  reasonCode  Int          @default(0)
+  status      RefundStatus @default(REQUESTED)
+  requestedAt DateTime     @default(now())
   resolvedAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  payment     Payment?     @relation(fields: [paymentId], references: [id])
 
   @@index([userId])
   @@index([status])
+  @@index([paymentId])
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PROCESSED
 }
 
 // ── Notification Hooks ────────────────────────────────────────
