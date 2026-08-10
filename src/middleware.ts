@@ -5,10 +5,16 @@ import type { NextRequest } from "next/server";
 import { InMemoryRateLimitStore } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 120; // requests per window per IP
+// Configurable via RATE_LIMIT_RPM env (defaults to 120 requests/min/IP)
+const RATE_LIMIT_MAX = Math.max(
+  1,
+  parseInt(process.env.RATE_LIMIT_RPM || "120", 10) || 120
+);
 
 // Single shared in-memory rate limit store (Edge Runtime safe)
-// Uses the same InMemoryRateLimitStore as src/lib/rate-limit.ts
+// NOTE: per-instance by design. For multi-instance production rate
+// limiting, terminate TLS at a load balancer / gateway that enforces
+// limits, or route through a Redis-backed limiter at the platform layer.
 const rateLimitStore = new InMemoryRateLimitStore();
 
 function getClientIp(request: NextRequest): string {
@@ -26,14 +32,6 @@ function generateRequestId(): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = generateRequestId();
-
-  // Non-API routes: set identification headers only
-  if (!pathname.startsWith("/api/")) {
-    const response = NextResponse.next();
-    response.headers.set("X-Request-Id", requestId);
-    response.headers.set("X-Api-Version", "1.0.0");
-    return response;
-  }
 
   // Skip rate limiting for health checks and metrics (monitoring endpoints
   // are hit frequently by orchestrators and should never be throttled)
@@ -88,7 +86,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set("Access-Control-Allow-Origin", origin || "*");
   }
   response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
 
   return response;
 }
