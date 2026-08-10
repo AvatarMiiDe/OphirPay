@@ -376,7 +376,7 @@ test.describe("API Versioning", () => {
     const res = await request.get(`${BASE_URL}/api/health`);
     // Check for X-API-Version or similar versioning header
     const headers = res.headers();
-    const hasVersion =
+    const _hasVersion =
       "x-api-version" in headers ||
       "api-version" in headers;
     // Not required yet, but validate response is well-formed

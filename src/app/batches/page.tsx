@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatAmount, timeAgo, getStatusColor } from "@/lib/utils";
+import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import type { Batch } from "@/types";

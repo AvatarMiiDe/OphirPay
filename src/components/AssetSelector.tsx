@@ -8,7 +8,6 @@ import {
   XLM_ASSET,
   USDC_TESTNET,
   USDC_MAINNET,
-  getAssetInfo,
   type AssetInfo,
 } from "@/lib/assets";
 import { fetchAllBalances, type AssetBalance } from "@/lib/stellar";

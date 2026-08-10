@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
-import { setFeeConfig, setFeeCollector, getFeeConfig, getFeeCollector } from "@/lib/contract-advanced";
+import { setFeeConfig, setFeeCollector } from "@/lib/contract-advanced";
 
 interface FeeConfigData {
   payment_fee_bps: number;
@@ -40,7 +40,7 @@ export default function FeeConfigPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [cfgRes, colRes] = await Promise.all([
+      const [cfgRes, _colRes] = await Promise.all([
         fetch("/api/fee-config"),
         fetch("/api/fee-config?collector=1"),
       ]);

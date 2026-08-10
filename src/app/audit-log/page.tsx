@@ -94,7 +94,7 @@ export default function AuditLogPage() {
 
   const toggleLive = () => {
     if (!liveMode) {
-      const es = connectSSE();
+      connectSSE(); // stored in sseRef internally
       setLiveMode(true);
     } else {
       sseRef.current?.close();
