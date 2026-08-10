@@ -17,13 +17,19 @@
 import prisma from "@/lib/prisma";
 import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";
-import { simulateContractCall } from "@/lib/contracts";
+import { simulateContractCall, CHAIN_READ_SOURCE } from "@/lib/contracts";
 
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID ||
-  "CBRCZHMNWOFTWOTCI2WBQ5A5HVKVLO2AXHYIWJ5FVYB45OHLSLWGJGYB";
+const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID;
+if (!CONTRACT_ID) {
+  throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your environment.");
+}
 
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
-const HOOK_SECRET = process.env.HOOK_SECRET || "ophirpay-dev-secret";
+
+const HOOK_SECRET = process.env.HOOK_SECRET;
+if (!HOOK_SECRET) {
+  throw new Error("HOOK_SECRET is required for webhook HMAC signing. Set it in your environment.");
+}
 
 interface QueuedEvent {
   event: string;
@@ -47,7 +53,7 @@ async function pollSorobanAuditLog(
     const countResult = await simulateContractCall(
       CONTRACT_ID,
       "get_audit_log_count",
-      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // burn address for read-only sim
+      CHAIN_READ_SOURCE,
     );
 
     const totalEntries = countResult.returnValue ? parseInt(String(countResult.returnValue)) : 0;
@@ -62,8 +68,7 @@ async function pollSorobanAuditLog(
     const rangeResult = await simulateContractCall(
       CONTRACT_ID,
       "get_audit_log_range",
-      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      // Note: range params are scv-converted; actual Soroban call needs proper args
+      CHAIN_READ_SOURCE,
     );
 
     // Map audit actions to webhook event types
