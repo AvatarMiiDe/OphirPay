@@ -59,6 +59,7 @@ impl PaymentEventEmitter {
 
     /// Record an external payment event.
     /// Caller must authorize — typically the main OphirPay contract via cross-contract call.
+    /// Returns the new event ID on success, or an EmitterError on failure.
     pub fn emit_payment(
         env: Env,
         caller: Address,
@@ -67,13 +68,14 @@ impl PaymentEventEmitter {
         payee: Address,
         amount: i128,
         tx_hash: String,
-    ) -> u64 {
+    ) -> Result<u64, EmitterError> {
         caller.require_auth();
 
-        // Respect pause state — reject emits while paused
+        // Reject emits while paused — return EmitterError so cross-contract
+        // callers receive a proper error instead of panicking the whole TX.
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
-            panic!("Emitter is paused");
+            return Err(EmitterError::ContractPaused);
         }
 
         let mut count: u64 = env.storage().instance().get(&EVENT_COUNT).unwrap_or(0);
@@ -105,7 +107,7 @@ impl PaymentEventEmitter {
             (amount, tx_hash),
         );
 
-        count
+        Ok(count)
     }
 
     /// Get event by ID
@@ -324,14 +326,16 @@ mod tests {
 
         let _ = client.init(&owner);
 
-        let id = client.emit_payment(
-            &owner,
-            &String::from_str(&env, "OphirPay"),
-            &payer,
-            &payee,
-            &2500i128,
-            &String::from_str(&env, "abc123def456"),
-        );
+        let id = client
+            .emit_payment(
+                &owner,
+                &String::from_str(&env, "OphirPay"),
+                &payer,
+                &payee,
+                &2500i128,
+                &String::from_str(&env, "abc123def456"),
+            )
+            .unwrap();
         assert_eq!(id, 1);
         assert_eq!(client.get_event_count(), 1);
 
@@ -357,7 +361,7 @@ mod tests {
         let _ = client.init(&owner);
 
         for i in 0..5 {
-            client.emit_payment(
+            let _ = client.emit_payment(
                 &owner,
                 &String::from_str(&env, "test"),
                 &p1,
