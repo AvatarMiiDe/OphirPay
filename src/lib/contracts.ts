@@ -11,18 +11,42 @@ import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
-// Hardcoded Stellar Testnet contract IDs — always available as fallback.
-// These are public identifiers, NOT secrets. Override via env vars for mainnet.
-const TESTNET_OPHIRPAY = "CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA";
-const TESTNET_EMITTER = "CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX";
-const TESTNET_READ_SOURCE = "GACNKEDGJYLLVQDXWYEEPB47Y3JEV5JNZ3RQANTJIVKKEOXX4NC4YWHU";
+// Contract IDs MUST be set via environment variables.
+// There are NO hardcoded fallbacks — if env vars are missing the
+// app will refuse to start rather than silently route mainnet
+// traffic to testnet contracts.
+//
+// For local development, set these in .env.local:
+//   NEXT_PUBLIC_CONTRACT_ID=CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA
+//   NEXT_PUBLIC_EMITTER_CONTRACT_ID=CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX
+
+export function getContractId(): string {
+  const id = process.env.NEXT_PUBLIC_CONTRACT_ID;
+  if (!id) {
+    throw new Error(
+      "NEXT_PUBLIC_CONTRACT_ID is required. Set it in your .env.local file."
+    );
+  }
+  return id;
+}
+
+export function getEmitterContractId(): string {
+  const id = process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID;
+  if (!id) {
+    throw new Error(
+      "NEXT_PUBLIC_EMITTER_CONTRACT_ID is required. Set it in your .env.local file."
+    );
+  }
+  return id;
+}
 
 export const OPHIRPAY_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_CONTRACT_ID || TESTNET_OPHIRPAY;
+  process.env.NEXT_PUBLIC_CONTRACT_ID || "";
 export const EMITTER_CONTRACT_ID =
-  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || TESTNET_EMITTER;
+  process.env.NEXT_PUBLIC_EMITTER_CONTRACT_ID || "";
 export const CHAIN_READ_SOURCE =
-  process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE || TESTNET_READ_SOURCE;
+  process.env.NEXT_PUBLIC_CHAIN_READ_SOURCE ||
+  "GACNKEDGJYLLVQDXWYEEPB47Y3JEV5JNZ3RQANTJIVKKEOXX4NC4YWHU";
 
 // Legacy alias
 export const DEFAULT_CONTRACT_ID = OPHIRPAY_CONTRACT_ID;
