@@ -19,17 +19,17 @@ export async function bootstrap(): Promise<void> {
       nodeEnv: env.NODE_ENV,
       database: env.DATABASE_PROVIDER,
       stellarNetwork: env.NEXT_PUBLIC_STELLAR_NETWORK,
+      contractId: env.NEXT_PUBLIC_CONTRACT_ID,
+      emitterContractId: env.NEXT_PUBLIC_EMITTER_CONTRACT_ID,
       redis: env.REDIS_URL ? "configured" : "not configured",
     });
   } catch (error) {
-    logger.error("Environment validation failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    if (process.env.NODE_ENV === "production") {
-      throw error;
-    }
-    logger.warn(
-      "Running with invalid env configuration in development mode — some features may not work"
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error("Environment validation failed", { error: message });
+    // In production, fail fast — do not start with invalid configuration.
+    // In development, throw as well since contract IDs are now required.
+    throw new Error(
+      `Fatal: environment validation failed. Check your .env.local file.\n${message}`
     );
   }
 
