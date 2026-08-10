@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { logger } from "@/lib/logger";
-import { getDatabaseProvider } from "@/lib/env";
+import { validateEnv, getDatabaseProvider } from "@/lib/env";
 import { initRateLimitStore } from "@/lib/rate-limit";
 
 /**
@@ -11,41 +11,36 @@ import { initRateLimitStore } from "@/lib/rate-limit";
 export async function bootstrap(): Promise<void> {
   const start = Date.now();
 
-  const dbProvider = getDatabaseProvider();
-
-  logger.info("OphirPay starting up", {
-    version: "0.1.0",
-    nodeEnv: process.env.NODE_ENV,
-    database: dbProvider,
-    redis: process.env.REDIS_URL ? "configured" : "not configured",
-  });
+  // Validate environment variables with Zod schema (fails fast with clear messages)
+  try {
+    const env = validateEnv();
+    logger.info("OphirPay starting up", {
+      version: "0.1.0",
+      nodeEnv: env.NODE_ENV,
+      database: env.DATABASE_PROVIDER,
+      stellarNetwork: env.NEXT_PUBLIC_STELLAR_NETWORK,
+      redis: env.REDIS_URL ? "configured" : "not configured",
+    });
+  } catch (error) {
+    logger.error("Environment validation failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (process.env.NODE_ENV === "production") {
+      throw error;
+    }
+    logger.warn(
+      "Running with invalid env configuration in development mode — some features may not work"
+    );
+  }
 
   // Initialise rate-limit store (Redis if available, else in-memory)
   await initRateLimitStore();
 
-  // Validate required environment variables
-  const required = [
-    "DATABASE_URL",
-    "NEXT_PUBLIC_CONTRACT_ID",
-    "NEXT_PUBLIC_EMITTER_CONTRACT_ID",
-  ];
-
   // PostgreSQL requires DIRECT_DATABASE_URL for migrations when pooling
+  const dbProvider = getDatabaseProvider();
   if (dbProvider === "postgresql" && !process.env.DIRECT_DATABASE_URL) {
     logger.warn(
       "DIRECT_DATABASE_URL not set — connection pooling (e.g. Supabase/Neon) may need this for migrations"
-    );
-  }
-
-  const missing = required.filter((key) => !process.env[key]);
-
-  if (missing.length > 0) {
-    logger.error("Missing required environment variables", { missing });
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(`Missing env vars: ${missing.join(", ")}`);
-    }
-    logger.warn(
-      "Running with missing env vars in development mode — some features may not work"
     );
   }
 
