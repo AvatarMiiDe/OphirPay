@@ -19,17 +19,25 @@ import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";
 import { simulateContractCall, CHAIN_READ_SOURCE } from "@/lib/contracts";
 
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID;
-if (!CONTRACT_ID) {
-  throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your environment.");
-}
+const READ_SOURCE = CHAIN_READ_SOURCE || "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+const CONTRACT_ID: string = (() => {
+  const id = process.env.NEXT_PUBLIC_CONTRACT_ID;
+  if (!id) {
+    throw new Error("NEXT_PUBLIC_CONTRACT_ID is required. Set it in your environment.");
+  }
+  return id;
+})();
 
 const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || "30000", 10);
 
-const HOOK_SECRET = process.env.HOOK_SECRET;
-if (!HOOK_SECRET) {
-  throw new Error("HOOK_SECRET is required for webhook HMAC signing. Set it in your environment.");
-}
+const HOOK_SECRET: string = (() => {
+  const secret = process.env.HOOK_SECRET;
+  if (!secret) {
+    throw new Error("HOOK_SECRET is required for webhook HMAC signing. Set it in your environment.");
+  }
+  return secret;
+})();
 
 interface QueuedEvent {
   event: string;
@@ -53,7 +61,7 @@ async function pollSorobanAuditLog(
     const countResult = await simulateContractCall(
       CONTRACT_ID,
       "get_audit_log_count",
-      CHAIN_READ_SOURCE,
+      READ_SOURCE,
     );
 
     const totalEntries = countResult.returnValue ? parseInt(String(countResult.returnValue)) : 0;
@@ -68,7 +76,7 @@ async function pollSorobanAuditLog(
     const rangeResult = await simulateContractCall(
       CONTRACT_ID,
       "get_audit_log_range",
-      CHAIN_READ_SOURCE,
+      READ_SOURCE,
     );
 
     // Map audit actions to webhook event types

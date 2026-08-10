@@ -115,6 +115,16 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
 
         const { publicKey, network } = await connector.connect();
 
+        // Warn if wallet network doesn't match configured network
+        const configuredNetwork = process.env.NEXT_PUBLIC_STELLAR_NETWORK || "TESTNET";
+        const walletNet = network.toUpperCase();
+        if (walletNet !== configuredNetwork) {
+          console.warn(
+            `[OphirPay] Wallet network (${walletNet}) doesn't match app config (${configuredNetwork}). ` +
+            `Switch your wallet to ${configuredNetwork} to use OphirPay.`
+          );
+        }
+
         setWallet({
           connected: true,
           publicKey,
