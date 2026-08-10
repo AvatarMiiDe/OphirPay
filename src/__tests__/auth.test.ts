@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, it, expect } from "vitest";
-import { hashApiKey, extractApiKey } from "@/lib/api-auth";
+import crypto from "crypto";
+import {
+  hashApiKey,
+  extractApiKey,
+  deriveKeyPrefix,
+  API_KEY_PREFIX_LENGTH,
+} from "@/lib/api-auth";
 import { InMemoryRateLimitStore } from "@/lib/rate-limit";
 import { timingSafeEqual } from "@/lib/crypto";
 import { searchRecords, rankSearchResults } from "@/lib/search-index";
@@ -26,6 +32,31 @@ describe("hashApiKey", () => {
   it("handles empty string", () => {
     const hash = hashApiKey("");
     expect(hash).toHaveLength(64);
+  });
+});
+
+// ─── deriveKeyPrefix ────────────────────────────────────────────
+
+describe("deriveKeyPrefix", () => {
+  it("returns exactly API_KEY_PREFIX_LENGTH characters", () => {
+    const key = `oph_${crypto.randomBytes(24).toString("hex")}`;
+    expect(deriveKeyPrefix(key)).toHaveLength(API_KEY_PREFIX_LENGTH);
+    expect(deriveKeyPrefix(key)).toBe(key.slice(0, 8));
+  });
+
+  it("is deterministic for the same key", () => {
+    const key = "oph_abcdef123456";
+    expect(deriveKeyPrefix(key)).toBe(deriveKeyPrefix(key));
+  });
+
+  it("matches the prefix stored at key creation (8 chars)", () => {
+    // Regression: key creation used slice(0, 11) while lookup used slice(0, 8),
+    // so findFirst({ keyHash, prefix }) never matched and ALL API auth failed.
+    const rawKey = `oph_${crypto.randomBytes(24).toString("hex")}`;
+    const createdPrefix = deriveKeyPrefix(rawKey); // as stored by POST /api/keys
+    const lookupPrefix = deriveKeyPrefix(rawKey); // as derived by authenticateRequest
+    expect(createdPrefix).toBe(lookupPrefix);
+    expect(createdPrefix).toHaveLength(API_KEY_PREFIX_LENGTH);
   });
 });
 

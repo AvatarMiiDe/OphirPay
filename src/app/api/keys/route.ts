@@ -4,7 +4,7 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { successResponse, badRequestError, handleApiError } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
-import { withApiAuth } from "@/lib/api-auth";
+import { withApiAuth, deriveKeyPrefix } from "@/lib/api-auth";
 
 /**
  * GET /api/keys — list API keys (without exposing hashes)
@@ -35,7 +35,7 @@ const _POST = async (request: Request) => {
 
     const rawKey = `oph_${crypto.randomBytes(24).toString("hex")}`;
     const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
-    const prefix = rawKey.slice(0, 11);
+    const prefix = deriveKeyPrefix(rawKey);
 
     const apiKey = await prisma.apiKey.create({
       data: { name, keyHash, prefix, userId },

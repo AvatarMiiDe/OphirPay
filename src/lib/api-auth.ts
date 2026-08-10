@@ -18,6 +18,18 @@ import { NextResponse } from "next/server";
 
 // ── Hashing ────────────────────────────────────────────────────
 
+/**
+ * Length of the API key prefix used for indexed lookups + display.
+ * MUST be identical in key creation (src/app/api/keys/route.ts) and
+ * lookup here — a mismatch silently breaks every authenticated request.
+ */
+export const API_KEY_PREFIX_LENGTH = 8;
+
+/** Derive the stable lookup prefix for a raw API key. */
+export function deriveKeyPrefix(rawKey: string): string {
+  return rawKey.slice(0, API_KEY_PREFIX_LENGTH);
+}
+
 /** Hash a raw API key using SHA-256 (sync, Node crypto). */
 export function hashApiKey(rawKey: string): string {
   return crypto.createHash("sha256").update(rawKey).digest("hex");
@@ -60,7 +72,7 @@ export async function authenticateRequest(
   if (!rawKey) return null;
 
   const keyHash = hashApiKey(rawKey);
-  const prefix = rawKey.slice(0, 8);
+  const prefix = deriveKeyPrefix(rawKey);
 
   try {
     const apiKey = await prisma.apiKey.findFirst({
