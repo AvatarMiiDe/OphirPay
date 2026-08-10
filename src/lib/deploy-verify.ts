@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { Contract } from "@stellar/stellar-sdk";
-import { getSorobanServer } from "@/lib/stellar";
+import { Contract, TransactionBuilder } from "@stellar/stellar-sdk";
+import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 import { logger } from "@/lib/logger";
 
 interface DeployVerification {
@@ -29,12 +29,9 @@ export async function verifyContractDeployment(
     const account = await server.getAccount(sourcePublicKey);
 
     // Try calling get_owner or get_payment_count
-    const tx = new (await import("@stellar/stellar-sdk")).TransactionBuilder(account, {
+    const tx = new TransactionBuilder(account, {
       fee: "100000",
-      networkPassphrase:
-        network === "TESTNET"
-          ? "Test SDF Network ; September 2015"
-          : "Public Global Stellar Network ; September 2015",
+      networkPassphrase: NETWORK_PASSPHRASE,
       timebounds: { minTime: 0, maxTime: 0 },
     })
       .addOperation(contract.call("get_payment_count"))
