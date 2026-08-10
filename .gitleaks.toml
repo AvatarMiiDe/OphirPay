@@ -28,7 +28,6 @@ title = "OphirPay Gitleaks Config"
   paths = [
     '''src/lib/contracts.ts''',
     '''README.md''',
-    '''.env.testnet''',
     '''contracts/ophirpay/test_snapshots/''',
     '''contracts/emitter/test_snapshots/''',
     '''prisma/seed.ts''',
