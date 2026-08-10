@@ -2,9 +2,6 @@ import type { NextConfig } from "next";
 
 const cspHeader = [
   "default-src 'self'",
-  // Next.js requires 'unsafe-inline' for styles (Tailwind) and scripts (chunks)
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  // Stellar SDK uses WebAssembly and eval for XDR parsing
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   // Horizon + Soroban RPC + Stellar Expert
