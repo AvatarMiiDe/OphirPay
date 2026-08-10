@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse, badRequestError, handleApiError } from "@/lib/api-response";
+import { voteOnProposal } from "@/lib/contract-advanced";
 
 /**
  * POST /api/governance/vote — cast a vote on a proposal
@@ -9,8 +10,27 @@ import { successResponse, handleApiError } from "@/lib/api-response";
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    // TODO: Call contract.vote_on_proposal(voter, proposal_id, support, weight)
-    return successResponse({ voted: true, ...body, source: "contract_stub" });
+    const { voter, proposalId, support, weight } = body;
+
+    if (!voter || !proposalId) {
+      return badRequestError("voter and proposalId are required");
+    }
+
+    const result = await voteOnProposal(
+      voter,
+      proposalId,
+      support ?? true,
+      weight ?? 1
+    );
+
+    if (!result.success) {
+      return Response.json(
+        { success: false, error: { code: "CONTRACT_ERROR", message: result.error } },
+        { status: 400 }
+      );
+    }
+
+    return successResponse({ voted: true, proposalId, txHash: result.txHash });
   } catch (err) {
     return handleApiError(err, "POST /api/governance/vote");
   }

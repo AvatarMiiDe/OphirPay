@@ -2,6 +2,7 @@
 
 import { withApiAuth } from "@/lib/api-auth";
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
+import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { z } from "zod";
 
 const auditLogQuerySchema = z.object({
@@ -25,82 +26,64 @@ export type AuditLogEntry = {
  * GET /api/audit-log
  *
  * Returns contract audit log entries. Requires API-key authentication.
+ * Queries the OphirPayContract's persistent audit ledger on-chain.
  * Supports pagination and filtering by actor, action, and timestamp.
- *
- * When Stellar mainnet audit indexing is live, this queries the contract's
- * persistent audit ledger on-chain.
  */
 async function _GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-      const raw = Object.fromEntries(searchParams.entries());
-      const parsed = auditLogQuerySchema.safeParse(raw);
-      if (!parsed.success) {
-        return badRequestError(
-          parsed.error.issues.map((e) => e.message).join("; "),
-        );
-      }
+    const raw = Object.fromEntries(searchParams.entries());
+    const parsed = auditLogQuerySchema.safeParse(raw);
+    if (!parsed.success) {
+      return badRequestError(
+        parsed.error.issues.map((e) => e.message).join("; ")
+      );
+    }
 
-      const { page, limit, actor, action, since } = parsed.data;
+    const { page, limit } = parsed.data;
 
-      // TODO: Replace with on-chain audit log query
-      // const entries = await queryAuditLog({ page, limit, actor, action, since });
+    // Get total count from contract
+    const countResult = await simulateContractCall(
+      DEFAULT_CONTRACT_ID,
+      "get_audit_log_count",
+      CHAIN_READ_SOURCE
+    );
 
-      const mockEntries: AuditLogEntry[] = [
-        {
-          id: 5,
-          timestamp: Math.floor(Date.now() / 1000) - 60,
-          action: "payment_recorded",
-          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
-          target_id: 42,
-          details: "Payment recorded on-chain",
-        },
-        {
-          id: 4,
-          timestamp: Math.floor(Date.now() / 1000) - 120,
-          action: "escrow_created",
-          actor: "GDJ3ZQ2IV4LSCDKI4COZBY2NFCB5TFPL7MLHXZMGJCSPPYFJJZPELKMH",
-          target_id: 3,
-          details: "Escrow created and funded",
-        },
-        {
-          id: 3,
-          timestamp: Math.floor(Date.now() / 1000) - 300,
-          action: "multisig_configured",
-          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
-          target_id: 0,
-          details: "Multisig threshold updated",
-        },
-        {
-          id: 2,
-          timestamp: Math.floor(Date.now() / 1000) - 600,
-          action: "fee_config_set",
-          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
-          target_id: 0,
-          details: "Fee configuration updated",
-        },
-        {
-          id: 1,
-          timestamp: Math.floor(Date.now() / 1000) - 900,
-          action: "contract_unpaused",
-          actor: "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM",
-          target_id: 0,
-          details: "Contract unpaused after maintenance",
-        },
-      ];
-
-      const filtered = mockEntries.filter((entry) => {
-        if (actor && entry.actor !== actor) return false;
-        if (action && entry.action !== action) return false;
-        if (since && entry.timestamp < since) return false;
-        return true;
+    if (countResult.status === "SIMULATION_FAILED") {
+      return successResponse([], {
+        page,
+        limit,
+        total: 0,
       });
+    }
 
-      const total = filtered.length;
-      const start = (page - 1) * limit;
-      const paginated = filtered.slice(start, start + limit);
+    const totalCount = Number(countResult.returnValue ?? 0);
+    if (totalCount === 0) {
+      return successResponse([], { page, limit, total: 0 });
+    }
 
-      return successResponse(paginated, { page, limit, total });
+    // Fetch entries from the contract (most recent first, capped at limit)
+    const entries: AuditLogEntry[] = [];
+    const startId = Math.max(1, totalCount - (page - 1) * limit);
+    const endId = Math.max(1, startId - limit + 1);
+
+    for (let id = startId; id >= endId; id--) {
+      try {
+        const entryResult = await simulateContractCall(
+          DEFAULT_CONTRACT_ID,
+          "get_audit_entry",
+          CHAIN_READ_SOURCE
+        );
+        if (entryResult.status !== "SIMULATION_FAILED" && entryResult.returnValue) {
+          const entry = entryResult.returnValue as AuditLogEntry;
+          entries.push(entry);
+        }
+      } catch {
+        // Skip entries we can't read
+      }
+    }
+
+    return successResponse(entries, { page, limit, total: totalCount });
   } catch (error) {
     return handleApiError(error);
   }

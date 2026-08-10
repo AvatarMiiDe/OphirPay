@@ -1,23 +1,34 @@
 // SPDX-License-Identifier: MIT
 
 import { successResponse, handleApiError } from "@/lib/api-response";
-import prisma from "@/lib/prisma";
+import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { setMultisigConfig } from "@/lib/contract-advanced";
 
 /**
  * GET /api/multisig — current multisig configuration
- *
  * Reads from the Soroban contract via OphirPayContract.get_multisig_config().
- * Falls back to a sensible default (disabled) when the contract is unreachable.
  */
 export async function GET() {
   try {
-    // TODO: Replace with contract call: contract.get_multisig_config()
-    // For now, return a safe default — multisig disabled until configured on-chain.
-    return successResponse({
+    const result = await simulateContractCall(
+      DEFAULT_CONTRACT_ID,
+      "get_multisig_config",
+      CHAIN_READ_SOURCE
+    );
+
+    if (result.status === "SIMULATION_FAILED") {
+      return successResponse({
+        threshold: 0,
+        signers: [] as string[],
+        enabled: false,
+        source: "contract_unavailable",
+      });
+    }
+
+    return successResponse(result.returnValue ?? {
       threshold: 0,
-      signers: [] as string[],
+      signers: [],
       enabled: false,
-      source: "contract_stub",
     });
   } catch (err) {
     return handleApiError(err, "GET /api/multisig");
@@ -30,13 +41,30 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    // TODO: Call contract.set_multisig_config(caller, threshold, signers, enabled)
-    return successResponse({
-      threshold: body.threshold ?? 2,
-      signers: body.signers ?? [],
-      enabled: body.enabled ?? false,
-      source: "contract_stub",
-    }, undefined, 201);
+    const { caller, threshold, signers, enabled } = body;
+
+    if (!caller) {
+      return Response.json(
+        { success: false, error: { code: "BAD_REQUEST", message: "caller (public key) is required" } },
+        { status: 400 }
+      );
+    }
+
+    const result = await setMultisigConfig(
+      caller,
+      threshold ?? 2,
+      signers ?? [],
+      enabled ?? false
+    );
+
+    if (!result.success) {
+      return Response.json(
+        { success: false, error: { code: "CONTRACT_ERROR", message: result.error } },
+        { status: 400 }
+      );
+    }
+
+    return successResponse({ txHash: result.txHash, ...body }, undefined, 200);
   } catch (err) {
     return handleApiError(err, "POST /api/multisig");
   }

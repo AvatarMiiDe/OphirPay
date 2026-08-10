@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { successResponse, badRequestError, handleApiError } from "@/lib/api-response";
+import { proposeMultisigPayment } from "@/lib/contract-advanced";
 
 /**
  * POST /api/multisig/propose — propose a payment for multisig approval
@@ -9,10 +10,28 @@ import { successResponse, badRequestError, handleApiError } from "@/lib/api-resp
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    if (!body.payee || !body.amount) return badRequestError("payee and amount are required");
+    const { caller, payee, amount, asset, txHash } = body;
 
-    // TODO: Call contract.propose_payment(proposer, payee, amount, asset, tx_hash)
-    return successResponse({ id: Date.now(), ...body, source: "contract_stub" }, undefined, 201);
+    if (!caller || !payee || !amount) {
+      return badRequestError("caller, payee, and amount are required");
+    }
+
+    const result = await proposeMultisigPayment(
+      caller,
+      payee,
+      amount,
+      asset ?? "native",
+      txHash ?? `multisig_${Date.now().toString(36)}`
+    );
+
+    if (!result.success) {
+      return Response.json(
+        { success: false, error: { code: "CONTRACT_ERROR", message: result.error } },
+        { status: 400 }
+      );
+    }
+
+    return successResponse({ txHash: result.txHash, proposalId: result.data }, undefined, 201);
   } catch (err) {
     return handleApiError(err, "POST /api/multisig/propose");
   }

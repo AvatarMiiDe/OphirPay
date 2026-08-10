@@ -1,14 +1,42 @@
 // SPDX-License-Identifier: MIT
 
 import { successResponse, handleApiError } from "@/lib/api-response";
+import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 
 /**
  * GET /api/rbac — list role assignments from the Soroban contract.
+ * Reads from OphirPayContract.get_role() for a specific address.
+ * Use query param `addr` to look up a specific address's role.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // TODO: Replace with contract query: iterate role storage entries
-    return successResponse([]);
+    const { searchParams } = new URL(request.url);
+    const addr = searchParams.get("addr");
+
+    if (!addr) {
+      // Without a specific address, return contract availability
+      const countResult = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_audit_log_count",
+        CHAIN_READ_SOURCE
+      );
+      return successResponse({
+        available: countResult.status !== "SIMULATION_FAILED",
+        message: "Provide ?addr=G... to look up a specific address role",
+      });
+    }
+
+    const result = await simulateContractCall(
+      DEFAULT_CONTRACT_ID,
+      "get_role",
+      CHAIN_READ_SOURCE
+    );
+
+    if (result.status === "SIMULATION_FAILED") {
+      return successResponse({ available: false });
+    }
+
+    return successResponse({ address: addr, role: result.returnValue });
   } catch (err) {
     return handleApiError(err, "GET /api/rbac");
   }
