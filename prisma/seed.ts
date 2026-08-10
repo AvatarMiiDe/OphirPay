@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -25,7 +25,7 @@ async function main() {
     { amount: 75, description: "Coffee fund contribution", status: "FAILED" as const },
   ];
 
-  const createdPayments: { id: string; amount: number }[] = [];
+  const createdPayments: { id: string; amount: Prisma.Decimal }[] = [];
   for (const p of paymentSeeds) {
     const payment = await prisma.payment.create({
       data: {
