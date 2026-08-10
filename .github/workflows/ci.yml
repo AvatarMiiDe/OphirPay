@@ -185,6 +185,32 @@ jobs:
           echo "✅ All 19 pages healthy"
 
   # ══════════════════════════════════════════════════════════════
+  # 7b. E2E TESTS — Playwright against live Vercel deployment
+  # ══════════════════════════════════════════════════════════════
+  e2e-tests:
+    name: "7️⃣-bis Frontend — E2E (Playwright)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E tests against live Vercel
+        run: npx playwright test --project=chromium
+        env:
+          E2E_BASE_URL: https://ophirpay.vercel.app
+      - name: Upload E2E report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
   # 8. PRISMA VALIDATE — Schema integrity, generate, db push
   # ══════════════════════════════════════════════════════════════
   prisma-validate:
