@@ -66,6 +66,8 @@ model Account {
   user          User       @relation(fields: [userId], references: [id])
   paymentsFrom  Payment[]  @relation("PaymentSourceAccount")
   paymentsTo    Payment[]  @relation("PaymentDestinationAccount")
+
+  @@index([userId])
 }
 
 // ── Payments ───────────────────────────────────────────────────
@@ -111,6 +113,13 @@ model Payment {
   batch             Batch?    @relation(fields: [batchId], references: [id])
   recurrence        Recurrence? @relation(fields: [recurrenceId], references: [id])
   refunds           Refund[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([batchId])
+  @@index([recurrenceId])
+  @@index([sourceAccountId])
+  @@index([destAccountId])
 }
 
 enum PaymentStatus {
@@ -135,6 +144,9 @@ model Batch {
 
   user        User      @relation(fields: [userId], references: [id])
   payments    Payment[]
+
+  @@index([userId])
+  @@index([status])
 }
 
 enum BatchStatus {
@@ -165,6 +177,9 @@ model Recurrence {
 
   user        User          @relation(fields: [userId], references: [id])
   payments    Payment[]
+
+  @@index([userId])
+  @@index([nextRunAt])
 }
 
 enum Frequency {
@@ -192,6 +207,8 @@ model PaymentRequest {
   updatedAt     DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 enum RequestStatus {
@@ -214,6 +231,8 @@ model Webhook {
   updatedAt DateTime @updatedAt
 
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 // ── Refunds ───────────────────────────────────────────────────
@@ -277,4 +296,7 @@ model ApiKey {
   expiresAt DateTime?
 
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([prefix])
 }
