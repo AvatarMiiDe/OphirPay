@@ -113,11 +113,15 @@ export async function GET() {
       // Heartbeat every 15s to keep connection alive
       const heartbeat = setInterval(() => {
         if (closed) return;
-        controller.enqueue(
-          encoder.encode(
-            `event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`,
-          ),
-        );
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `event: heartbeat\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`,
+            ),
+          );
+        } catch {
+          closed = true;
+        }
       }, 15000);
 
       // Poll emitter contract every 10 seconds for new events

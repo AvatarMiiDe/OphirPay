@@ -95,8 +95,12 @@ export async function GET() {
         )
       );
 
+      let closed = false;
+      const encoder = new TextEncoder();
+
       // Poll contract every 15 seconds for new entries
       const pollInterval = setInterval(async () => {
+        if (closed) return;
         try {
           const { entries, newLastSeenId } = await pollContractForAuditEntries(
             lastSeenId,
@@ -105,11 +109,17 @@ export async function GET() {
           lastSeenId = newLastSeenId;
 
           for (const entry of entries) {
-            controller.enqueue(
-              new TextEncoder().encode(
-                `event: audit:entry\ndata: ${JSON.stringify(entry)}\n\n`
-              )
-            );
+            if (closed) break;
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  `event: audit:entry\ndata: ${JSON.stringify(entry)}\n\n`
+                )
+              );
+            } catch {
+              closed = true;
+              break;
+            }
           }
         } catch {
           // Poll failed silently — retry next interval
@@ -121,23 +131,35 @@ export async function GET() {
         const { entries, newLastSeenId } = await pollContractForAuditEntries(0, CHAIN_READ_SOURCE);
         lastSeenId = newLastSeenId;
         for (const entry of entries) {
+          if (closed) break;
           controller.enqueue(
-            new TextEncoder().encode(
+            encoder.encode(
               `event: audit:entry\ndata: ${JSON.stringify(entry)}\n\n`
             )
           );
         }
       } catch { /* silent */ }
 
-      // Cleanup on disconnect
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const signal = (controller as any).signal;
-      if (signal) {
-        signal.addEventListener("abort", () => {
-          clearInterval(pollInterval);
-          clients.delete(String(clientId));
-        });
-      }
+      // Cleanup on stream cancel / client disconnect
+      const cleanup = () => {
+        closed = true;
+        clearInterval(pollInterval);
+        clients.delete(String(clientId));
+      };
+
+      // Try to hook into the stream's cancel signal, but also use a
+      // safety timeout: if no explicit signal handler fires, stop
+      // polling after 10 minutes anyway to prevent orphaned intervals.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const signal = (controller as any).signal;
+        if (signal) {
+          signal.addEventListener("abort", cleanup);
+        }
+      } catch { /* signal not available in this runtime */ }
+
+      // Safety: auto-cleanup after 10 minutes even without explicit disconnect
+      setTimeout(cleanup, 10 * 60 * 1000);
     },
   });
 
