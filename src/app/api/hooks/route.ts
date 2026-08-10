@@ -1,14 +1,27 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { successResponse, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const eventType = searchParams.get("event_type");
-
   try {
-    const where = eventType ? { eventType, active: true } : {};
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const eventType = searchParams.get("event_type");
+
+    const where: Record<string, unknown> = { userId: auth.userId, active: true };
+    if (eventType) where.eventType = eventType;
 
     const hooks = await prisma.notificationHook.findMany({
       where,

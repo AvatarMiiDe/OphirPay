@@ -2,14 +2,27 @@
 
 import prisma from "@/lib/prisma";
 import { createPaymentSchema, paginationSchema } from "@/lib/validations";
-import { successResponse, validationError, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  validationError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
 
 export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const parsed = paginationSchema.safeParse({
       page: searchParams.get("page"),
@@ -22,7 +35,8 @@ export async function GET(request: Request) {
 
     const { page, limit, status, search } = parsed.data;
 
-    const where: Record<string, unknown> = {};
+    // Always scope to the authenticated user — never expose other users' data
+    const where: Record<string, unknown> = { userId: auth.userId };
     if (status) where.status = status;
     if (search) {
       where.OR = [
@@ -52,6 +66,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const body = await request.json();
     const parsed = createPaymentSchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
@@ -64,20 +85,27 @@ export async function POST(request: Request) {
         description: parsed.data.description,
         memo: parsed.data.memo,
         status: "CREATED",
-        userId: parsed.data.sourceAccountId,
+        // The authenticated user owns the record; sourceAccountId is a
+        // Stellar account reference, NOT the User FK (previously this
+        // wrote a Stellar address into userId, breaking the relation).
+        userId: auth.userId,
         sourceAccountId: parsed.data.sourceAccountId,
       },
     });
 
     logger.info("Payment created", { id: payment.id, amount: payment.amount });
 
-    dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CREATED, {
-      paymentId: payment.id,
-      amount: payment.amount,
-      assetCode: payment.assetCode,
-      status: payment.status,
-      createdAt: payment.createdAt.toISOString(),
-    });
+    dispatchWebhookEventAsync(
+      WEBHOOK_EVENTS.PAYMENT_CREATED,
+      {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        status: payment.status,
+        createdAt: payment.createdAt.toISOString(),
+      },
+      auth.userId
+    );
 
     incMetric("payments_created_total");
 

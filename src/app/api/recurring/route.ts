@@ -2,11 +2,24 @@
 
 import prisma from "@/lib/prisma";
 import { createRecurrenceSchema, paginationSchema } from "@/lib/validations";
-import { successResponse, validationError, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  validationError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { getAuthContext } from "@/lib/auth-session";
 
 export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const parsed = paginationSchema.safeParse({
       page: searchParams.get("page"),
@@ -15,14 +28,16 @@ export async function GET(request: Request) {
     if (!parsed.success) return validationError(parsed.error);
 
     const { page, limit } = parsed.data;
+    const where = { userId: auth.userId };
     const [recurrences, total] = await Promise.all([
       prisma.recurrence.findMany({
+        where,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         include: { payments: { take: 5, orderBy: { createdAt: "desc" } } },
       }),
-      prisma.recurrence.count(),
+      prisma.recurrence.count({ where }),
     ]);
 
     return successResponse(recurrences, { page, limit, total });
@@ -33,6 +48,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const body = await request.json();
     const parsed = createRecurrenceSchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
@@ -56,7 +78,7 @@ export async function POST(request: Request) {
         destAddress: parsed.data.destAddress,
         description: parsed.data.description,
         nextRunAt,
-        userId: parsed.data.sourceAccountId,
+        userId: auth.userId,
       },
     });
 

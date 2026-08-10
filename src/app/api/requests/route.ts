@@ -2,14 +2,28 @@
 
 import prisma from "@/lib/prisma";
 import { createPaymentRequestSchema } from "@/lib/validations";
-import { successResponse, validationError, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  validationError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const requests = await prisma.paymentRequest.findMany({
+      where: { userId: auth.userId },
       orderBy: { createdAt: "desc" },
     });
     return successResponse(requests);
@@ -20,6 +34,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const body = await request.json();
     const parsed = createPaymentRequestSchema.safeParse(body);
     if (!parsed.success) return validationError(parsed.error);
@@ -31,20 +52,24 @@ export async function POST(request: Request) {
         assetIssuer: parsed.data.assetIssuer,
         description: parsed.data.description,
         recipientAddress: parsed.data.recipientAddress,
-        userId: body.userId || "default",
+        userId: auth.userId,
       },
     });
 
     logger.info("Payment request created", { id: req.id, amount: req.amount });
 
-    dispatchWebhookEventAsync(WEBHOOK_EVENTS.REQUEST_CREATED, {
-      requestId: req.id,
-      amount: req.amount,
-      assetCode: req.assetCode,
-      description: req.description,
-      status: req.status,
-      createdAt: req.createdAt.toISOString(),
-    });
+    dispatchWebhookEventAsync(
+      WEBHOOK_EVENTS.REQUEST_CREATED,
+      {
+        requestId: req.id,
+        amount: req.amount,
+        assetCode: req.assetCode,
+        description: req.description,
+        status: req.status,
+        createdAt: req.createdAt.toISOString(),
+      },
+      auth.userId
+    );
 
     return successResponse(req, undefined, 201);
   } catch (err) {

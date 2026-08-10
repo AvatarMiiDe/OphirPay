@@ -1,22 +1,37 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { successResponse, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 
 /**
- * GET /api/analytics — Aggregated payment metrics
+ * GET /api/analytics — Aggregated payment metrics scoped to the
+ * authenticated user. Previously returned platform-wide totals.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
+    const scope = { userId: auth.userId };
+
     const [totalPayments, completedPayments, failedPayments, volumeResult] =
       await Promise.all([
-        prisma.payment.count(),
-        prisma.payment.count({ where: { status: "COMPLETED" } }),
-        prisma.payment.count({ where: { status: "FAILED" } }),
+        prisma.payment.count({ where: scope }),
+        prisma.payment.count({ where: { ...scope, status: "COMPLETED" } }),
+        prisma.payment.count({ where: { ...scope, status: "FAILED" } }),
         prisma.payment.aggregate({
           _sum: { amount: true },
           _avg: { amount: true },
-          where: { status: "COMPLETED" },
+          where: { ...scope, status: "COMPLETED" },
         }),
       ]);
 
@@ -28,6 +43,7 @@ export async function GET() {
       _count: { id: true },
       _sum: { amount: true },
       where: {
+        ...scope,
         createdAt: { gte: thirtyDaysAgo },
         status: "COMPLETED",
       },

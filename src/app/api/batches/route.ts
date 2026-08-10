@@ -2,21 +2,33 @@
 
 import prisma from "@/lib/prisma";
 import { createBatchSchema } from "@/lib/validations";
-import { successResponse, validationError, handleApiError } from "@/lib/api-response";
-import { requireAuth } from "@/lib/api-auth";
+import {
+  successResponse,
+  validationError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { incMetric } from "@/lib/metrics-counters";
 
 // ── GET /api/batches — List batches with pagination ──────────
 
 export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
     const status = searchParams.get("status");
     const search = searchParams.get("search");
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { userId: auth.userId };
     if (status) where.status = status;
     if (search) {
       where.OR = [
@@ -51,6 +63,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const body = await request.json();
 
     const parsed = createBatchSchema.safeParse(body);
@@ -59,11 +78,6 @@ export async function POST(request: Request) {
     }
 
     const { name, description, recipients: payments } = parsed.data;
-
-    // Enforce authentication
-    const auth = await requireAuth(request);
-    if (!("userId" in auth)) return auth;
-
     const { userId } = auth;
 
     const batch = await prisma.batch.create({

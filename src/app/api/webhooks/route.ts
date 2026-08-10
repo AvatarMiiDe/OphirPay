@@ -2,16 +2,25 @@
 
 import prisma from "@/lib/prisma";
 import { createWebhookSchema } from "@/lib/validations";
-import { successResponse, badRequestError, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  badRequestError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
 import { logger } from "@/lib/logger";
-import { withApiAuth } from "@/lib/api-auth";
+import { getAuthContext } from "@/lib/auth-session";
 import crypto from "crypto";
 
 // ── GET /api/webhooks ─────────────────────────────────────────
 
-const _GET = async () => {
+export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) return unauthorizedError("Authentication required.");
+
     const webhooks = await prisma.webhook.findMany({
+      where: { userId: auth.userId },
       orderBy: { createdAt: "desc" },
     });
     const safe = webhooks.map(({ secret, ...w }) => ({ ...w, hasSecret: !!secret }));
@@ -19,12 +28,15 @@ const _GET = async () => {
   } catch (err) {
     return handleApiError(err, "GET /api/webhooks");
   }
-};
+}
 
 // ── POST /api/webhooks ────────────────────────────────────────
 
-const _POST = async (request: Request) => {
+export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) return unauthorizedError("Authentication required.");
+
     const body = await request.json();
     const parsed = createWebhookSchema.safeParse(body);
     if (!parsed.success) return badRequestError("Invalid webhook data");
@@ -37,7 +49,7 @@ const _POST = async (request: Request) => {
         events: JSON.stringify(parsed.data.events),
         isActive: parsed.data.isActive,
         secret,
-        userId: body.userId || "default",
+        userId: auth.userId, // never trust a client-supplied userId
       },
     });
 
@@ -47,23 +59,27 @@ const _POST = async (request: Request) => {
   } catch (err) {
     return handleApiError(err, "POST /api/webhooks");
   }
-};
+}
 
 // ── DELETE /api/webhooks?id=... ────────────────────────────────
 
-const _DELETE = async (request: Request) => {
+export async function DELETE(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) return unauthorizedError("Authentication required.");
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return badRequestError("Webhook ID is required");
 
-    await prisma.webhook.delete({ where: { id } });
+    // Scoped delete — a user can only remove their own webhook
+    const result = await prisma.webhook.deleteMany({
+      where: { id, userId: auth.userId },
+    });
+    if (result.count === 0) return badRequestError("Webhook not found");
+
     return successResponse({ deleted: true });
   } catch (err) {
     return handleApiError(err, "DELETE /api/webhooks");
   }
-};
-
-export const GET = withApiAuth(_GET);
-export const POST = withApiAuth(_POST);
-export const DELETE = withApiAuth(_DELETE);
+}

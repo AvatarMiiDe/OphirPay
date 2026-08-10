@@ -13,9 +13,17 @@ import type { WebhookEventType } from "@/app/api/webhooks/event-types";
  * Safe to call from API routes, server actions, or client-side pages
  * (client calls are no-ops since Prisma only works server-side).
  */
+/**
+ * Dispatch a webhook event to subscribed endpoints.
+ *
+ * @param scopedUserId When provided, only webhooks owned by this user are
+ *   notified — prevents cross-user webhook leakage (user A's payment must
+ *   never fire user B's webhook and leak A's data to B's endpoint).
+ */
 export async function dispatchWebhookEvent(
   event: WebhookEventType,
   data: Record<string, unknown>,
+  scopedUserId?: string,
 ): Promise<void> {
   // Guard: only run on server (Prisma needs Node runtime)
   if (typeof window !== "undefined") return;
@@ -25,6 +33,7 @@ export async function dispatchWebhookEvent(
       where: {
         isActive: true,
         events: { contains: event },
+        ...(scopedUserId ? { userId: scopedUserId } : {}),
       },
     });
 
@@ -62,8 +71,9 @@ export async function dispatchWebhookEvent(
 export function dispatchWebhookEventAsync(
   event: WebhookEventType,
   data: Record<string, unknown>,
+  scopedUserId?: string,
 ): void {
   if (typeof window !== "undefined") return;
   // Fire and forget — do not await
-  void dispatchWebhookEvent(event, data);
+  void dispatchWebhookEvent(event, data, scopedUserId);
 }
