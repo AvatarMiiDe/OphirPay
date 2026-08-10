@@ -98,8 +98,8 @@ ophirpay/
 
 | Layer | Technology |
 |---|---|
-| Blockchain | Stellar / Soroban SDK 22.0.0 |
-| Contracts | Rust, `#![no_std]`, wasm32 target |
+| Blockchain | Stellar / Soroban SDK 27.0.5 |
+| Contracts | Rust, `#![no_std]`, soroban-sdk 27.0.5, wasm32v1-none target |
 | Frontend | Next.js 15, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |

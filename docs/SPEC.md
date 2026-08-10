@@ -225,8 +225,8 @@ Each invariant is verified by at least one unit test in the contract's
 
 To run tests (soroban-sdk 27 — the env-host conflict from v22.1.3 is fixed):
 ```bash
-cd contracts/ophirpay && cargo test   # 50 unit tests, native host
-cd contracts/emitter && cargo test    # 6 unit tests, native host
+cd contracts/ophirpay && cargo test   # unit tests, native host
+cd contracts/emitter && cargo test    # unit tests, native host
 ```
 
 ## Future Verification Work
