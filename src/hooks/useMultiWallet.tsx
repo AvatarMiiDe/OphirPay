@@ -13,6 +13,7 @@ import {
 import type { MultiWalletState, WalletId } from "@/lib/wallets";
 import { getWalletConnector, getAvailableWallets, setActiveWalletId } from "@/lib/wallets";
 import { fetchXlmBalance } from "@/lib/stellar";
+import { establishSession, revokeSession } from "@/lib/client-auth";
 
 // ── Context ───────────────────────────────────────────────────
 
@@ -88,6 +89,8 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
           });
           setActiveWalletId(walletId);
           loadBalanceRef.current(publicKey);
+              // Restore the server-side session for API authorization
+              await establishSession(publicKey, network || "TESTNET");
               return; // Connected to first available wallet
             }
           }
@@ -138,6 +141,8 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
         if (publicKey) {
           loadBalance(publicKey);
         }
+        // Open a server-side session so API routes can authorize this user
+        await establishSession(publicKey, network || "TESTNET");
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to connect wallet";
@@ -158,6 +163,8 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
         // Best effort
       }
     }
+    // Revoke the server-side session cookie
+    await revokeSession();
     setWallet(initialWalletState);
     setActiveWalletId(null);
     setError(null);

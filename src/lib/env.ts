@@ -19,6 +19,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   RATE_LIMIT_RPM: z.coerce.number().positive().default(120),
   REDIS_URL: z.string().url().optional(),
+  AUTH_SECRET: z.string().min(32).optional(), // required in production (see auth-session.ts)
   NEXT_PUBLIC_DEMO_MODE: z.string().optional(),
   NEXT_PUBLIC_FEATURE_MULTI_ASSET: z.string().optional(),
   NEXT_PUBLIC_FEATURE_WEBHOOKS: z.string().optional(),
