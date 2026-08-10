@@ -15,6 +15,9 @@ const cspHeader = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Enable instrumentation hook for startup bootstrap
+  instrumentationHook: true,
+
   // Power web vitals with edge performance metrics
   poweredByHeader: false,
 
