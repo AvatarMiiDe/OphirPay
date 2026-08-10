@@ -69,7 +69,8 @@ export function simulateBatchPayment(params: {
 /** Demo wallet state for when Freighter is not connected */
 export const DEMO_WALLET = {
   connected: true,
-  publicKey: "GDEMO-DEMO-DEMO-DEMO-DEMO-DEMO-DEMO-DEMO-DEMO",
+  // Valid-format Stellar testnet address (demo only — not a real funded account)
+  publicKey: "GBZX4364PEPQTDICMIQDZ56K4T75QGKCRFHSVJFVODVFBRR6XOQNFB2C",
   network: "TESTNET",
   balance: "10,000.00",
   balanceLoading: false,
