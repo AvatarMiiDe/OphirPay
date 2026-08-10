@@ -25,6 +25,9 @@ const cspHeader = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Standalone output — required by the Docker image (copies .next/standalone)
+  output: "standalone",
+
   // Enable instrumentation hook for startup bootstrap
   instrumentationHook: true,
 
