@@ -27,10 +27,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = generateRequestId();
 
-  // Only apply API-specific logic to API routes
+  // Non-API routes: set identification headers only
   if (!pathname.startsWith("/api/")) {
     const response = NextResponse.next();
     response.headers.set("X-Request-Id", requestId);
+    response.headers.set("X-Api-Version", "1.0.0");
     return response;
   }
 
