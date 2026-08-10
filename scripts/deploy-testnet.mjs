@@ -228,7 +228,9 @@ async function main() {
     `NEXT_PUBLIC_CONTRACT_ID=${ophirpay.contractId}`,
     `NEXT_PUBLIC_EMITTER_CONTRACT_ID=${emitter.contractId}`,
     `# Deployer public: ${keypair.publicKey()}`,
-    `# Deployer secret: ${keypair.secret()}`,
+    `# NOTE: The deployer SECRET key was intentionally NOT written to disk.`,
+    `# Save it securely (password manager) or export from the stellar CLI`,
+    `# (e.g. 'stellar keys export <alias>') before discarding this keypair.`,
     "",
   ].join("\n");
   writeFileSync(join(ROOT, ".env.testnet"), envContent);
