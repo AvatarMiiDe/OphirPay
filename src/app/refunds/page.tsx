@@ -80,8 +80,8 @@ export default function RefundsPage() {
     try {
       const result = await requestRefund(
         wallet.publicKey,
-        parseInt(formPaymentId),
-        parseInt(formAmount),
+        parseInt(formPaymentId, 10),
+        parseFloat(formAmount) || 0,
         formAsset || "native",
         formReason || "Refund requested",
         formReasonCode,
@@ -97,7 +97,7 @@ export default function RefundsPage() {
           id: Date.now(),
           payment_id: parseInt(formPaymentId),
           requester: wallet.publicKey!,
-          amount: parseInt(formAmount),
+          amount: parseFloat(formAmount) || 0,
           reason: formReason || "Refund requested",
           reason_code: formReasonCode,
           status: "Requested",
