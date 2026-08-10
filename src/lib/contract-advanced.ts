@@ -21,6 +21,7 @@ import {
   classifyContractError,
 } from "@/lib/contracts";
 import { getActiveWalletConnector } from "@/lib/wallets";
+import { NETWORK_PASSPHRASE, STELLAR_NETWORK } from "@/lib/stellar";
 
 /** Resolve contract ID — env var or hardcoded Testnet fallback */
 const CONTRACT_ID = DEFAULT_CONTRACT_ID;
@@ -65,7 +66,8 @@ async function signAndSubmit(
     }
 
     const signedXdr = await wallet.signTransaction(txInfo.xdr, {
-      network: "TESTNET",
+      network: STELLAR_NETWORK,
+      networkPassphrase: NETWORK_PASSPHRASE,
     });
 
     const result = await submitContractInvocation(signedXdr);

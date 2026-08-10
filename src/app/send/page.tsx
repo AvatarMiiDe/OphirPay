@@ -11,6 +11,7 @@ import {
   submitSignedTx,
   getStellarExplorerUrl,
   NETWORK_PASSPHRASE,
+  STELLAR_NETWORK,
   XLM_STROOPS,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
@@ -125,7 +126,7 @@ export default function SendPage() {
 
       const connector = getWalletConnector(wallet.activeWalletId);
       const signedXdr = await connector.signTransaction(xdr, {
-        network: "TESTNET",
+        network: STELLAR_NETWORK,
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
@@ -143,7 +144,7 @@ export default function SendPage() {
         amountStroops: Math.round(parseFloat(amount) * XLM_STROOPS),
         txHash: response.hash,
         signTransaction: (xdr, opts) => connector.signTransaction(xdr, opts),
-        network: "TESTNET",
+        network: STELLAR_NETWORK,
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
