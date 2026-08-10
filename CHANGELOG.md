@@ -2,6 +2,25 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased] — 2026-08-10
+
+### Fixed
+- **Startup bootstrap**: `bootstrap()` now called via Next.js instrumentation hook; env validation with Zod
+- **Environment**: Added `.env.example` with all 20+ documented variables
+- **CI**: Removed `|| true` that masked ESLint failures; added Playwright E2E job
+- **Database**: Converted 4 monetary `Float` columns to `Decimal(18,7)`; added `@relation` annotations to Batch, Recurrence, PaymentRequest
+- **Rate limiting**: Unified duplicate implementations — middleware now uses shared `InMemoryRateLimitStore`
+- **Docs**: Corrected SDK version to 27.0.5 in architecture + integration guide
+- **Contract tests**: Expanded from 21 → 56 tests (refund lifecycle, multisig threshold, spending limit expiry, atomic spend)
+- **Lint**: Removed all 8 unused variables; added `argsIgnorePattern` for underscore-prefixed params
+- **API routes**: Wired 14 stubbed routes to actual Soroban contract calls (multisig, governance, fee-config, RBAC, timelock, policy-versions, audit-log)
+- **Wallet network**: 5 connectors now use `NEXT_PUBLIC_STELLAR_NETWORK` env var instead of hardcoded "PUBLIC"
+- **Refunds page**: Fixed `parseInt` → `parseFloat` for Decimal amount fields
+- **API endpoints**: Added missing escrow, stream, stats, contracts, and fee-collector API routes
+- **Infra**: Added `.gitattributes` for WASM binaries, `robots.txt`, Dependabot config (npm + cargo + GHA)
+- **simulateContractCall**: Added optional `args` parameter for arg-based contract queries
+- **Error codes**: Centralized `ERROR_CODES` constants with HTTP status code mapping
+
 ## [Unreleased] — 2026-08-07
 
 ### Changed
