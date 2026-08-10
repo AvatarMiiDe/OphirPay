@@ -46,7 +46,8 @@ export const xBullConnector: WalletConnector = {
     }
     // xBull's connect() returns the public key
     const publicKey = await xbull.connect();
-    return { publicKey, network: "PUBLIC" };
+    const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
+    return { publicKey, network };
   },
 
   async disconnect() {
@@ -68,8 +69,9 @@ export const xBullConnector: WalletConnector = {
     if (!xbull) throw new Error("xBull wallet not found. Please reconnect.");
     const result = await xbull.sign({ xdr, network: opts?.network });
     // xBull returns the signature, not the signed XDR
-    // For compatibility with submitSignedTx, we may need to attach the signature
-    // Since full XDR signing support varies, we return signature for now
+    // NOTE: xBull returns the raw signature, not a signed XDR envelope.
+    // For full Soroban compatibility, the caller should use submitContractInvocation
+    // which handles signature attachment internally.
     return result.signature;
   },
 
@@ -84,8 +86,7 @@ export const xBullConnector: WalletConnector = {
   },
 
   async getNetwork() {
-    // xBull doesn't directly expose network — defaults to PUBLIC
-    return "PUBLIC";
+    return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
   },
 
   async isConnected() {

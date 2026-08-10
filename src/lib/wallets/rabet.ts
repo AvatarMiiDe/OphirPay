@@ -46,7 +46,8 @@ export const rabetConnector: WalletConnector = {
       );
     }
     const result = await rabet.connect();
-    return { publicKey: result.publicKey, network: "PUBLIC" };
+    const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
+    return { publicKey: result.publicKey, network };
   },
 
   async disconnect() {
@@ -85,7 +86,7 @@ export const rabetConnector: WalletConnector = {
   },
 
   async getNetwork() {
-    return "PUBLIC";
+    return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
   },
 
   async isConnected() {

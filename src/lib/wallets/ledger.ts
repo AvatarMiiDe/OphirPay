@@ -107,7 +107,7 @@ export const ledgerConnector: WalletConnector = {
   },
 
   async getNetwork() {
-    return "PUBLIC";
+    return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
   },
 
   async isConnected() {

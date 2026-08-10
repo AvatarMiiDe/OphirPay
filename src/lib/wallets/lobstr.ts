@@ -75,7 +75,8 @@ export const lobstrConnector: WalletConnector = {
           if (event.data?.type === "lobstr:connected" && event.data?.publicKey) {
             window.removeEventListener("message", handler);
             lobstrPublicKey = event.data.publicKey;
-            resolve({ publicKey: event.data.publicKey, network: "PUBLIC" });
+            const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
+            resolve({ publicKey: event.data.publicKey, network });
           }
         };
         window.addEventListener("message", handler);
@@ -119,7 +120,7 @@ export const lobstrConnector: WalletConnector = {
   },
 
   async getNetwork() {
-    return "PUBLIC";
+    return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
   },
 
   async isConnected() {

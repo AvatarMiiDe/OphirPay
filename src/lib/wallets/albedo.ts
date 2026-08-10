@@ -48,7 +48,8 @@ export const albedoConnector: WalletConnector = {
       );
     }
     const result = await albedo.publicKey();
-    return { publicKey: result.pubkey, network: "PUBLIC" };
+    const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
+    return { publicKey: result.pubkey, network };
   },
 
   async disconnect() {
@@ -76,8 +77,7 @@ export const albedoConnector: WalletConnector = {
   },
 
   async getNetwork() {
-    // Albedo doesn't expose network directly — assume PUBLIC
-    return "PUBLIC";
+    return process.env.NEXT_PUBLIC_STELLAR_NETWORK === "TESTNET" ? "TESTNET" : "PUBLIC";
   },
 
   async isConnected() {
