@@ -2,6 +2,7 @@
 
 import { successResponse, handleApiError, notFoundError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/recurring/[id] — single recurring payment lookup
@@ -22,7 +23,8 @@ export async function GET(
     const result = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
       "get_recurring",
-      CHAIN_READ_SOURCE
+      CHAIN_READ_SOURCE,
+      [nativeToScVal(recurringId, { type: "u64" })]
     );
 
     if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
@@ -31,6 +33,6 @@ export async function GET(
 
     return successResponse(result.returnValue);
   } catch (err) {
-    return handleApiError(err, `GET /api/recurring/${await params.then(p => p.id)}`);
+    return handleApiError(err, "GET /api/recurring/[id]");
   }
 }

@@ -2,6 +2,7 @@
 
 import { successResponse, handleApiError, notFoundError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/batches/[id] — single batch lookup
@@ -22,7 +23,8 @@ export async function GET(
     const result = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
       "get_batch",
-      CHAIN_READ_SOURCE
+      CHAIN_READ_SOURCE,
+      [nativeToScVal(batchId, { type: "u64" })]
     );
 
     if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
@@ -37,7 +39,8 @@ export async function GET(
       const paymentsResult = await simulateContractCall(
         DEFAULT_CONTRACT_ID,
         "get_payments_by_batch",
-        CHAIN_READ_SOURCE
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(batchId, { type: "u64" })]
       );
       return successResponse({
         ...batch,
@@ -47,6 +50,6 @@ export async function GET(
 
     return successResponse(batch);
   } catch (err) {
-    return handleApiError(err, `GET /api/batches/${await params.then(p => p.id)}`);
+    return handleApiError(err, "GET /api/batches/[id]");
   }
 }
