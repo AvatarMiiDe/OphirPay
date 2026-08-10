@@ -2,6 +2,7 @@
 
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/escrows — list escrows or fetch single by ?id=N
@@ -13,7 +14,12 @@ export async function GET(request: Request) {
     const escrowId = searchParams.get("id");
 
     if (escrowId) {
-      const result = await simulateContractCall(DEFAULT_CONTRACT_ID, "get_escrow", CHAIN_READ_SOURCE);
+      const result = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_escrow",
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(escrowId, { type: "u64" })]
+      );
       if (result.status === "SIMULATION_FAILED") {
         return successResponse({ available: false, error: result.error });
       }

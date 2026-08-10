@@ -2,6 +2,7 @@
 
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/streams — list streams or fetch single by ?id=N
@@ -13,7 +14,12 @@ export async function GET(request: Request) {
     const streamId = searchParams.get("id");
 
     if (streamId) {
-      const result = await simulateContractCall(DEFAULT_CONTRACT_ID, "get_stream", CHAIN_READ_SOURCE);
+      const result = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_stream",
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(streamId, { type: "u64" })]
+      );
       if (result.status === "SIMULATION_FAILED") {
         return successResponse({ available: false, error: result.error });
       }
