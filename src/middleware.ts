@@ -2,12 +2,14 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { InMemoryRateLimitStore } from "@/lib/rate-limit";
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 120; // requests per window per IP
 
-// In-memory rate limit store (Edge Runtime safe — no Redis, no ioredis)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// Single shared in-memory rate limit store (Edge Runtime safe)
+// Uses the same InMemoryRateLimitStore as src/lib/rate-limit.ts
+const rateLimitStore = new InMemoryRateLimitStore();
 
 function getClientIp(request: NextRequest): string {
   return (
@@ -19,30 +21,6 @@ function getClientIp(request: NextRequest): string {
 
 function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function checkRateLimit(
-  ip: string
-): { allowed: boolean; remaining: number; resetAt: number } {
-  const now = Date.now();
-  let entry = rateLimitMap.get(ip);
-
-  if (!entry || entry.resetAt < now) {
-    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-  }
-
-  entry.count++;
-  rateLimitMap.set(ip, entry);
-
-  // Periodic cleanup
-  if (rateLimitMap.size > 10_000) {
-    for (const [k, v] of rateLimitMap) {
-      if (v.resetAt < now) rateLimitMap.delete(k);
-    }
-  }
-
-  const remaining = Math.max(0, RATE_LIMIT_MAX - entry.count);
-  return { allowed: entry.count <= RATE_LIMIT_MAX, remaining, resetAt: entry.resetAt };
 }
 
 export async function middleware(request: NextRequest) {
@@ -65,7 +43,7 @@ export async function middleware(request: NextRequest) {
 
   if (!skipRateLimit) {
     const ip = getClientIp(request);
-    const result = checkRateLimit(ip);
+    const result = await rateLimitStore.increment(ip, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX);
     remaining = result.remaining;
     resetAt = result.resetAt;
 
