@@ -56,6 +56,26 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* JSON-LD structured data for SEO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              name: "OphirPay",
+              url: process.env.NEXT_PUBLIC_APP_URL || "https://ophirpay.vercel.app",
+              description: "Open-source payment orchestration layer for Stellar — smart contracts, webhooks, batch payments, refunds, multisig, and governance.",
+              applicationCategory: "FinanceApplication",
+              operatingSystem: "All",
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+              },
+            }),
+          }}
+        />
         {/* Register service worker for PWA offline support */}
         <script
           dangerouslySetInnerHTML={{
