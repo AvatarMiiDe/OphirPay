@@ -2,6 +2,7 @@
 
 import { logger } from "@/lib/logger";
 import { incMetric } from "@/lib/metrics-counters";
+import { isSafeWebhookUrlAtDelivery } from "@/lib/webhook-url-guard";
 import crypto from "crypto";
 
 interface WebhookPayload {
@@ -33,6 +34,13 @@ export async function deliverWebhook(
     ...payload,
     signature: signWebhookPayload(payload, secret),
   };
+
+  // Re-validate the destination at delivery time to mitigate DNS rebinding.
+  if (!(await isSafeWebhookUrlAtDelivery(url))) {
+    logger.error("Webhook delivery blocked — URL resolved to a private/internal address", { url });
+    incMetric("webhooks_failed_total");
+    return false;
+  }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

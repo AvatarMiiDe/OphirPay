@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
+import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
 import crypto from "crypto";
 
 // ── GET /api/webhooks ─────────────────────────────────────────
@@ -40,6 +41,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = createWebhookSchema.safeParse(body);
     if (!parsed.success) return badRequestError("Invalid webhook data");
+
+    // SSRF guard — reject URLs targeting internal/private networks
+    if (!isSafeWebhookUrl(parsed.data.url)) {
+      return badRequestError(
+        "Webhook URL must be a public http(s) endpoint — internal and private addresses are not allowed."
+      );
+    }
 
     const secret = crypto.randomBytes(32).toString("hex");
 
