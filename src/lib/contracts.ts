@@ -108,7 +108,8 @@ export interface InvokeResult {
 export async function simulateContractCall(
   contractId: string,
   functionName: string,
-  sourcePublicKey: string
+  sourcePublicKey: string,
+  args: xdr.ScVal[] = []
 ): Promise<SimulateResult> {
   const server = getSorobanServer();
 
@@ -121,7 +122,7 @@ export async function simulateContractCall(
       networkPassphrase: NETWORK_PASSPHRASE,
       timebounds: { minTime: 0, maxTime: 0 },
     })
-      .addOperation(contract.call(functionName))
+      .addOperation(contract.call(functionName, ...args))
       .build();
 
     const simResponse = await server.simulateTransaction(tx);
