@@ -19,7 +19,6 @@ import { logger } from "@/lib/logger";
 const FALLBACK_RPC_URLS: Record<string, string[]> = {
   TESTNET: [
     "https://soroban-testnet.stellar.org:443",
-    "https://rpc-futurenet.stellar.org:443",
   ],
   PUBLIC: [
     "https://soroban.stellar.org:443",
