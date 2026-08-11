@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -192,11 +193,7 @@ export default function RefundsPage() {
     return (
       <div className="animate-fade-in space-y-6">
         <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-        <div className="grid gap-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-32 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-          ))}
-        </div>
+        <LoadingSkeleton lines={2} variant="card" />
       </div>
     );
   }
@@ -226,9 +223,11 @@ export default function RefundsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+          <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden" role="tablist" aria-label="Refund views">
             <button
               onClick={() => setActiveTab("list")}
+              role="tab"
+              aria-selected={activeTab === "list"}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 activeTab === "list"
                   ? "bg-blue-600 text-white"
@@ -239,6 +238,8 @@ export default function RefundsPage() {
             </button>
             <button
               onClick={() => setActiveTab("analytics")}
+              role="tab"
+              aria-selected={activeTab === "analytics"}
               className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                 activeTab === "analytics"
                   ? "bg-blue-600 text-white"

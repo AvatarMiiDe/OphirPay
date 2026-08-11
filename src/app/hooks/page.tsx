@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -127,11 +128,7 @@ export default function HooksPage() {
     return (
       <div className="animate-fade-in space-y-6">
         <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-        <div className="grid gap-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-24 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-          ))}
-        </div>
+        <LoadingSkeleton lines={2} variant="card" />
       </div>
     );
   }
