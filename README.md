@@ -18,10 +18,10 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/badge/CI%20jobs-13-blue.svg?logo=githubactions" alt="13 CI Jobs" />
+      <img src="https://img.shields.io/badge/CI%20jobs-21-blue.svg?logo=githubactions" alt="21 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-246%20passed%20(184%20app%20%2B%2062%20contracts)-brightgreen.svg" alt="246 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-329%20passed%20(184%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="329 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -38,20 +38,28 @@
   </p>
 
   <p>
-    <sub>      <b>13 CI checks:</b>
+    <sub>      <b>21 CI checks:</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
+      <img src="https://img.shields.io/badge/clippy-Rust%20Lint-DEA584.svg?logo=rust" />
+      <img src="https://img.shields.io/badge/fmt-rustfmt-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/build-Next.js-black.svg?logo=nextdotjs" />
       <img src="https://img.shields.io/badge/smoke-19%20pages-000.svg?logo=vercel" />
       <img src="https://img.shields.io/badge/e2e-Playwright-2EAD33.svg?logo=playwright" />
       <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
+      <img src="https://img.shields.io/badge/secrets-Gitleaks-FF4B4B.svg?logo=shield" />
+      <img src="https://img.shields.io/badge/docker-Build-2496ED.svg?logo=docker" />
+      <img src="https://img.shields.io/badge/bundle-Size%20Check-F7DF1E.svg?logo=javascript" />
+      <img src="https://img.shields.io/badge/a11y-axe%20core-6B46C1.svg?logo=axe" />
+      <img src="https://img.shields.io/badge/openapi-Redocly-000.svg?logo=openapiinitiative" />
+      <img src="https://img.shields.io/badge/spell-typos-lightgrey.svg?logo=textpattern" />
       <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
       <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
+      <img src="https://img.shields.io/badge/gas-Soroban%20Analyze-7B68EE.svg?logo=stellar" />
       <img src="https://img.shields.io/badge/audit-npm-CB3837.svg?logo=npm" />
-      <img src="https://img.shields.io/badge/labels-auto-lightgrey.svg?logo=github" />
     </sub>
   </p>
       <img src="https://img.shields.io/badge/version-v1.0.0--rc1-orange.svg" alt="v1.0.0-rc1" />
@@ -684,6 +692,15 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 > ⚠️ **Production note**: OphirPay uses SQLite locally. For production, migrate to PostgreSQL and add rate limiting, CORS policies, and API authentication.
 
 ---
+
+## 🌐 Community
+
+| Channel | Link |
+|---|---|
+| **GitHub Discussions** | [github.com/OphirPay/OphirPay/discussions](https://github.com/OphirPay/OphirPay/discussions) |
+| **Issue Tracker** | [github.com/OphirPay/OphirPay/issues](https://github.com/OphirPay/OphirPay/issues) |
+| **Security Reports** | [SECURITY.md](SECURITY.md) — Bug bounty program available |
+| **Stellar Ecosystem** | [stellar.org](https://stellar.org) · [Soroban Docs](https://soroban.stellar.org) |
 
 ## 📄 License & Credits
 
