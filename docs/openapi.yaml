@@ -795,10 +795,39 @@ paths:
   /api/governance/proposals:
     get:
       tags: [Governance]
-      summary: List governance proposals
+      summary: List governance proposals (most recent first)
+      description: |
+        Enumerates the contract's proposals, capped at the 100 most recent to
+        bound the N+1 on-chain read cost. `truncated` is true when the chain
+        holds more proposals than the cap, so callers know the list is partial.
       responses:
         "200":
-          description: Proposals list
+          description: Proposals list with total and truncation signal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            title: { type: string }
+                            description: { type: string }
+                            action_type: { type: string }
+                            yes_votes: { type: integer }
+                            no_votes: { type: integer }
+                            voting_ends_at: { type: integer, nullable: true }
+                            executed: { type: boolean }
+                            proposer: { type: string }
+                      total: { type: integer, description: "Total proposal count on-chain" }
+                      truncated: { type: boolean, description: "True when older proposals were dropped" }
     post:
       tags: [Governance]
       summary: Create a governance proposal (on-chain)

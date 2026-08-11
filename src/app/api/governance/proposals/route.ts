@@ -29,19 +29,26 @@ export async function GET(request: Request) {
     );
 
     if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse([]);
+      return successResponse({ items: [], total: 0, truncated: false });
     }
 
     const totalCount = Number(countResult.returnValue ?? 0);
-    if (totalCount === 0) return successResponse([]);
+    if (totalCount === 0) {
+      return successResponse({ items: [], total: 0, truncated: false });
+    }
 
     // Enumerate proposals by id (most recent last). Cap the loop to bound the
-    // N+1 read pattern (one RPC per proposal).
+    // N+1 read pattern (one RPC per proposal). When the chain has more than
+    // the cap, enumerate the TAIL (most recent) so truncation drops the
+    // oldest proposals — never the ones users are actively voting on — and
+    // surface the truncation explicitly so callers know the list is partial.
     const maxProposals = 100;
-    const toFetch = Math.min(totalCount, maxProposals);
+    const truncated = totalCount > maxProposals;
+    const startId = truncated ? totalCount - maxProposals + 1 : 1;
+    const endId = totalCount;
 
-    const proposals: unknown[] = [];
-    for (let id = 1; id <= toFetch; id++) {
+    const items: unknown[] = [];
+    for (let id = startId; id <= endId; id++) {
       const result = await cachedFetch(
         `gov:proposal:${id}`,
         () => simulateContractCall(
@@ -53,11 +60,11 @@ export async function GET(request: Request) {
         30_000,
       );
       if (result.status !== "SIMULATION_FAILED" && result.returnValue) {
-        proposals.push(result.returnValue);
+        items.push(result.returnValue);
       }
     }
 
-    return successResponse(proposals);
+    return successResponse({ items, total: totalCount, truncated });
   } catch (err) {
     return handleApiError(err, "GET /api/governance/proposals");
   }

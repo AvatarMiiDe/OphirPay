@@ -25,6 +25,13 @@ interface Proposal {
   proposer: string;
 }
 
+interface ProposalsResponse {
+  items: Proposal[];
+  total: number;
+  /** True when the chain holds more proposals than the API enumerates. */
+  truncated: boolean;
+}
+
 export default function GovernancePage() {
   const { wallet } = useWallet();
   const toast = useToast();
@@ -45,7 +52,7 @@ export default function GovernancePage() {
     isLoading,
     isError,
     refetch,
-  } = useApiQuery<Proposal[]>(
+  } = useApiQuery<ProposalsResponse>(
     ["governance", "proposals"],
     "/api/governance/proposals",
     // Enumerating proposals is an N+1 contract read — skip focus refetches.
@@ -142,7 +149,8 @@ export default function GovernancePage() {
   };
 
   const showConnectBanner = !wallet.connected;
-  const list = Array.isArray(proposals) ? proposals : [];
+  const list = proposals?.items ?? [];
+  const truncated = proposals?.truncated ?? false;
 
   if (isLoading) return <LoadingSkeleton lines={3} variant="card" />;
   if (isError) {
@@ -177,6 +185,13 @@ export default function GovernancePage() {
         </div>
         <Button onClick={() => setShowCreate(true)}>+ New Proposal</Button>
       </div>
+
+      {truncated && list.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+          Showing the {list.length} most recent of {proposals?.total} proposals — older proposals are not
+          listed to bound the on-chain enumeration cost.
+        </div>
+      )}
 
       {list.length === 0 ? (
         <EmptyState
