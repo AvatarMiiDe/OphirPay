@@ -53,18 +53,23 @@ export default function GovernancePage() {
   );
 
   // ── React Query: create proposal mutation ────────────────
+  // Invalidation is scoped to governance so unrelated (and expensive,
+  // e.g. on-chain enumeration) queries are not refetched on every vote.
   const createMutation = useApiMutation<Record<string, unknown>, { txHash?: string }>(
-    "/api/governance/proposals"
+    "/api/governance/proposals",
+    { invalidateKeys: [["governance"]] }
   );
 
   // ── React Query: vote mutation ───────────────────────────
   const voteMutation = useApiMutation<{ voter: string; proposalId: number; support: boolean }, { voted: boolean }>(
-    "/api/governance/vote"
+    "/api/governance/vote",
+    { invalidateKeys: [["governance"]] }
   );
 
   // ── React Query: execute mutation ────────────────────────
   const executeMutation = useApiMutation<{ proposalId: number }, { executed: boolean }>(
-    "/api/governance/execute"
+    "/api/governance/execute",
+    { invalidateKeys: [["governance"]] }
   );
 
   const handleCreate = async () => {
