@@ -4,10 +4,12 @@ import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-re
 import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { createGovernanceProposal } from "@/lib/contract-advanced";
+import { cachedFetch } from "@/lib/api-cache";
 
 /**
  * GET /api/governance/proposals — list governance proposals
  * Reads from OphirPayContract.get_proposal() on-chain.
+ * Cached for 30 seconds to reduce RPC load.
  */
 export async function GET(request: Request) {
   try {
@@ -16,11 +18,11 @@ export async function GET(request: Request) {
       return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
     }
 
-    // First get total count
-    const countResult = await simulateContractCall(
-      DEFAULT_CONTRACT_ID,
-      "get_proposal_count",
-      CHAIN_READ_SOURCE
+    // First get total count (cached, 30s TTL)
+    const countResult = await cachedFetch(
+      "gov:proposal_count",
+      () => simulateContractCall(DEFAULT_CONTRACT_ID, "get_proposal_count", CHAIN_READ_SOURCE),
+      30_000,
     );
 
     if (countResult.status === "SIMULATION_FAILED") {
