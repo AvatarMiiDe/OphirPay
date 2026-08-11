@@ -416,6 +416,7 @@ pub struct NotificationHook {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PaymentError {
+    // ── Core Errors (1-10) ───────────────────────────────────
     NotInitialized = 1,
     AlreadyInitialized = 2,
     PaymentNotFound = 3,
@@ -426,6 +427,7 @@ pub enum PaymentError {
     EscrowNotFound = 8,
     StreamNotStarted = 9,
     StreamAlreadyCancelled = 10,
+    // ── Stream + Batch Errors (11-20) ────────────────────────
     StreamNotFound = 11,
     StreamFullyClaimed = 12,
     BatchTooLarge = 13,
@@ -436,6 +438,7 @@ pub enum PaymentError {
     ContractPaused = 18,
     NoTokensToWithdraw = 19,
     UpgradeNotProposed = 20,
+    // ── Upgrade + Multisig Errors (21-30) ────────────────────
     UpgradeTimelockActive = 21,
     MultisigNotConfigured = 22,
     NotASigner = 23,
@@ -446,6 +449,7 @@ pub enum PaymentError {
     AuditLogEmpty = 28,
     AuditEntryNotFound = 29,
     RecurringNotFound = 30,
+    // ── Recurring + Fee Errors (31-40) ────────────────────
     RecurringNotDue = 31,
     RecurringAlreadyCancelled = 32,
     RecurringExpired = 33,
@@ -456,6 +460,7 @@ pub enum PaymentError {
     TimelockAlreadyExecuted = 38,
     GovernanceNotConfigured = 39,
     ProposalNotFound = 40,
+    // ── Governance + Spend Errors (41-52) ───────────────────
     VotingPeriodEnded = 41,
     ProposalAlreadyExecuted = 42,
     QuorumNotMet = 43,
@@ -468,9 +473,45 @@ pub enum PaymentError {
     RefundWindowExpired = 50,
     AlreadyVoted = 51,
     ReentrantCall = 52,
-    // NOTE: InsufficientUnlockedBalance would be 53 if needed;
-    // using NoTokensToWithdraw (19) for the locked-funds invariant check
-    // to stay within soroban-sdk's contracterror variant limits.
+    // ── Extended Errors (60-99) ───────────────────────────────
+    // Reserved for next-generation features with plenty of headroom
+    ProposalNotPassed = 60,
+    InvalidSignature = 61,
+    HookNotFound = 62,
+    HookAlreadyExists = 63,
+    RateLimitExceeded = 64,
+    AssetNotSupported = 65,
+    InvalidMetadataLength = 66,
+    MaxRecipientsExceeded = 67,
+    DuplicateRecipient = 68,
+    StreamEndBeforeStart = 69,
+    EscrowDeadlineInPast = 70,
+    PendingOwnershipTransfer = 71,
+    OwnershipTransferExpired = 72,
+    InvalidAddressFormat = 73,
+    BatchItemFailed = 74,
+    RecurringScheduleInvalid = 75,
+    FeeCollectorNotSet = 76,
+    EmitterNotLinked = 77,
+    ProposalDepositLocked = 78,
+    MultisigSignerLimit = 79,
+    InvalidTokenContract = 80,
+    StorageLimitExceeded = 81,
+    ContractMigrationRequired = 82,
+    InvalidEventType = 83,
+    WebhookUrlTooLong = 84,
+    MaxHooksExceeded = 85,
+    HookNotActive = 86,
+    CrossContractCallFailed = 87,
+    InvalidScValEncoding = 88,
+    UnsupportedOperation = 89,
+    ContractNotLinked = 90,
+    MaxSignersExceeded = 91,
+    ZeroAddressNotAllowed = 92,
+    InvalidNetwork = 93,
+    // ── Future Expansion Reserved (100-255) ────────────────────
+    // Add new error codes here without renumbering existing ones.
+    // Keeps backward-compatibility with off-chain error catalogs.
 }
 
 // ── Native Events ──────────────────────────────────────────────

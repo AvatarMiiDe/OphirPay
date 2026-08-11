@@ -36,6 +36,14 @@ pub enum EmitterError {
     UpgradeNotProposed = 5,
     UpgradeTimelockActive = 6,
     ContractPaused = 7,
+    InvalidAmount = 8,
+    DuplicateEvent = 9,
+    MaxEventsReached = 10,
+    ReentrantCall = 11,
+    InvalidTxHash = 12,
+    EmitFailed = 13,
+    CrossContractCallFailed = 14,
+    // Future Expansion Reserved (20-99) ─────────────────
 }
 
 // ── Contract ───────────────────────────────────────────────────
