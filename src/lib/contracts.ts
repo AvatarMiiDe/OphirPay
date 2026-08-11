@@ -5,7 +5,7 @@ import {
   scValToNative,
   nativeToScVal,
   TransactionBuilder,
-  type xdr,
+  xdr,
 } from "@stellar/stellar-sdk";
 import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
@@ -224,6 +224,7 @@ export async function invokeContractFunction(
 export async function submitContractInvocation(signedXdr: string): Promise<{
   txHash: string;
   status: string;
+  returnValue?: unknown;
 }> {
   const server = getSorobanServer();
 
@@ -240,7 +241,25 @@ export async function submitContractInvocation(signedXdr: string): Promise<{
       attempts++;
     }
 
-    return { txHash, status: result.status };
+    // Extract the contract's return value from the transaction result meta so
+    // callers can capture on-chain ids (e.g. the proposal/request id returned
+    // by create_proposal / propose_payment). Best-effort: if the meta can't be
+    // parsed, returnValue stays undefined and callers fall back gracefully.
+    let returnValue: unknown;
+    if (result.status === "SUCCESS" && result.resultMetaXdr) {
+      try {
+        // SDK v13 parses resultMetaXdr into an xdr.TransactionMeta already.
+        const meta = result.resultMetaXdr as xdr.TransactionMeta;
+        const sorobanMeta = meta.v3()?.sorobanMeta();
+        if (sorobanMeta) {
+          returnValue = scValToNative(sorobanMeta.returnValue());
+        }
+      } catch {
+        // Non-Soroban meta or parsing failure — ignore, returnValue stays undefined.
+      }
+    }
+
+    return { txHash, status: result.status, returnValue };
   } catch (err) {
     throw classifyContractError(err);
   }

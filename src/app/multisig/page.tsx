@@ -116,8 +116,11 @@ export default function MultisigPage() {
         setShowPropose(false);
         setProposePayee("");
         setProposeAmount("");
+        // Use the real on-chain request id returned by propose_payment so that
+        // Approve/Execute later address the correct contract record.
+        const onChainId = typeof result.data === "number" ? result.data : Date.now();
         setRequests((prev) => [...prev, {
-          id: Date.now(),
+          id: onChainId,
           proposer: wallet.publicKey!,
           payee: proposePayee,
           amount: proposeAmount,
@@ -141,9 +144,13 @@ export default function MultisigPage() {
       const result = await approveMultisigPayment(wallet.publicKey, requestId);
       if (result.success) {
         toast.success("Approval submitted on-chain");
-        setRequests((prev) => prev.map((r) =>
-          r.id === requestId ? { ...r, approvals_count: (r.approvals_count ?? 0) + 1 } : r
-        ));
+        setRequests((prev) => prev.map((r) => {
+          if (r.id !== requestId) return r;
+          const approvals_count = (r.approvals_count ?? 0) + 1;
+          // Show Execute once the threshold is met.
+          const threshold_met = approvals_count >= threshold;
+          return { ...r, approvals_count, threshold_met };
+        }));
         queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Approval failed");

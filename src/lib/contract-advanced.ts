@@ -93,7 +93,9 @@ async function signAndSubmit(
     return {
       success: result.status === "SUCCESS",
       txHash: result.txHash,
-      data: result,
+      // The contract's return value (e.g. the on-chain proposal/request id
+      // returned by create_proposal / propose_payment) when available.
+      data: result.returnValue,
     };
   } catch (err) {
     const ce = classifyContractError(err);
