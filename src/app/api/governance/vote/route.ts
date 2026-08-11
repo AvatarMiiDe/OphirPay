@@ -2,6 +2,7 @@
 
 import { successResponse, unauthorizedError, handleApiError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { voteOnProposal } from "@/lib/contract-advanced";
 import { validateBody, voteOnProposalSchema } from "@/lib/validation-schemas";
 
@@ -11,6 +12,9 @@ import { validateBody, voteOnProposalSchema } from "@/lib/validation-schemas";
  */
 export async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
