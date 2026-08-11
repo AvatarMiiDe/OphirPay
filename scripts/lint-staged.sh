@@ -8,9 +8,9 @@ echo "🔍 Running pre-commit checks..."
 echo "  → TypeScript..."
 npx tsc --noEmit || { echo "❌ TypeScript errors found"; exit 1; }
 
-# Lint
+# Lint (flat config — `next lint` was removed in Next.js 16)
 echo "  → Lint..."
-npx next lint --max-warnings 0 || { echo "⚠️  Lint warnings (non-blocking)"; }
+npx eslint . --max-warnings 0 || { echo "⚠️  Lint warnings (non-blocking)"; }
 
 # Tests
 echo "  → Tests..."
