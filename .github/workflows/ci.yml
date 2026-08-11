@@ -234,7 +234,6 @@ jobs:
       - name: Build Next.js production bundle
         run: npm run build
       - name: Install Playwright browsers
-      - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Serve production build
         run: |
