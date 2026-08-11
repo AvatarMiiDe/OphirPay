@@ -1,28 +1,9 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
-// In production: strict CSP — no unsafe-inline, no unsafe-eval.
-// Next.js bundles all scripts in production mode, so inline scripts
-// are not required. Only wasm-unsafe-eval is needed for Stellar SDK.
-// In development: allow unsafe-inline/eval for HMR and Fast Refresh.
-const scriptSrc = isProd
-  ? "'self' 'wasm-unsafe-eval'"
-  : "'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'";
-
-const cspHeader = [
-  "default-src 'self'",
-  `script-src ${scriptSrc}`,
-  "style-src 'self' 'unsafe-inline'",
-  // Horizon + Soroban RPC + Stellar Expert
-  "connect-src 'self' https://horizon-testnet.stellar.org https://horizon.stellar.org https://soroban-testnet.stellar.org https://soroban.stellar.org https://rpc-futurenet.stellar.org https://mainnet.soroban.rpc.pulse.so",
-  "img-src 'self' data: https://stellar.expert https://raw.githubusercontent.com",
-  "font-src 'self'",
-  "frame-src 'self' https://*.freighter.app chrome-extension: moz-extension:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
+// NOTE: the Content-Security-Policy is set per-request in src/middleware.ts
+// with a per-request nonce (Next.js reads it from the x-nonce request header
+// and applies it to its inline streaming/hydration scripts). A static CSP
+// cannot express that nonce, so it must NOT live here.
 
 const nextConfig: NextConfig = {
   // Standalone output — required by the Docker image (copies .next/standalone)
@@ -50,7 +31,6 @@ const nextConfig: NextConfig = {
         { key: "X-XSS-Protection", value: "0" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
-        { key: "Content-Security-Policy", value: cspHeader },
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
         { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
         { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
