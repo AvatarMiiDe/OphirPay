@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError, notFoundError } from "@/lib/api-response";
+import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 
@@ -9,10 +10,17 @@ import { nativeToScVal } from "@stellar/stellar-sdk";
  * Reads from OphirPayContract on-chain.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { id } = await params;
     const recurringId = parseInt(id, 10);
 

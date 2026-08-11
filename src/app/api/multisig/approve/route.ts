@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, badRequestError, handleApiError } from "@/lib/api-response";
+import { successResponse, badRequestError, unauthorizedError, handleApiError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { approveMultisigPayment } from "@/lib/contract-advanced";
 
 /**
@@ -9,6 +10,13 @@ import { approveMultisigPayment } from "@/lib/contract-advanced";
  */
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const { signer, requestId } = body;
 

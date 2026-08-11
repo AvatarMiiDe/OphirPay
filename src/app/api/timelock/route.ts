@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 
@@ -11,6 +12,11 @@ import { nativeToScVal } from "@stellar/stellar-sdk";
  */
 export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const { searchParams } = new URL(request.url);
     const actionId = searchParams.get("id");
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
+import { successResponse, handleApiError, badRequestError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 
@@ -10,6 +11,11 @@ import { nativeToScVal } from "@stellar/stellar-sdk";
  */
 export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const { searchParams } = new URL(request.url);
     const streamId = searchParams.get("id");
 
@@ -41,6 +47,11 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const body = await request.json().catch(() => ({}));
     const { creator, recipient, totalAmount, asset, startTime, endTime, metadata } = body;
 

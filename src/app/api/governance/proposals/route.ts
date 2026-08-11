@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { createGovernanceProposal } from "@/lib/contract-advanced";
 
@@ -8,8 +9,13 @@ import { createGovernanceProposal } from "@/lib/contract-advanced";
  * GET /api/governance/proposals — list governance proposals
  * Reads from OphirPayContract.get_proposal() on-chain.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     // First get total count
     const countResult = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
@@ -33,6 +39,11 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const body = await request.json().catch(() => ({}));
     const { proposer, title, description, actionType, target, data } = body;
 

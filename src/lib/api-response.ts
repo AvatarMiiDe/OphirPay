@@ -28,6 +28,44 @@ interface ApiError {
   timestamp: string;
 }
 
+// ── BigInt-safe JSON ───────────────────────────────────────────
+
+/**
+ * Recursively convert BigInt values into JSON-serializable values.
+ * Soroban contract reads (scValToNative) return BigInts for u64/i64/i128
+ * fields; JSON.stringify throws on BigInt, which crashed several
+ * contract-read routes with "Do not know how to serialize a BigInt".
+ *
+ * Values within the safe integer range become numbers; larger values
+ * become strings to avoid precision loss (e.g. i128 stroop amounts).
+ */
+export function jsonSafe<T>(value: T): unknown {
+  if (typeof value === "bigint") {
+    return value >= BigInt(Number.MIN_SAFE_INTEGER) &&
+      value <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(value)
+      : value.toString();
+  }
+  // Dates must be serialized before the object branch: Object.entries() on a
+  // Date is empty, which would otherwise silently turn it into {}.
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => jsonSafe(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(
+      value as Record<string, unknown>
+    )) {
+      out[key] = jsonSafe(val);
+    }
+    return out;
+  }
+  return value;
+}
+
 // ── Response Helpers ───────────────────────────────────────────
 
 export function successResponse<T>(
@@ -39,7 +77,7 @@ export function successResponse<T>(
   const response = NextResponse.json(
     {
       success: true,
-      data,
+      data: jsonSafe(data) as T,
       meta: { timestamp: new Date().toISOString(), ...meta },
     } satisfies ApiSuccess<T>,
     { status }
@@ -59,7 +97,7 @@ export function errorResponse(
   return NextResponse.json(
     {
       success: false,
-      error: { code, message, details },
+      error: { code, message, details: details ? jsonSafe(details) : undefined },
       timestamp: new Date().toISOString(),
     } satisfies ApiError,
     { status }

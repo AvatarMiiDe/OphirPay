@@ -1,18 +1,34 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { successResponse, notFoundError, handleApiError } from "@/lib/api-response";
+import {
+  successResponse,
+  notFoundError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
+import { getAuthContext } from "@/lib/auth-session";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { id } = await params;
-    const payment = await prisma.payment.findUnique({ where: { id } });
+    // Only the owning user may read the payment (no IDOR across users)
+    const payment = await prisma.payment.findFirst({
+      where: { id, userId: auth.userId },
+    });
     if (!payment) return notFoundError("Payment");
     return successResponse(payment);
   } catch (err) {
@@ -25,17 +41,29 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { id } = await params;
     const body = await request.json() as { status?: string; description?: string; memo?: string };
 
-    const payment = await prisma.payment.update({
-      where: { id },
+    // updateMany scopes the write to the authenticated user's records
+    const updated = await prisma.payment.updateMany({
+      where: { id, userId: auth.userId },
       data: {
         ...(body.status && { status: body.status as never }),
         ...(body.description !== undefined && { description: body.description }),
         ...(body.memo !== undefined && { memo: body.memo }),
       },
     });
+    if (updated.count === 0) return notFoundError("Payment");
+
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) return notFoundError("Payment");
 
     logger.info("Payment updated", { id, status: payment.status });
 
@@ -64,12 +92,23 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
     const { id } = await params;
-    await prisma.payment.delete({ where: { id } });
+    // deleteMany scopes the delete to the authenticated user's records
+    const deleted = await prisma.payment.deleteMany({
+      where: { id, userId: auth.userId },
+    });
+    if (deleted.count === 0) return notFoundError("Payment");
     logger.info("Payment deleted", { id });
     return successResponse({ deleted: true });
   } catch (err) {

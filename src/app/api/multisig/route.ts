@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
+import { successResponse, handleApiError, badRequestError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { setMultisigConfig } from "@/lib/contract-advanced";
 
@@ -8,8 +9,13 @@ import { setMultisigConfig } from "@/lib/contract-advanced";
  * GET /api/multisig — current multisig configuration
  * Reads from the Soroban contract via OphirPayContract.get_multisig_config().
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const result = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
       "get_multisig_config",
@@ -40,6 +46,11 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+    }
+
     const body = await request.json().catch(() => ({}));
     const { caller, threshold, signers, enabled } = body;
 
