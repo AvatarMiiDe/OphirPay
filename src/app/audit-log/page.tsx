@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -70,6 +70,14 @@ export default function AuditLogPage() {
     data: rawEntries,
     isLoading: loading,
   } = useApiQuery<AuditEntry[]>(["audit-log"], "/api/audit-log");
+
+  // Close the EventSource when the page unmounts — otherwise the stream keeps
+  // polling and the connection leaks until the tab is closed.
+  useEffect(() => {
+    return () => {
+      sseRef.current?.close();
+    };
+  }, []);
 
   const entries = useMemo(() => {
     const fetchedEntries = Array.isArray(rawEntries) ? rawEntries : [];
