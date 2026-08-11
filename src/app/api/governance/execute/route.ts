@@ -1,25 +1,32 @@
 // SPDX-License-Identifier: MIT
 
-import { withApiAuth } from "@/lib/api-auth";
-import { successResponse, handleApiError } from "@/lib/api-response";
+import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, executeProposalSchema } from "@/lib/validation-schemas";
 import { executeGovernanceProposal } from "@/lib/contract-advanced";
 
 /**
  * POST /api/governance/execute
- * Execute a passed governance proposal on-chain. Requires API-key authentication.
+ * Execute a passed governance proposal on-chain.
  */
-async function _POST(request: Request) {
+export async function POST(request: Request) {
   try {
     const csrfError = verifyCsrf(request);
     if (csrfError) return csrfError;
+
+    const auth = await getAuthContext(request);
+    if (!auth?.publicKey) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
 
     const parsed = await validateBody(request, executeProposalSchema);
     if (!parsed.success) return parsed.response;
     const { proposalId } = parsed.data;
 
-    const result = await executeGovernanceProposal(proposalId);
+    const result = await executeGovernanceProposal(auth.publicKey, proposalId);
 
     if (!result.success) {
       return Response.json(
@@ -33,5 +40,3 @@ async function _POST(request: Request) {
     return handleApiError(error);
   }
 }
-
-export const POST = withApiAuth(_POST);

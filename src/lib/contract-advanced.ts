@@ -207,17 +207,13 @@ export async function voteOnProposal(
 }
 
 export async function executeGovernanceProposal(
+  caller: string,
   proposalId: number,
 ): Promise<ContractCallResult> {
   const args: xdr.ScVal[] = [
     nativeToScVal(proposalId, { type: "u64" }),
   ];
-  return signAndSubmit(
-    "",
-    CONTRACT_ID,
-    "execute_proposal",
-    args,
-  );
+  return signAndSubmit(caller, CONTRACT_ID, "execute_proposal", args);
 }
 
 // ── Recurring Functions ────────────────────────────────────────
@@ -304,12 +300,13 @@ export async function approveRefund(
 }
 
 export async function processRefund(
+  caller: string,
   refundId: number,
 ): Promise<ContractCallResult> {
   const args: xdr.ScVal[] = [
     nativeToScVal(refundId, { type: "u64" }),
   ];
-  return signAndSubmit("", CONTRACT_ID, "process_refund", args);
+  return signAndSubmit(caller, CONTRACT_ID, "process_refund", args);
 }
 
 // ── Notification Hook Functions ───────────────────────────────

@@ -136,10 +136,11 @@ export default function RefundsPage() {
   };
 
   const handleProcess = async (refundId: string | number) => {
+    if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     const onChainId = requireOnChainRefund(refundId);
     if (onChainId === null) return;
     try {
-      const result = await processRefund(onChainId);
+      const result = await processRefund(wallet.publicKey, onChainId);
       if (result.success) {
         toast.success("Refund processed on-chain — tokens returned");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
