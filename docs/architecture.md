@@ -42,7 +42,7 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │  │  Multisig (N-of-M) · RBAC       │ cc │  get_event() / count()   ││
 │  │  Governance · Timelocks         │    │                          ││
 │  │  Fee Config · Hooks · Audit     │    │  14 error codes          ││
-│  │  94 error codes · 329 tests     │    │  6 tests                 ││
+│  │  94 error codes · 251 tests     │    │  6 tests                 ││
 │  └───────────────┬─────────────────┘    └──────────────────────────┘│
 │                  │                                                    │
 │  ┌───────────────┴────────────────────────────────────────────────┐  │
@@ -155,7 +155,7 @@ ophirpay/
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (329), Rust `#[test]` (64), Playwright (71 E2E+API) |
+| Testing | Vitest (187), Rust `#[test]` (64), Playwright (71 E2E+API) |
 | CI/CD | GitHub Actions (21 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |
