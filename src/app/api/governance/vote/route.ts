@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { voter, proposalId, support, weight } = body;
+    const { voter, proposalId, support } = body;
 
     if (!voter || !proposalId) {
       return badRequestError("voter and proposalId are required");
@@ -28,7 +28,6 @@ export async function POST(request: Request) {
       voter,
       proposalId,
       support ?? true,
-      weight ?? 1
     );
 
     if (!result.success) {

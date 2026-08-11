@@ -147,6 +147,8 @@ export async function createGovernanceProposal(
   actionType: string,
   target: string,
   data: string,
+  depositAsset: string = "",
+  depositAmount: number = 0,
 ): Promise<ContractCallResult> {
   const args: xdr.ScVal[] = [
     nativeToScVal(proposer, { type: "address" }),
@@ -155,6 +157,8 @@ export async function createGovernanceProposal(
     nativeToScVal(actionType, { type: "string" }),
     nativeToScVal(target, { type: "string" }),
     nativeToScVal(data, { type: "string" }),
+    nativeToScVal(depositAsset || proposer, { type: "address" }),
+    nativeToScVal(depositAmount, { type: "i128" }),
   ];
   return signAndSubmit(proposer, CONTRACT_ID, "create_proposal", args);
 }
@@ -163,13 +167,11 @@ export async function voteOnProposal(
   voter: string,
   proposalId: number,
   support: boolean,
-  weight: number,
 ): Promise<ContractCallResult> {
   const args: xdr.ScVal[] = [
     nativeToScVal(voter, { type: "address" }),
     nativeToScVal(proposalId, { type: "u64" }),
     nativeToScVal(support, { type: "bool" }),
-    nativeToScVal(weight, { type: "i128" }),
   ];
   return signAndSubmit(voter, CONTRACT_ID, "vote_on_proposal", args);
 }

@@ -495,12 +495,16 @@ paths:
           application/json:
             schema:
               type: object
+              required: [proposer, title]
               properties:
+                proposer: { type: string }
                 title: { type: string }
                 description: { type: string }
                 actionType: { type: string }
                 target: { type: string }
                 data: { type: string }
+                depositAsset: { type: string, description: "Stellar asset address for deposit" }
+                depositAmount: { type: integer, description: "Deposit amount (must be >= min_proposal_deposit)" }
       responses:
         "201":
           description: Proposal created
@@ -508,18 +512,18 @@ paths:
   /api/governance/vote:
     post:
       tags: [Governance]
-      summary: Cast a vote on a proposal (on-chain)
+      summary: Cast a vote on a proposal (on-chain, 1 vote per address)
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       requestBody:
         content:
           application/json:
             schema:
               type: object
+              required: [voter, proposalId]
               properties:
                 proposalId: { type: integer }
                 voter: { type: string }
                 support: { type: boolean }
-                weight: { type: integer }
       responses:
         "200":
           description: Vote cast

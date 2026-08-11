@@ -61,7 +61,7 @@ export default function GovernancePage() {
     setSubmitting(true);
     try {
       const result = await createGovernanceProposal(
-        wallet.publicKey, formTitle, formDesc, formAction, formTarget, formData,
+        wallet.publicKey, formTitle, formDesc, formAction, formTarget, formData, "", 0,
       );
       if (result.success) {
         toast.success("Proposal created on-chain");
@@ -94,7 +94,7 @@ export default function GovernancePage() {
   const handleVote = async (proposalId: number, support: boolean) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     try {
-      const result = await voteOnProposal(wallet.publicKey, proposalId, support, 1);
+      const result = await voteOnProposal(wallet.publicKey, proposalId, support);
       if (result.success) {
         toast.success(support ? "Voted YES on-chain" : "Voted NO on-chain");
         setProposals((prev) => prev.map((p) =>
