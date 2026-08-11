@@ -32,4 +32,25 @@ describe("getContractErrorCatalog", () => {
     expect(catalog[0]).toHaveProperty("code");
     expect(catalog[0]).toHaveProperty("message");
   });
+
+  it("includes AlreadyVoted (51) in error catalog", () => {
+    const catalog = getContractErrorCatalog();
+    const entry = catalog.find((e) => e.code === "51");
+    expect(entry).toBeDefined();
+    expect(entry!.message).toContain("Already voted");
+  });
+
+  it("includes ReentrantCall (52) in error catalog", () => {
+    const catalog = getContractErrorCatalog();
+    const entry = catalog.find((e) => e.code === "52");
+    expect(entry).toBeDefined();
+    expect(entry!.message).toContain("Reentrant");
+  });
+
+  it("includes DepositTooLow (45) in error catalog", () => {
+    const catalog = getContractErrorCatalog();
+    const entry = catalog.find((e) => e.code === "45");
+    expect(entry).toBeDefined();
+    expect(entry!.message).toContain("Deposit");
+  });
 });

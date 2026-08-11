@@ -4806,4 +4806,69 @@ mod tests {
         );
         assert!(result.is_err());
     }
+
+    // ── New Error Path Tests (governance + reentrancy) ──
+
+    /// GOV-1: Double-voting is rejected with AlreadyVoted error
+    #[test]
+    fn test_double_vote_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let proposer = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        client.configure_governance(&owner, &0i128, &1000u64, &51u32, &true);
+
+        let deposit_asset = Address::generate(&env);
+        let _ = client.create_proposal(
+            &proposer,
+            &String::from_str(&env, "P"),
+            &String::from_str(&env, "D"),
+            &String::from_str(&env, "upgrade"),
+            &String::from_str(&env, "t"),
+            &String::from_str(&env, "d"),
+            &deposit_asset,
+            &0i128,
+        );
+
+        // First vote succeeds
+        client.vote_on_proposal(&voter, &1, &true);
+
+        // Second vote from same voter should fail with AlreadyVoted
+        let result = client.try_vote_on_proposal(&voter, &1, &false);
+        assert!(result.is_err());
+    }
+
+    /// GOV-2: Proposal creation fails when deposit is below minimum
+    #[test]
+    fn test_deposit_too_low_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let proposer = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        // Set min_proposal_deposit to 100
+        client.configure_governance(&owner, &100i128, &1000u64, &51u32, &true);
+
+        let deposit_asset = Address::generate(&env);
+        // Try with deposit_amount = 50 (below 100 minimum)
+        let result = client.try_create_proposal(
+            &proposer,
+            &String::from_str(&env, "P"),
+            &String::from_str(&env, "D"),
+            &String::from_str(&env, "upgrade"),
+            &String::from_str(&env, "t"),
+            &String::from_str(&env, "d"),
+            &deposit_asset,
+            &50i128,
+        );
+        assert!(result.is_err());
+    }
 }
