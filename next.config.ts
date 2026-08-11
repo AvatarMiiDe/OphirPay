@@ -28,8 +28,8 @@ const nextConfig: NextConfig = {
   // Standalone output — required by the Docker image (copies .next/standalone)
   output: "standalone",
 
-  // Enable instrumentation hook for startup bootstrap
-  instrumentationHook: true,
+  // Note: instrumentation (src/instrumentation.ts) is always enabled in Next.js 16
+  // — the legacy `instrumentationHook` option was removed from the config type.
 
   // Power web vitals with edge performance metrics
   poweredByHeader: false,
