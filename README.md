@@ -585,6 +585,27 @@ Every push to `main` triggers:
 
 > The demo video above is captured from the live Vercel deployment and embedded in the README. For static screenshots, see the [public/screenshots](./public/screenshots/) directory.
 
+### Reproducing the demo assets
+
+All demo assets are generated from checked-in scripts — no hand-edited media:
+
+```bash
+# 1. Seed the database and start the app (demo mode)
+./scripts/demo-seed.sh
+
+# 2. Static UI screenshots (from scripts/mockups/*.html) → public/screenshots/
+node scripts/capture-mockups.js
+
+# 3. Demo video (captures the running app; compile step needs FFmpeg)
+node scripts/create-demo-video.js   # FFMPEG_PATH=/path/to/ffmpeg node ...
+```
+
+The video script captures each slide from a running deployment (set `BASE_URL`
+in the script to point at your local dev server instead of the live site) and
+compiles frames with FFmpeg. FFmpeg is resolved from `FFMPEG_PATH`, a few
+known `/tmp` static-download locations, or `PATH`. `public/demo.mp4` and
+`public/screenshots/` are the outputs referenced by this README.
+
 </div>
 
 ---

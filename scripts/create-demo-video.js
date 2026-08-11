@@ -17,7 +17,20 @@ const OUTPUT_DIR = path.join(__dirname, "..", "public");
 const FRAMES_DIR = path.join(__dirname, "..", ".demo-frames");
 const VIDEO_OUTPUT = path.join(OUTPUT_DIR, "demo.mp4");
 
-const FFMPEG = "/tmp/ffmpeg-7.0.2-amd64-static/ffmpeg";
+// Resolve the ffmpeg binary: FFMPEG_PATH env > known static downloads > PATH.
+function resolveFfmpeg() {
+  const candidates = [
+    process.env.FFMPEG_PATH,
+    "/tmp/ffmpeg-7.0.2-amd64-static/ffmpeg",
+    "/tmp/ffmpeg-6.1.1-amd64-static/ffmpeg",
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return "ffmpeg"; // fall back to whatever is on PATH
+}
+
+const FFMPEG = resolveFfmpeg();
 
 const BASE_URL = "https://ophirpay.vercel.app";
 
