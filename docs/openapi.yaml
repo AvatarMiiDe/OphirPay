@@ -59,6 +59,24 @@ tags:
     description: Service health and readiness checks
   - name: Metrics
     description: Prometheus metrics endpoint
+  - name: Escrows
+    description: On-chain escrow accounts (authenticated)
+  - name: Streams
+    description: On-chain payment streams (authenticated)
+  - name: Timelock
+    description: Timelocked administrative actions (on-chain)
+  - name: RBAC
+    description: Role-based access control lookups (on-chain)
+  - name: Fee Config
+    description: Fee configuration and history (on-chain)
+  - name: Policy Versions
+    description: Fee and multisig config version history (on-chain)
+  - name: Contracts
+    description: Contract deployment info and version
+  - name: Stats
+    description: Aggregate on-chain contract statistics
+  - name: Session
+    description: Wallet session issuance and revocation
 
 paths:
   # ── Payments ──────────────────────────────────────────────
@@ -168,6 +186,228 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Escrows ───────────────────────────────────────────────
+  /api/escrows:
+    get:
+      tags: [Escrows]
+      summary: List escrows or fetch one by id
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          schema: { type: integer }
+          description: Fetch a single escrow by on-chain id
+      responses:
+        "200":
+          description: Escrow list or single escrow
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Escrows]
+      summary: Create an on-chain escrow
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payee, amount]
+              properties:
+                payee: { type: string, description: "Recipient Stellar address" }
+                amount: { type: number, description: "Amount in stroops" }
+                assetCode: { type: string, default: XLM }
+                releaseAfter: { type: integer, description: "Unix timestamp" }
+                releaseTo: { type: string, description: "Stellar address, defaults to caller" }
+                memo: { type: string, maxLength: 28 }
+      responses:
+        "201":
+          description: Escrow created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/escrows/{id}:
+    get:
+      tags: [Escrows]
+      summary: Get an escrow by id
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Escrow details
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Streams ───────────────────────────────────────────────
+  /api/streams:
+    get:
+      tags: [Streams]
+      summary: List streams or fetch one by id
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          schema: { type: integer }
+          description: Fetch a single stream by on-chain id
+      responses:
+        "200":
+          description: Stream list or single stream
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Streams]
+      summary: Create an on-chain payment stream
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payee, amount]
+              properties:
+                payee: { type: string, description: "Recipient Stellar address" }
+                amount: { type: number, description: "Total amount in stroops" }
+                assetCode: { type: string, default: XLM }
+                startTime: { type: integer, description: "Unix timestamp" }
+                endTime: { type: integer, description: "Unix timestamp" }
+                memo: { type: string, maxLength: 28 }
+      responses:
+        "201":
+          description: Stream created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/streams/{id}:
+    get:
+      tags: [Streams]
+      summary: Get a stream by id
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Stream details
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Timelock ──────────────────────────────────────────────
+  /api/timelock:
+    get:
+      tags: [Timelock]
+      summary: List pending timelocked actions
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          schema: { type: integer, minimum: 1 }
+          description: Fetch a single timelocked action; rejected if non-numeric
+      responses:
+        "200":
+          description: Timelock list or single action
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── RBAC ──────────────────────────────────────────────────
+  /api/rbac:
+    get:
+      tags: [RBAC]
+      summary: Look up role assignments
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: addr
+          in: query
+          schema: { type: string }
+          description: Stellar address to look up; returns the full role map when omitted
+      responses:
+        "200":
+          description: Role assignment(s)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Fee Config ────────────────────────────────────────────
+  /api/fee-config:
+    get:
+      tags: [Fee Config]
+      summary: Get the current fee configuration
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Fee configuration
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fee-config/collector:
+    get:
+      tags: [Fee Config]
+      summary: Get the fee collector address
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Fee collector address
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/fee-config/history:
+    get:
+      tags: [Fee Config]
+      summary: Get fee configuration version history
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Fee config history
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Policy Versions ───────────────────────────────────────
+  /api/policy-versions:
+    get:
+      tags: [Policy Versions]
+      summary: Get fee and multisig config version history
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Version history
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Contracts ─────────────────────────────────────────────
+  /api/contracts:
+    get:
+      tags: [Contracts]
+      summary: Get contract deployment info and version
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Contract version and owner
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Stats ─────────────────────────────────────────────────
+  /api/stats:
+    get:
+      tags: [Stats]
+      summary: Aggregate on-chain contract statistics
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        "200":
+          description: Payment/escrow/stream/batch counters and total amounts
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   # ── Batches ────────────────────────────────────────────────
   /api/batches:
     get:
@@ -211,6 +451,21 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/batches/{id}:
+    get:
+      tags: [Batches]
+      summary: Get a batch with its child payments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Batch details with child payments
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── Recurring Payments ────────────────────────────────────
   /api/recurring:
     get:
@@ -240,6 +495,21 @@ paths:
           description: Recurrence created
         "400":
           $ref: "#/components/responses/ValidationError"
+
+  /api/recurring/{id}:
+    get:
+      tags: [Recurring]
+      summary: Get a recurring payment by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Recurrence details
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Payment Requests ──────────────────────────────────────
   /api/requests:
@@ -372,6 +642,48 @@ paths:
           description: Key revoked
         "400":
           description: Missing key ID
+
+  # ── Session ───────────────────────────────────────────────
+  /api/auth/session:
+    post:
+      tags: [Session]
+      summary: Issue a signed session cookie for a connected wallet
+      description: |
+        Called by the UI after a successful wallet connect. Sets an HttpOnly
+        HMAC-signed session cookie carrying the wallet public key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publicKey, signature]
+              properties:
+                publicKey: { type: string, description: "Stellar wallet public key" }
+                signature: { type: string, description: "Wallet-signed payload proving ownership" }
+      responses:
+        "200":
+          description: Session cookie issued
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Session]
+      summary: Revoke the session cookie
+      responses:
+        "200":
+          description: Session revoked
+
+  /api/csrf:
+    get:
+      tags: [Session]
+      summary: Mint a CSRF token for this session
+      description: |
+        Sets the HttpOnly `__Host-csrf` cookie AND returns the token in the
+        body so clients can echo it via the `x-csrf-token` header on mutation
+        requests (double-submit cookie pattern).
+      responses:
+        "200":
+          description: CSRF token issued
 
   # ── Multisig ──────────────────────────────────────────────
   /api/multisig:
@@ -643,6 +955,22 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/audit-log/sse:
+    get:
+      tags: [Audit Log]
+      summary: Subscribe to the live audit-log stream
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      description: |
+        Server-Sent Events stream that polls the contract audit log every few
+        seconds and pushes new entries to connected clients.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
   # ── SSE Events ────────────────────────────────────────────
   /api/events:
     get:
@@ -662,6 +990,19 @@ paths:
             text/event-stream:
               schema:
                 type: string
+
+  /api/events/history:
+    get:
+      tags: [Events]
+      summary: Fetch on-chain payment event history
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+          description: Number of recent events to return
+      responses:
+        "200":
+          description: Recent event history
 
   # ── Health ────────────────────────────────────────────────
   /api/health:
