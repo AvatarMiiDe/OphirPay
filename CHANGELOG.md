@@ -2,6 +2,19 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased] — 2026-08-11
+
+### Security Fixes
+- **Voting weight**: `vote_on_proposal` no longer accepts self-reported `weight` parameter. Each address gets exactly 1 vote per proposal with double-vote prevention via persistent storage tracking. Added `AlreadyVoted` error (51).
+- **Reentrancy guard**: Added `REENTRANCY_LOCK` with `acquire_reentrancy_lock()`/`release_reentrancy_lock()` helpers and `ReentrantCall` error (52). Applied to `emergency_withdraw`, `emergency_pause_all`, `emergency_unpause_all`.
+- **Min proposal deposit**: `create_proposal` now requires `deposit_asset` + `deposit_amount` params, validated against `config.min_proposal_deposit`. Deposit transferred to contract and tracked in `LOCKED_BALANCE`. `execute_proposal` refunds deposit regardless of outcome.
+
+### Changed
+- **Error code expansion**: OphirPay PaymentError from 52 → 94 variants (grouped, 100-255 reserved). Emitter EmitterError from 7 → 14 variants. TypeScript `CONTRACT_ERROR_MAP` updated with human-readable messages for all 94 codes.
+- **CI/CD pipeline**: 12 → 20 jobs. Added Rust Clippy, Rust Format, Secrets Scan (Gitleaks), Docker Build, Bundle Size, Accessibility Audit (axe-core), OpenAPI Validation (Redocly), Spell Check (typos-cli).
+- **React Query**: Added `@tanstack/react-query` with `QueryProvider`, `useApiQuery` (typed GET), `useApiMutation` (typed POST with auto-invalidation). Wired into `AppShell`.
+- **Zod validation**: Added shared `validation-schemas.ts` with 15 schemas and `validateBody()` helper. Wired into governance vote route.
+
 ## [Unreleased] — 2026-08-10
 
 ### Changed
