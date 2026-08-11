@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useToast } from "@/components/ui/Toast";
+import { useApiQuery, useApiMutation, type ApiError } from "@/hooks/useApiQuery";
 import { ALL_WEBHOOK_EVENTS, WEBHOOK_EVENT_LABELS } from "@/app/api/webhooks/event-types";
 import type { WebhookEventType } from "@/app/api/webhooks/event-types";
 
@@ -21,10 +22,14 @@ interface WebhookData {
   createdAt: string;
 }
 
+interface CreateWebhookBody {
+  url: string;
+  events: WebhookEventType[];
+  isActive: boolean;
+}
+
 export default function WebhooksPage() {
   const toast = useToast();
-  const [webhooks, setWebhooks] = useState<WebhookData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -34,23 +39,21 @@ export default function WebhooksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const fetchWebhooks = useCallback(async () => {
-    try {
-      const res = await fetch("/api/webhooks");
-      if (res.ok) {
-        const json = await res.json();
-        setWebhooks(json.data ?? []);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: rawWebhooks,
+    isLoading: loading,
+  } = useApiQuery<WebhookData[]>(["webhooks"], "/api/webhooks");
+  const webhooks = Array.isArray(rawWebhooks) ? rawWebhooks : [];
 
-  useEffect(() => {
-    fetchWebhooks();
-  }, [fetchWebhooks]);
+  const createMutation = useApiMutation<CreateWebhookBody, WebhookData & { secret?: string }>(
+    "/api/webhooks",
+    { invalidateKeys: [["webhooks"]] }
+  );
+
+  const deleteMutation = useApiMutation<{ id: string }, { deleted: boolean }>(
+    (body) => `/api/webhooks?id=${body.id}`,
+    { method: "DELETE", invalidateKeys: [["webhooks"]] }
+  );
 
   const toggleEvent = (event: WebhookEventType) => {
     setFormEvents((prev) =>
@@ -71,25 +74,18 @@ export default function WebhooksPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/webhooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: formUrl, events: formEvents, isActive: true }),
+      const data = await createMutation.mutateAsync({
+        url: formUrl,
+        events: formEvents,
+        isActive: true,
       });
-
-      if (res.ok) {
-        const json = await res.json();
-        setNewSecret(json.data?.secret ?? null);
-        setFormUrl("");
-        setFormEvents([]);
-        fetchWebhooks();
-        toast.success("Webhook created", "Your webhook endpoint has been registered.");
-      } else {
-        const err = await res.json().catch(() => ({ error: "Failed to create webhook" }));
-        setFormError(err.error ?? "Failed to create webhook");
-      }
-    } catch {
-      setFormError("Network error. Please try again.");
+      setNewSecret(data?.secret ?? null);
+      setFormUrl("");
+      setFormEvents([]);
+      toast.success("Webhook created", "Your webhook endpoint has been registered.");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setFormError(apiErr.message || "Failed to create webhook");
     } finally {
       setSubmitting(false);
     }
@@ -98,13 +94,11 @@ export default function WebhooksPage() {
   const handleDelete = async (id: string) => {
     setDeleting(id);
     try {
-      const res = await fetch(`/api/webhooks?id=${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setWebhooks((prev) => prev.filter((w) => w.id !== id));
-        toast.success("Webhook deleted");
-      }
-    } catch {
-      toast.error("Failed to delete webhook");
+      await deleteMutation.mutateAsync({ id });
+      toast.success("Webhook deleted");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      toast.error(apiErr.message || "Failed to delete webhook");
     } finally {
       setDeleting(null);
     }

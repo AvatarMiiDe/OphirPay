@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { useApiQuery } from "@/hooks/useApiQuery";
 
 interface AuditEntry {
   id: number;
@@ -56,27 +58,19 @@ const ACTION_COLORS: Record<string, "success" | "danger" | "warning" | "info"> =
 };
 
 export default function AuditLogPage() {
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [connected, setConnected] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
 
-  const fetchEntries = useCallback(async () => {
-    try {
-      const res = await fetch("/api/audit-log");
-      if (res.ok) setEntries((await res.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: rawEntries,
+    isLoading: loading,
+  } = useApiQuery<AuditEntry[]>(["audit-log"], "/api/audit-log");
+  const entries = Array.isArray(rawEntries) ? rawEntries : [];
 
-  useEffect(() => { fetchEntries(); }, [fetchEntries]);
-
-  // SSE live streaming
+  // SSE live streaming — prepend incoming entries into the React Query cache
   const connectSSE = useCallback(() => {
     if (sseRef.current) sseRef.current.close();
     const es = new EventSource("/api/audit-log/sse");
@@ -85,12 +79,14 @@ export default function AuditLogPage() {
     es.addEventListener("audit:entry", (e) => {
       try {
         const data = JSON.parse(e.data);
-        setEntries((prev) => [data, ...prev].slice(0, 100));
+        queryClient.setQueryData<AuditEntry[]>(["audit-log"], (prev) =>
+          [data, ...(Array.isArray(prev) ? prev : [])].slice(0, 100)
+        );
       } catch {}
     });
     es.onerror = () => setConnected(false);
     return es;
-  }, []);
+  }, [queryClient]);
 
   const toggleLive = () => {
     if (!liveMode) {
@@ -100,7 +96,7 @@ export default function AuditLogPage() {
       sseRef.current?.close();
       setConnected(false);
       setLiveMode(false);
-      fetchEntries();
+      queryClient.invalidateQueries({ queryKey: ["audit-log"] });
     }
   };
 

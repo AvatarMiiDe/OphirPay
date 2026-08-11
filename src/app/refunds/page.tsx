@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { requestRefund, approveRefund, processRefund } from "@/lib/contract-advanced";
 
 const REASON_CODES = [
@@ -40,12 +42,15 @@ interface Refund {
   resolved_at: number;
 }
 
+interface RefundAnalytics {
+  code: number;
+  count: number;
+}
+
 export default function RefundsPage() {
   const { wallet } = useWallet();
   const toast = useToast();
-  const [refunds, setRefunds] = useState<Refund[]>([]);
-  const [analytics, setAnalytics] = useState<{ code: number; count: number }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showRequest, setShowRequest] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"list" | "analytics">("list");
@@ -56,22 +61,16 @@ export default function RefundsPage() {
   const [formReason, setFormReason] = useState("");
   const [formReasonCode, setFormReasonCode] = useState(0);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [refundsRes, analyticsRes] = await Promise.all([
-        fetch("/api/refunds"),
-        fetch("/api/refunds?analytics=true"),
-      ]);
-      if (refundsRes.ok) setRefunds((await refundsRes.json()).data ?? []);
-      if (analyticsRes.ok) setAnalytics((await analyticsRes.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: rawRefunds,
+    isLoading: loading,
+  } = useApiQuery<Refund[]>(["refunds"], "/api/refunds");
+  const refunds = Array.isArray(rawRefunds) ? rawRefunds : [];
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const {
+    data: rawAnalytics,
+  } = useApiQuery<RefundAnalytics[]>(["refunds", "analytics"], "/api/refunds?analytics=true");
+  const analytics = Array.isArray(rawAnalytics) ? rawAnalytics : [];
 
   const handleRequest = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -93,17 +92,7 @@ export default function RefundsPage() {
         setFormAmount("");
         setFormAsset("");
         setFormReason("");
-        setRefunds((prev) => [...prev, {
-          id: Date.now(),
-          payment_id: parseInt(formPaymentId),
-          requester: wallet.publicKey!,
-          amount: parseFloat(formAmount) || 0,
-          reason: formReason || "Refund requested",
-          reason_code: formReasonCode,
-          status: "Requested",
-          requested_at: Math.floor(Date.now() / 1000),
-          resolved_at: 0,
-        }]);
+        queryClient.invalidateQueries({ queryKey: ["refunds"] });
       } else {
         toast.error(result.error || "Failed to request refund");
       }
@@ -120,9 +109,7 @@ export default function RefundsPage() {
       const result = await approveRefund(wallet.publicKey, refundId);
       if (result.success) {
         toast.success("Refund approved on-chain");
-        setRefunds((prev) => prev.map((r) =>
-          r.id === refundId ? { ...r, status: "Approved" } : r
-        ));
+        queryClient.invalidateQueries({ queryKey: ["refunds"] });
       } else {
         toast.error(result.error || "Approval failed");
       }
@@ -136,9 +123,7 @@ export default function RefundsPage() {
       const result = await processRefund(refundId);
       if (result.success) {
         toast.success("Refund processed on-chain — tokens returned");
-        setRefunds((prev) => prev.map((r) =>
-          r.id === refundId ? { ...r, status: "Processed" } : r
-        ));
+        queryClient.invalidateQueries({ queryKey: ["refunds"] });
       } else {
         toast.error(result.error || "Processing failed");
       }

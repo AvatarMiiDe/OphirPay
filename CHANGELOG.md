@@ -4,6 +4,12 @@ All notable changes to OphirPay will be documented in this file.
 
 ## [Unreleased] — 2026-08-11
 
+### Changed
+- **React Query rollout complete**: All 16 remaining data-driven pages converted from raw `fetch` + `useState` to `useApiQuery`/`useApiMutation` (batches, policy-versions, recurring, RBAC, timelock, hooks, fee-config, refunds, multisig, webhooks, requests, audit-log, dashboard, payments, events, send). Contract-signed mutations keep in-browser Freighter signing but now refresh the cache via `queryClient.invalidateQueries()` instead of manual state patching; webhooks/requests/send use `useApiMutation` with scoped invalidation
+- **CSRF client plumbing**: added `GET /api/csrf` (sets `__Host-csrf` cookie + returns token) and `apiFetch` now auto-attaches `x-csrf-token` to non-GET requests — fixes 403s that previously blocked ALL mutation API routes (including the already-converted governance page)
+- **`useApiMutation` upgrades**: `method` option (POST/DELETE/PUT/PATCH), URL-as-function for resource-identified routes, `invalidateKeys` for scoped cache invalidation
+- **`useApiQuery` upgrades**: optional `queryFn` override for non-REST sources (on-chain Soroban reads on dashboard/payments/events) with `refetchOnWindowFocus: false` to avoid N+1 RPC refetches on tab focus
+
 ### Security Fixes
 - **Voting weight**: `vote_on_proposal` no longer accepts self-reported `weight` parameter. Each address gets exactly 1 vote per proposal with double-vote prevention via persistent storage tracking. Added `AlreadyVoted` error (51).
 - **Reentrancy guard**: Added `REENTRANCY_LOCK` with `acquire_reentrancy_lock()`/`release_reentrancy_lock()` helpers and `ReentrantCall` error (52). Applied to `emergency_withdraw`, `emergency_pause_all`, `emergency_unpause_all`.

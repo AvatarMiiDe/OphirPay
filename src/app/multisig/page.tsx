@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import {
   setMultisigConfig,
   proposeMultisigPayment,
@@ -37,9 +39,7 @@ interface ApprovalRequest {
 export default function MultisigPage() {
   const toast = useToast();
   const { wallet } = useWallet();
-  const [config, setConfig] = useState<MultisigConfig | null>(null);
-  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showConfig, setShowConfig] = useState(false);
   const [showPropose, setShowPropose] = useState(false);
 
@@ -51,22 +51,19 @@ export default function MultisigPage() {
   const [proposeAmount, setProposeAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [cfgRes, reqRes] = await Promise.all([
-        fetch("/api/multisig"),
-        fetch("/api/multisig/requests"),
-      ]);
-      if (cfgRes.ok) setConfig((await cfgRes.json()).data ?? null);
-      if (reqRes.ok) setRequests((await reqRes.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: rawConfig,
+    isLoading: loading,
+  } = useApiQuery<MultisigConfig>(["multisig", "config"], "/api/multisig");
+  const config =
+    rawConfig && typeof rawConfig === "object" && "threshold" in rawConfig
+      ? (rawConfig as MultisigConfig)
+      : null;
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const {
+    data: rawRequests,
+  } = useApiQuery<ApprovalRequest[]>(["multisig", "requests"], "/api/multisig/requests");
+  const requests = Array.isArray(rawRequests) ? rawRequests : [];
 
   const handleConfigSubmit = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -77,7 +74,7 @@ export default function MultisigPage() {
       if (result.success) {
         toast.success("Multisig configuration updated on-chain");
         setShowConfig(false);
-        setConfig({ threshold: formThreshold, signers, enabled: formEnabled });
+        queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Failed to update configuration");
       }
@@ -102,14 +99,7 @@ export default function MultisigPage() {
         setShowPropose(false);
         setProposePayee("");
         setProposeAmount("");
-        setRequests((prev) => [...prev, {
-          id: Date.now(),
-          proposer: wallet.publicKey!,
-          payee: proposePayee,
-          amount: proposeAmount,
-          approvals_count: 0,
-          executed: false,
-        }]);
+        queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Failed to propose payment");
       }
@@ -126,9 +116,7 @@ export default function MultisigPage() {
       const result = await approveMultisigPayment(wallet.publicKey, requestId);
       if (result.success) {
         toast.success("Approval submitted on-chain");
-        setRequests((prev) => prev.map((r) =>
-          r.id === requestId ? { ...r, approvals_count: (r.approvals_count ?? 0) + 1 } : r
-        ));
+        queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Approval failed");
       }
@@ -143,9 +131,7 @@ export default function MultisigPage() {
       const result = await executeApprovedPayment(wallet.publicKey, requestId);
       if (result.success) {
         toast.success("Payment executed on-chain");
-        setRequests((prev) => prev.map((r) =>
-          r.id === requestId ? { ...r, executed: true } : r
-        ));
+        queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Execution failed — threshold may not be met");
       }

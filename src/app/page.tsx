@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { shortenAddress, formatAmount, timeAgo } from "@/lib/utils";
 import { getAccountExplorerUrl, XLM_STROOPS, STELLAR_NETWORK } from "@/lib/stellar";
@@ -10,6 +9,7 @@ import {
   fetchOnChainPayments,
   type OnChainPayment,
 } from "@/lib/contracts";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -19,31 +19,32 @@ import Link from "next/link";
 
 // ── Page ───────────────────────────────────────────────────────
 
+interface OnChainData {
+  payments: OnChainPayment[];
+  total: number;
+}
+
 export default function TreasuryDashboard() {
   const { wallet, fetchBalance } = useWallet();
 
-  const [payments, setPayments] = useState<OnChainPayment[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    isLoading: loading,
+    error: fetchError,
+    refetch: loadOnChain,
+  } = useApiQuery<OnChainData>(
+    ["dashboard", "payments"],
+    undefined, // REST not used — reads via Soroban simulation below
+    {
+      // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
+      refetchOnWindowFocus: false,
+    },
+    () => fetchOnChainPayments(20),
+  );
 
-  const loadOnChain = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchOnChainPayments(20);
-      setPayments(result.payments);
-      setTotalCount(result.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load on-chain data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadOnChain();
-  }, [loadOnChain]);
+  const payments = data?.payments ?? [];
+  const totalCount = data?.total ?? 0;
+  const error = fetchError ? fetchError.message : null;
 
   const totalBalance = wallet.balance ? parseFloat(wallet.balance) : 0;
 
@@ -244,7 +245,7 @@ export default function TreasuryDashboard() {
                 Failed to load on-chain data: {error}
               </p>
               <button
-                onClick={loadOnChain}
+                onClick={() => loadOnChain()}
                 className="text-sm text-red-600 dark:text-red-400 underline hover:no-underline font-medium"
               >
                 Retry

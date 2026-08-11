@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
+import { useApiQuery, useApiMutation, type ApiError } from "@/hooks/useApiQuery";
 import { generatePaymentLink } from "@/lib/payment-link";
 import { formatAmount } from "@/lib/utils";
 import { useWallet } from "@/hooks/useMultiWallet";
@@ -25,13 +26,18 @@ interface RequestData {
   updatedAt: string;
 }
 
+interface CreateRequestBody {
+  amount: number;
+  assetCode: string;
+  description?: string;
+  recipientAddress?: string;
+}
+
 const QR_API = "https://api.qrserver.com/v1/create-qr-code";
 
 export default function RequestsPage() {
   const toast = useToast();
   const { wallet } = useWallet();
-  const [requests, setRequests] = useState<RequestData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RequestData | null>(null);
   const [showQR, setShowQR] = useState(false);
@@ -43,23 +49,16 @@ export default function RequestsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const fetchRequests = useCallback(async () => {
-    try {
-      const res = await fetch("/api/requests");
-      if (res.ok) {
-        const json = await res.json();
-        setRequests(json.data ?? []);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: rawRequests,
+    isLoading: loading,
+  } = useApiQuery<RequestData[]>(["requests"], "/api/requests");
+  const requests = Array.isArray(rawRequests) ? rawRequests : [];
 
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+  const createMutation = useApiMutation<CreateRequestBody, RequestData>(
+    "/api/requests",
+    { invalidateKeys: [["requests"]] }
+  );
 
   const handleCreate = async () => {
     setFormError(null);
@@ -71,28 +70,18 @@ export default function RequestsPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amt,
-          assetCode: formAsset,
-          description: formDescription || undefined,
-          recipientAddress: formAddress || wallet.publicKey || undefined,
-        }),
+      await createMutation.mutateAsync({
+        amount: amt,
+        assetCode: formAsset,
+        description: formDescription || undefined,
+        recipientAddress: formAddress || wallet.publicKey || undefined,
       });
-
-      if (res.ok) {
-        setShowCreate(false);
-        resetForm();
-        fetchRequests();
-        toast.success("Request created", "Share the payment link with your payer.");
-      } else {
-        const err = await res.json().catch(() => ({ error: "Failed to create request" }));
-        setFormError(err.error ?? "Failed to create request");
-      }
-    } catch {
-      setFormError("Network error. Please try again.");
+      setShowCreate(false);
+      resetForm();
+      toast.success("Request created", "Share the payment link with your payer.");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setFormError(apiErr.message || "Failed to create request");
     } finally {
       setSubmitting(false);
     }

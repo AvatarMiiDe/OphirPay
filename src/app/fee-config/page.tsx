@@ -1,7 +1,8 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { setFeeConfig, setFeeCollector } from "@/lib/contract-advanced";
 
 interface FeeConfigData {
@@ -23,9 +25,8 @@ interface FeeConfigData {
 export default function FeeConfigPage() {
   const toast = useToast();
   const { wallet } = useWallet();
-  const [config, setConfig] = useState<FeeConfigData | null>(null);
+  const queryClient = useQueryClient();
   const [collector, setCollector] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showCollectorModal, setShowCollectorModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -38,24 +39,13 @@ export default function FeeConfigPage() {
   const [formEnabled, setFormEnabled] = useState(true);
   const [formCollector, setFormCollector] = useState("");
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [cfgRes, _colRes] = await Promise.all([
-        fetch("/api/fee-config"),
-        fetch("/api/fee-config?collector=1"),
-      ]);
-      if (cfgRes.ok) {
-        const data = (await cfgRes.json()).data;
-        if (data) setConfig(data);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const {
+    data: rawConfig,
+    isLoading: loading,
+  } = useApiQuery<FeeConfigData>(["fee-config"], "/api/fee-config");
+  const config = rawConfig && typeof rawConfig === "object" && "payment_fee_bps" in rawConfig
+    ? rawConfig
+    : null;
 
   const handleFeeSubmit = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -69,14 +59,7 @@ export default function FeeConfigPage() {
       if (result.success) {
         toast.success("Fee configuration saved on-chain");
         setShowFeeModal(false);
-        setConfig({
-          payment_fee_bps: formPaymentFee,
-          escrow_fee_bps: formEscrowFee,
-          stream_fee_bps: formStreamFee,
-          batch_base_fee: formBatchBase,
-          batch_per_item_fee: formBatchPerItem,
-          enabled: formEnabled,
-        });
+        queryClient.invalidateQueries({ queryKey: ["fee-config"] });
       } else {
         toast.error(result.error || "Failed to update fee config");
       }

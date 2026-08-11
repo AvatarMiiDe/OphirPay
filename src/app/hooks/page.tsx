@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { registerHook, unregisterHook } from "@/lib/contract-advanced";
 
 const EVENT_TYPES = [
@@ -36,26 +38,18 @@ interface Hook {
 export default function HooksPage() {
   const { wallet } = useWallet();
   const toast = useToast();
-  const [hooks, setHooks] = useState<Hook[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showRegister, setShowRegister] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [formEventType, setFormEventType] = useState<string>(EVENT_TYPES[0]);
   const [formWebhookUrl, setFormWebhookUrl] = useState("");
 
-  const fetchHooks = useCallback(async () => {
-    try {
-      const res = await fetch("/api/hooks");
-      if (res.ok) setHooks((await res.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchHooks(); }, [fetchHooks]);
+  const {
+    data: rawHooks,
+    isLoading: loading,
+  } = useApiQuery<Hook[]>(["hooks"], "/api/hooks");
+  const hooks = Array.isArray(rawHooks) ? rawHooks : [];
 
   const handleRegister = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -67,14 +61,7 @@ export default function HooksPage() {
         toast.success("Notification hook registered on-chain");
         setShowRegister(false);
         setFormWebhookUrl("");
-        setHooks((prev) => [...prev, {
-          id: Date.now(),
-          subscriber: wallet.publicKey!,
-          event_type: formEventType,
-          webhook_url: formWebhookUrl,
-          active: true,
-          created_at: Math.floor(Date.now() / 1000),
-        }]);
+        queryClient.invalidateQueries({ queryKey: ["hooks"] });
       } else {
         toast.error(result.error || "Failed to register hook");
       }
@@ -91,9 +78,7 @@ export default function HooksPage() {
       const result = await unregisterHook(wallet.publicKey, hookId);
       if (result.success) {
         toast.success("Hook deactivated on-chain");
-        setHooks((prev) => prev.map((h) =>
-          h.id === hookId ? { ...h, active: false } : h
-        ));
+        queryClient.invalidateQueries({ queryKey: ["hooks"] });
       } else {
         toast.error(result.error || "Failed to deactivate hook");
       }

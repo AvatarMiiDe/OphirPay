@@ -1,7 +1,8 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import {
   proposeTimelockedAction,
   executeTimelockedAction,
@@ -38,8 +40,7 @@ const ACTION_TYPES = [
 export default function TimelockPage() {
   const toast = useToast();
   const { wallet } = useWallet();
-  const [actions, setActions] = useState<TimelockAction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showPropose, setShowPropose] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -47,18 +48,11 @@ export default function TimelockPage() {
   const [formTarget, setFormTarget] = useState("");
   const [formData, setFormData] = useState("");
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/timelock");
-      if (res.ok) setActions((await res.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const {
+    data: rawActions,
+    isLoading: loading,
+  } = useApiQuery<TimelockAction[]>(["timelock"], "/api/timelock");
+  const actions = Array.isArray(rawActions) ? rawActions : [];
 
   const handlePropose = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -72,16 +66,7 @@ export default function TimelockPage() {
         setShowPropose(false);
         setFormTarget("");
         setFormData("");
-        setActions((prev) => [...prev, {
-          id: Date.now(),
-          action_type: formActionType,
-          target: formTarget,
-          data: formData,
-          proposed_by: wallet.publicKey!,
-          proposed_at: Math.floor(Date.now() / 1000),
-          unlocks_at: Math.floor(Date.now() / 1000) + 86400,
-          executed: false,
-        }]);
+        queryClient.invalidateQueries({ queryKey: ["timelock"] });
       } else {
         toast.error(result.error || "Proposal failed — owner only");
       }
@@ -98,9 +83,7 @@ export default function TimelockPage() {
       const result = await executeTimelockedAction(wallet.publicKey || "", actionId);
       if (result.success) {
         toast.success("Timelocked action executed on-chain");
-        setActions((prev) =>
-          prev.map((a) => (a.id === actionId ? { ...a, executed: true } : a))
-        );
+        queryClient.invalidateQueries({ queryKey: ["timelock"] });
       } else {
         toast.error(result.error || "Execution failed — still locked or already executed");
       }
@@ -115,9 +98,7 @@ export default function TimelockPage() {
       const result = await cancelTimelockedAction(wallet.publicKey, actionId);
       if (result.success) {
         toast.success("Action cancelled on-chain");
-        setActions((prev) =>
-          prev.map((a) => (a.id === actionId ? { ...a, executed: true } : a))
-        );
+        queryClient.invalidateQueries({ queryKey: ["timelock"] });
       } else {
         toast.error(result.error || "Cancel failed — owner only");
       }

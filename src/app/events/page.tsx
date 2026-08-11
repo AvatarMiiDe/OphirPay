@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 
@@ -10,6 +10,7 @@ import {
   fetchOnChainPayments,
   type OnChainPayment,
 } from "@/lib/contracts";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { XLM_STROOPS, getStellarExplorerUrl } from "@/lib/stellar";
 
 interface SseEvent {
@@ -27,7 +28,6 @@ interface SseEvent {
 export default function EventsPage() {
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);
-  const [onChainPayments, setOnChainPayments] = useState<OnChainPayment[]>([]);
   const [viewMode, setViewMode] = useState<"live" | "onchain">("live");
   const eventsEndRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -57,17 +57,20 @@ export default function EventsPage() {
     return () => eventSource.close();
   }, []);
 
-  // Load on-chain data
-  const loadOnChain = useCallback(async () => {
-    try {
-      const result = await fetchOnChainPayments(50);
-      setOnChainPayments(result.payments);
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (viewMode === "onchain") loadOnChain();
-  }, [viewMode, loadOnChain]);
+  // Load on-chain data (only when the On-Chain tab is active)
+  const {
+    data: onChainData,
+  } = useApiQuery<{ payments: OnChainPayment[] }>(
+    ["events", "onchain"],
+    undefined, // REST not used — reads via Soroban simulation below
+    {
+      enabled: viewMode === "onchain",
+      // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
+      refetchOnWindowFocus: false,
+    },
+    () => fetchOnChainPayments(50),
+  );
+  const onChainPayments = onChainData?.payments ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">

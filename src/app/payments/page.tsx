@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
 import {
@@ -14,34 +14,37 @@ import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useApiQuery } from "@/hooks/useApiQuery";
 
 // ── Page ──────────────────────────────────────────────────────
 
+interface OnChainData {
+  payments: OnChainPayment[];
+  total: number;
+}
+
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<OnChainPayment[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchOnChainPayments(50);
-      setPayments(result.payments);
-      setTotal(result.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load on-chain payments");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data,
+    isLoading: loading,
+    error: fetchError,
+    refetch: load,
+  } = useApiQuery<OnChainData>(
+    ["payments", "onchain"],
+    undefined, // REST not used — reads via Soroban simulation below
+    {
+      // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
+      refetchOnWindowFocus: false,
+    },
+    () => fetchOnChainPayments(50),
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const payments = useMemo(() => data?.payments ?? [], [data]);
+  const total = data?.total ?? 0;
+  const error = fetchError ? fetchError.message : null;
 
   // Client-side search/filter
   const filtered = useMemo(() => {
@@ -94,7 +97,7 @@ export default function PaymentsPage() {
             CSV
           </button>
           <button
-            onClick={load}
+            onClick={() => load()}
             disabled={loading}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
@@ -155,7 +158,7 @@ export default function PaymentsPage() {
           <p className="text-sm text-red-700 dark:text-red-400">
             Failed to load on-chain payments: {error}
           </p>
-          <button onClick={load} className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline">
+          <button onClick={() => load()} className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline">
             Try again
           </button>
         </div>

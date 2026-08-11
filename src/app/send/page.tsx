@@ -18,6 +18,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
+import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
 import Link from "next/link";
@@ -60,6 +61,21 @@ export default function SendPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Best-effort DB record — invalidates dashboard/payments caches on success
+  const recordPaymentMutation = useApiMutation<
+    {
+      amount: number;
+      assetCode: string;
+      assetIssuer?: string;
+      memo?: string;
+      sourceAccountId: string;
+      destAddress: string;
+    },
+    { id: string }
+  >("/api/payments", {
+    invalidateKeys: [["dashboard", "payments"], ["payments", "onchain"], ["events", "onchain"]],
+  });
 
   // Fetch live fee estimate on mount
   useEffect(() => {
@@ -150,17 +166,13 @@ export default function SendPage() {
 
       // 5. Create a DB payment record (triggers webhooks automatically)
       try {
-        await fetch("/api/payments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: parseFloat(amount),
-            assetCode: selectedAsset.code,
-            assetIssuer: selectedAsset.issuer,
-            memo: memo.trim() || undefined,
-            sourceAccountId: wallet.publicKey,
-            destAddress: destination.trim(),
-          }),
+        await recordPaymentMutation.mutateAsync({
+          amount: parseFloat(amount),
+          assetCode: selectedAsset.code,
+          assetIssuer: selectedAsset.issuer,
+          memo: memo.trim() || undefined,
+          sourceAccountId: wallet.publicKey,
+          destAddress: destination.trim(),
         });
       } catch {
         // Best-effort: payment already settled on-chain

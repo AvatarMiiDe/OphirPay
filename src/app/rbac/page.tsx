@@ -1,7 +1,8 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { grantRole, revokeRole, Role, type RoleValue } from "@/lib/contract-advanced";
 
 interface RoleAssignment {
@@ -26,8 +28,7 @@ const ROLE_LABELS: Record<RoleValue, { label: string; color: "info" | "success" 
 export default function RBACPage() {
   const toast = useToast();
   const { wallet } = useWallet();
-  const [assignments, setAssignments] = useState<RoleAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showGrant, setShowGrant] = useState(false);
   const [showRevoke, setShowRevoke] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -36,18 +37,11 @@ export default function RBACPage() {
   const [grantRoleVal, setGrantRoleVal] = useState<RoleValue>(Role.Operator);
   const [revokeAddress, setRevokeAddress] = useState("");
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/rbac");
-      if (res.ok) setAssignments((await res.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const {
+    data: rawAssignments,
+    isLoading: loading,
+  } = useApiQuery<RoleAssignment[]>(["rbac"], "/api/rbac");
+  const assignments = Array.isArray(rawAssignments) ? rawAssignments : [];
 
   const handleGrant = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -62,10 +56,7 @@ export default function RBACPage() {
         toast.success(`Role granted on-chain`);
         setShowGrant(false);
         setGrantAddress("");
-        setAssignments((prev) => [
-          ...prev.filter((a) => a.address !== grantAddress),
-          { address: grantAddress, role: grantRoleVal, roleName: ROLE_LABELS[grantRoleVal].label },
-        ]);
+        queryClient.invalidateQueries({ queryKey: ["rbac"] });
       } else {
         toast.error(result.error || "Grant failed — are you an Admin?");
       }
@@ -89,7 +80,7 @@ export default function RBACPage() {
         toast.success("Role revoked on-chain");
         setShowRevoke(false);
         setRevokeAddress("");
-        setAssignments((prev) => prev.filter((a) => a.address !== revokeAddress));
+        queryClient.invalidateQueries({ queryKey: ["rbac"] });
       } else {
         toast.error(result.error || "Revoke failed — are you an Admin?");
       }

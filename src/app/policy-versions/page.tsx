@@ -1,10 +1,11 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { useApiQuery } from "@/hooks/useApiQuery";
 
 interface FeeVersion {
   version: number;
@@ -29,28 +30,19 @@ interface MultisigVersion {
 
 type Tab = "fees" | "multisig";
 
+interface PolicyVersionData {
+  feeConfigHistory: FeeVersion[];
+  multisigHistory: MultisigVersion[];
+}
+
 export default function PolicyVersionsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("fees");
-  const [feeHistory, setFeeHistory] = useState<FeeVersion[]>([]);
-  const [multisigHistory, setMultisigHistory] = useState<MultisigVersion[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/policy-versions");
-      if (res.ok) {
-        const json = await res.json();
-        setFeeHistory(json.data?.feeConfigHistory ?? []);
-        setMultisigHistory(json.data?.multisigHistory ?? []);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const { data, isLoading: loading } = useApiQuery<PolicyVersionData>(
+    ["policy-versions"],
+    "/api/policy-versions"
+  );
+  const feeHistory = Array.isArray(data?.feeConfigHistory) ? data.feeConfigHistory : [];
+  const multisigHistory = Array.isArray(data?.multisigHistory) ? data.multisigHistory : [];
 
   const formatTime = (ts: string | number) => {
     const date = new Date(typeof ts === "string" ? Number(ts) * 1000 : Number(ts) * 1000);

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { createRecurringPayment, cancelRecurringPayment } from "@/lib/contract-advanced";
 import { DEFAULT_CONTRACT_ID } from "@/lib/contracts";
 
@@ -27,8 +29,7 @@ interface RecurringPayment {
 export default function RecurringPage() {
   const { wallet } = useWallet();
   const toast = useToast();
-  const [payments, setPayments] = useState<RecurringPayment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -37,18 +38,11 @@ export default function RecurringPage() {
   const [formSchedule, setFormSchedule] = useState("Daily");
   const [formRemaining, setFormRemaining] = useState(0);
 
-  const fetchPayments = useCallback(async () => {
-    try {
-      const res = await fetch("/api/recurring");
-      if (res.ok) setPayments((await res.json()).data ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchPayments(); }, [fetchPayments]);
+  const {
+    data: rawPayments,
+    isLoading: loading,
+  } = useApiQuery<RecurringPayment[]>(["recurring"], "/api/recurring");
+  const payments = Array.isArray(rawPayments) ? rawPayments : [];
 
   const handleCreate = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -66,16 +60,7 @@ export default function RecurringPage() {
         setFormPayee("");
         setFormAmount("");
         setFormRemaining(0);
-        setPayments((prev) => [...prev, {
-          id: Date.now(),
-          payee: formPayee,
-          amount: formAmount,
-          schedule: formSchedule as "Daily" | "Weekly" | "Monthly",
-          remaining: formRemaining || 0,
-          times_executed: 0,
-          next_execution: Math.floor(Date.now() / 1000) + 86400,
-          active: true,
-        }]);
+        queryClient.invalidateQueries({ queryKey: ["recurring"] });
       } else {
         toast.error(result.error || "Failed to create recurring payment");
       }
@@ -92,9 +77,7 @@ export default function RecurringPage() {
       const result = await cancelRecurringPayment(wallet.publicKey, id);
       if (result.success) {
         toast.success("Recurring payment cancelled on-chain");
-        setPayments((prev) => prev.map((p) =>
-          p.id === id ? { ...p, active: false } : p
-        ));
+        queryClient.invalidateQueries({ queryKey: ["recurring"] });
       } else {
         toast.error(result.error || "Cancel failed");
       }

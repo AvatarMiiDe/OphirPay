@@ -2,39 +2,24 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import type { Batch } from "@/types";
 
 export default function BatchesPage() {
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: rawBatches,
+    isLoading: loading,
+    isError: hasError,
+    refetch: load,
+  } = useApiQuery<Batch[]>(["batches"], "/api/batches");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/batches");
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setBatches(json.data);
-      } else {
-        setBatches([]);
-      }
-    } catch {
-      setBatches([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const batches = Array.isArray(rawBatches) ? rawBatches : [];
+  const error = hasError ? "Failed to load batches" : null;
+  const handleRetry = () => { load(); };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -61,7 +46,7 @@ export default function BatchesPage() {
       {error && (
         <div className="p-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30">
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-          <button onClick={load} className="mt-2 text-sm text-red-600 dark:text-red-400 underline">Try again</button>
+          <button onClick={handleRetry} className="mt-2 text-sm text-red-600 dark:text-red-400 underline">Try again</button>
         </div>
       )}
 
