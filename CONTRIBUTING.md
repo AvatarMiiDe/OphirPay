@@ -71,9 +71,13 @@ npm run lint          # ESLint
 Contracts are in `contracts/`. Build with:
 
 ```bash
-cd contracts/ophirpay && cargo test   # 46 contract tests
+cd contracts/ophirpay && cargo test   # 58 contract tests
 cd contracts/emitter && cargo test    # 6 emitter tests
 ```
+
+Contract WASM size is enforced in CI (hard limit: 64 KB per contract, the
+Soroban protocol limit) and a per-function gas report is uploaded as a build
+artifact — see the `contract-gas-report` job in `.github/workflows/ci.yml`.
 
 ## Pull Request Process
 
