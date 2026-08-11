@@ -64,7 +64,7 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "ioredis": "^5.4.0"
+    "ioredis": "^5.11.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
