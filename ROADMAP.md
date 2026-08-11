@@ -12,10 +12,28 @@
 - [x] CSRF protection for mutations
 - [x] Docker distroless base image
 - [x] 20-job CI/CD pipeline
+- [x] Pre-submission hardening pass (one commit per fix, all pushed to `main`)
+  - [x] Governance proposal enumeration now works and creates proposals with real deposits
+  - [x] On-chain return values (proposal/request/refund/hook ids) captured from tx meta
+  - [x] Refund & hook lifecycles synced end-to-end (DB ledger rows linked by `onChainId`)
+  - [x] No empty-caller contract invocations anywhere in the UI/API
+  - [x] Stale test expectations aligned with the 94-code catalog — full suite green
+  - [x] OpenAPI spec expanded to cover all 40 API routes
+  - [x] Docs numbers (tests, versions, gas) aligned with reality
 
-### Up Next
+### Submission Milestone (Q3 2026)
+
+**Goal:** submit OphirPay to Stellar Drips Wave + Grantfox with a demo-ready,
+fully-green repository.
+- [x] 0 failing tests across 200 vitest + 64 Rust contract tests
+- [x] End-to-end refund lifecycle (Request → Approve → Process) demonstrable in the UI
+- [x] Multisig approve/execute address real on-chain request ids
+- [x] Security, Performance & Gas, and Audit-Readiness documented in the README
+- [ ] Record fresh demo video + screenshots against the seeded demo environment
 - [ ] External security audit (Runtime Verification or Certora)
 - [ ] Formal verification of key contract invariants
+
+### Up Next
 - [ ] Contract modularization (split into Payment/Escrow/Governance modules)
 - [ ] Redis-backed distributed rate limiting
 - [ ] Bug bounty program on Immunefi
