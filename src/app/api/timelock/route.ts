@@ -21,6 +21,14 @@ export async function GET(request: Request) {
     const actionId = searchParams.get("id");
 
     if (actionId) {
+      // Validate before encoding — garbage input would otherwise throw inside
+      // nativeToScVal and surface as a 500 instead of a clean 400.
+      if (!/^\d+$/.test(actionId)) {
+        return Response.json(
+          { success: false, error: { code: "VALIDATION_ERROR", message: "action id must be a positive integer" } },
+          { status: 400 }
+        );
+      }
       const result = await simulateContractCall(
         DEFAULT_CONTRACT_ID,
         "get_timelocked_action",
