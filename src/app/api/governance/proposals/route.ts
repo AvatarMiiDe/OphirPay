@@ -4,7 +4,7 @@ import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-re
 import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { createGovernanceProposal } from "@/lib/contract-advanced";
-import { cachedFetch } from "@/lib/api-cache";
+import { cachedFetch, cacheDelete } from "@/lib/api-cache";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, createProposalSchema } from "@/lib/validation-schemas";
 import { nativeToScVal } from "@stellar/stellar-sdk";
@@ -99,6 +99,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // A new proposal increments the count — drop the cached count so the
+    // next list fetch includes it.
+    cacheDelete("gov:proposal_count");
     return successResponse({ txHash: result.txHash, proposalId: result.data }, undefined, 201);
   } catch (err) {
     return handleApiError(err, "POST /api/governance/proposals");

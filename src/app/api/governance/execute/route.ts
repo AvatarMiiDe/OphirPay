@@ -5,6 +5,7 @@ import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, executeProposalSchema } from "@/lib/validation-schemas";
 import { executeGovernanceProposal } from "@/lib/contract-advanced";
+import { cacheDelete } from "@/lib/api-cache";
 
 /**
  * POST /api/governance/execute
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
       );
     }
 
+    cacheDelete("gov:proposal_count");
+    cacheDelete(`gov:proposal:${proposalId}`);
     return successResponse({ executed: true, proposalId, txHash: result.txHash });
   } catch (error) {
     return handleApiError(error);

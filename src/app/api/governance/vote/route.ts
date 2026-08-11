@@ -5,6 +5,13 @@ import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
 import { voteOnProposal } from "@/lib/contract-advanced";
 import { validateBody, voteOnProposalSchema } from "@/lib/validation-schemas";
+import { cacheDelete } from "@/lib/api-cache";
+
+/** Invalidate the cached proposal reads so a refetch shows the fresh vote. */
+function invalidateProposalCache(proposalId: number) {
+  cacheDelete("gov:proposal_count");
+  cacheDelete(`gov:proposal:${proposalId}`);
+}
 
 /**
  * POST /api/governance/vote — cast a vote on a proposal
@@ -39,6 +46,7 @@ export async function POST(request: Request) {
       );
     }
 
+    invalidateProposalCache(proposalId);
     return successResponse({ voted: true, proposalId, txHash: result.txHash });
   } catch (err) {
     return handleApiError(err, "POST /api/governance/vote");
