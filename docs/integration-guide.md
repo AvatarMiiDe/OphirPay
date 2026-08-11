@@ -106,16 +106,39 @@ await registerHook(
 
 Your endpoint receives HMAC-SHA256 signed payloads:
 
-```json
+```http
+POST /hooks HTTP/1.1
+Content-Type: application/json
+X-OphirPay-Signature: <hmac-sha256 hex>
+X-OphirPay-Event: payment_recorded
+
 {
   "event": "payment_recorded",
   "timestamp": "2026-08-06T12:00:00Z",
   "data": { "paymentId": 42, "amount": "10000000" },
-  "signature": "abc123..."
+  "signature": "<hmac-sha256 hex>"
 }
 ```
 
-Verify with: `HMAC-SHA256(JSON.stringify(payload), yourSecret)`
+The signature is HMAC-SHA256 (hex) over the payload **without** the
+`signature` field, using the secret returned when you registered the
+webhook. The same value is mirrored in the `X-OphirPay-Signature` header for
+convenience. Verify by recomputing:
+
+```typescript
+import { createHmac, timingSafeEqual } from "crypto";
+
+const received = await request.json();
+const { signature, ...payload } = received; // strip signature before signing
+const expected = createHmac("sha256", yourSecret)
+  .update(JSON.stringify(payload))
+  .digest("hex");
+const ok = signature.length === expected.length &&
+  timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+```
+
+Always compare with a constant-time comparison (`timingSafeEqual`) and
+reject requests missing a valid signature.
 
 ## Available Contract Functions
 
