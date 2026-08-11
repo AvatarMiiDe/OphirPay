@@ -22,6 +22,7 @@ interface AlbedoAPI {
     tx_hash: string;
     signed_envelope_xdr: string;
   }>;
+  signMessage: (params: { message: string; pubkey: string }) => Promise<{ signature: string }>;
 }
 
 function getAlbedoApi(): AlbedoAPI | undefined {
@@ -63,6 +64,14 @@ export const albedoConnector: WalletConnector = {
     if (!albedo) throw new Error("Albedo SDK not loaded. Please reconnect.");
     const result = await albedo.tx(xdr, { network: opts?.network });
     return result.signed_envelope_xdr;
+  },
+
+  async signMessage(message: string) {
+    const albedo = getAlbedoApi();
+    if (!albedo) throw new Error("Albedo SDK not loaded. Please reconnect.");
+    const { pubkey } = await albedo.publicKey();
+    const result = await albedo.signMessage({ message, pubkey });
+    return result.signature;
   },
 
   async getAddress() {

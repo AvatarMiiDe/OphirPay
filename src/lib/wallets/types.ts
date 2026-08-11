@@ -32,6 +32,12 @@ export interface WalletConnector {
     xdr: string,
     opts?: SignOptions,
   ): Promise<string>;
+  /**
+   * Sign an arbitrary message (proof of ownership). Optional — wallets that
+   * don't support message signing leave it undefined. Returns the raw
+   * signature as a base64 string.
+   */
+  signMessage?(message: string): Promise<string>;
   /** Get the current public key (returns null if not connected) */
   getAddress(): Promise<string | null>;
   /** Get the current Stellar network */

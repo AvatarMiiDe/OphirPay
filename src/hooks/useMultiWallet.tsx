@@ -141,8 +141,16 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
         if (publicKey) {
           loadBalance(publicKey);
         }
-        // Open a server-side session so API routes can authorize this user
-        await establishSession(publicKey, network || "TESTNET");
+        // Open a server-side session so API routes can authorize this user.
+        // Wallets that support message signing prove ownership by signing a
+        // challenge; the session route rejects fresh sessions without proof.
+        await establishSession(
+          publicKey,
+          network || "TESTNET",
+          connector.signMessage
+            ? (message: string) => connector.signMessage!(message)
+            : undefined
+        );
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to connect wallet";

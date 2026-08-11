@@ -15,6 +15,10 @@ interface FreighterAPI {
     xdr: string,
     opts?: { network?: string; networkPassphrase?: string },
   ) => Promise<string>;
+  signMessage: (message: string) => Promise<
+    | { signedMessage: string; messageSignature: string }
+    | string
+  >;
 }
 
 function getFreighterApi(): FreighterAPI | undefined {
@@ -59,6 +63,17 @@ export const freighterConnector: WalletConnector = {
       network: opts?.network,
       networkPassphrase: opts?.networkPassphrase,
     });
+  },
+
+  async signMessage(message: string) {
+    const freighter = getFreighterApi();
+    if (!freighter) throw new Error("Freighter wallet not found. Please reconnect.");
+    const result = await freighter.signMessage(message);
+    // Newer APIs return { signedMessage, messageSignature }; older return a
+    // bare base64 signature string. Both are accepted by the server.
+    const signature = typeof result === "string" ? result : result?.messageSignature;
+    if (!signature) throw new Error("Freighter did not return a message signature.");
+    return signature;
   },
 
   async getAddress() {

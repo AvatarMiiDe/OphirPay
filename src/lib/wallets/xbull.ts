@@ -19,6 +19,7 @@ interface XBullAPI {
     publicKey?: string;
     network?: string;
   }) => Promise<{ signature: string }>;
+  signMessage: (message: string) => Promise<string>;
   closeConnections: () => Promise<void>;
 }
 
@@ -73,6 +74,12 @@ export const xBullConnector: WalletConnector = {
     // For full Soroban compatibility, the caller should use submitContractInvocation
     // which handles signature attachment internally.
     return result.signature;
+  },
+
+  async signMessage(message: string) {
+    const xbull = getXBullApi();
+    if (!xbull) throw new Error("xBull wallet not found. Please reconnect.");
+    return xbull.signMessage(message);
   },
 
   async getAddress() {
