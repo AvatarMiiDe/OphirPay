@@ -62,22 +62,27 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
 
   let res = await fetch(url, { ...init, headers });
 
+  // Read the body once so it can be reused for both the CSRF check and the
+  // error path — consuming the stream twice loses the server's error detail.
+  let body: { error?: { code?: string; message?: string } } | null = null;
+
   // The cached token may be stale (24h cookie expiry, server rotation, or a
   // prior failed mint). Mint a fresh one and retry the request once.
   if (res.status === 403 && isMutation) {
-    const csrfBody = await res.json().catch(() => ({}));
-    if (csrfBody?.error?.code === "CSRF_INVALID") {
+    body = await res.json().catch(() => ({}));
+    if (body?.error?.code === "CSRF_INVALID") {
       csrfTokenPromise = null;
       const token = await getCsrfToken();
       if (token) {
         headers.set("x-csrf-token", token);
         res = await fetch(url, { ...init, headers });
+        body = null; // the retried response has its own body
       }
     }
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
+    if (!body) body = await res.json().catch(() => ({}));
     const err: ApiError = {
       code: body?.error?.code ?? `HTTP_${res.status}`,
       message: body?.error?.message ?? `Request failed with status ${res.status}`,
