@@ -21,7 +21,7 @@
       <img src="https://img.shields.io/badge/CI%20jobs-21-blue.svg?logo=githubactions" alt="21 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-329%20passed%20(184%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="329 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-251%20passed%20(187%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="251 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -62,7 +62,7 @@
       <img src="https://img.shields.io/badge/audit-npm-CB3837.svg?logo=npm" />
     </sub>
   </p>
-      <img src="https://img.shields.io/badge/version-v1.0.0--rc1-orange.svg" alt="v1.0.0-rc1" />
+      <img src="https://img.shields.io/badge/version-v0.1.0-blue.svg" alt="v0.1.0" />
     </a>
   </p>
 </div>
@@ -123,7 +123,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 246 tests (184 app + 62 contracts)** | ✅ | ⚠️ |
+| **Full CI/CD + 251 tests (187 app + 64 contracts)** | ✅ | ⚠️ |
 
 ---
 
@@ -470,7 +470,7 @@ Automatically builds WASM, uploads, deploys, initializes, and verifies both cont
 
 ## 🧪 Smart Contract Tests
 
-Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (62 tests total):
+Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (64 tests total):
 
 | Contract | Tests | Coverage |
 |---|---|---|
@@ -488,7 +488,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (246 total: 184 app + 62 contracts)
+# All tests (251 total: 187 app + 64 contracts)
 npm test
 
 # Watch mode
@@ -547,7 +547,7 @@ Every push to `main` triggers:
 |---|---|---|
 | Lint | `npx eslint . --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
-| Unit Tests | `vitest run --reporter=verbose` | 184 app tests across 13 suites |
+| Unit Tests | `vitest run --reporter=verbose` | 187 app tests across 13 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
 | Build | `next build` | Production Next.js build verification |
 | Smoke | curl (19 pages) | HTTP 200 check against live Vercel — ~3s |
@@ -652,7 +652,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 184 app tests + 62 contract tests | **Done** |
+| ✅ CI/CD pipeline + 187 app tests + 64 contract tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
