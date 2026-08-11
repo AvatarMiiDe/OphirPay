@@ -96,10 +96,29 @@ export async function GET() {
       );
 
       let closed = false;
+      let pollInterval: ReturnType<typeof setInterval> | null = null;
+      let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
       const encoder = new TextEncoder();
 
+      // Cleanup on stream cancel / client disconnect
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        if (pollInterval) clearInterval(pollInterval);
+        if (safetyTimeout) clearTimeout(safetyTimeout);
+        clients.delete(String(clientId));
+      };
+
+      // Typed cancel hook — runs when the client disconnects.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (controller as any).signal?.addEventListener("abort", cleanup);
+
+      // Safety: auto-cleanup after 10 minutes even without an explicit
+      // disconnect (e.g. runtimes that never surface the abort signal).
+      safetyTimeout = setTimeout(cleanup, 10 * 60 * 1000);
+
       // Poll contract every 15 seconds for new entries
-      const pollInterval = setInterval(async () => {
+      pollInterval = setInterval(async () => {
         if (closed) return;
         try {
           const { entries, newLastSeenId } = await pollContractForAuditEntries(
@@ -139,27 +158,6 @@ export async function GET() {
           );
         }
       } catch { /* silent */ }
-
-      // Cleanup on stream cancel / client disconnect
-      const cleanup = () => {
-        closed = true;
-        clearInterval(pollInterval);
-        clients.delete(String(clientId));
-      };
-
-      // Try to hook into the stream's cancel signal, but also use a
-      // safety timeout: if no explicit signal handler fires, stop
-      // polling after 10 minutes anyway to prevent orphaned intervals.
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const signal = (controller as any).signal;
-        if (signal) {
-          signal.addEventListener("abort", cleanup);
-        }
-      } catch { /* signal not available in this runtime */ }
-
-      // Safety: auto-cleanup after 10 minutes even without explicit disconnect
-      setTimeout(cleanup, 10 * 60 * 1000);
     },
   });
 
