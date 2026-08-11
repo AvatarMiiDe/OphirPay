@@ -682,14 +682,33 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 
 ## 🔒 Security
 
-- **No private keys stored** — all signing happens client-side via Freighter
-- **Read-only simulation** — contract queries use Soroban `simulateTransaction`, no signature needed
-- **Environment isolation** — network configuration via env vars, no hardcoded secrets
-- **Input validation** — Stellar address regex, amount bounds, memo length limits
-- **Error boundaries** — React error boundaries prevent full-page crashes
-- **Dependency auditing** — run `npm audit` to check for vulnerabilities
+OphirPay is designed with defense-in-depth across the contract, API, and web layers. No private keys are ever stored server-side — all signing happens client-side via Freighter/xBull/Rabet/Albedo/Lobstr.
 
-> ⚠️ **Production note**: OphirPay uses SQLite locally. For production, migrate to PostgreSQL and add rate limiting, CORS policies, and API authentication.
+### Smart Contract Invariants
+
+- **Fund-safety invariant** — `emergency_withdraw` is capped at `contract_balance − LOCKED_BALANCE`, so even the contract **owner cannot drain** funds locked in active escrows, streams, or governance deposits
+- **Reentrancy guard** — `REENTRANCY_LOCK` blocks cross-contract reentrancy on `emergency_withdraw` / `emergency_pause_all` / `emergency_unpause_all`
+- **Pause circuit breaker** — `require_not_paused()` guards every state-changing function
+- **Timelocked admin actions** — 24h delay on upgrades, ownership transfer, and other sensitive operations
+- **1 address = 1 vote** — governance votes are tracked per-address on-chain; double-voting returns `AlreadyVoted`
+- **Spam-resistant governance** — proposals require a minimum deposit (locked in `LOCKED_BALANCE`, refunded on execution)
+- **No panics** — all contract functions return `Result<T, PaymentError>` with 94 typed error codes
+- **TTL management** — every write calls `extend_ttl(5000, 50000)` so records can never be archived
+
+### Web & API Hardening
+
+- **CSRF protection** — double-submit cookie pattern (`__Host-csrf`, HttpOnly, SameSite=Strict) with timing-safe comparison; the client mints the token once and retries once on `CSRF_INVALID`
+- **Session security** — HMAC-SHA256 signed session cookies with expiry, `HttpOnly; SameSite=Lax`, fail-closed on DB errors
+- **API keys** — SHA-256 hashed at rest, indexed prefix lookup, expiry support, `lastUsed` tracking
+- **SSRF guard for webhooks** — blocks loopback/link-local/private IPs and hostnames, with DNS-rebinding re-validation at delivery time
+- **HMAC-signed webhook payloads** — receivers verify `X-OphirPay-Signature` (HMAC-SHA256)
+- **Input validation** — Zod schemas on all mutation routes; Stellar address regex, amount bounds, memo length limits
+- **Rate limiting** — per-IP sliding window (120 RPM default, Redis backend for multi-instance)
+- **Security headers** — CSP with Stellar-only connect-src, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, Referrer-Policy
+- **Error boundaries** — React error boundaries prevent full-page crashes
+- **Secrets scanning** — Gitleaks on every PR; dependency auditing via `npm audit` in CI
+
+> ⚠️ **Production note**: OphirPay uses SQLite locally. For production, migrate to PostgreSQL and set `AUTH_SECRET` (32+ bytes), `REDIS_URL` for distributed rate limiting, and the documented CORS origins. See `docs/deployment-mainnet.md` for the full checklist.
 
 ---
 
