@@ -29,15 +29,33 @@ export const EMITTER_ID = EMITTER_CONTRACT_ID;
 
 // ── Types ──────────────────────────────────────────────────────
 
+/**
+ * Result of a contract invocation submitted on-chain.
+ * Mirrors the Soroban transaction lifecycle: simulation → signing → submission.
+ */
 export interface ContractCallResult {
   success: boolean;
+  /** Soroban transaction hash on success (hex string) */
   txHash?: string;
+  /** Contract return value deserialized (varies by function) */
   data?: unknown;
+  /** Human-readable error message on failure */
   error?: string;
 }
 
 // ── Signing Helper ─────────────────────────────────────────────
 
+/**
+ * Build, simulate, sign, and submit a Soroban contract invocation.
+ * Orchestrates the full lifecycle: ScVal encoding → simulation →
+ * Freighter/xBull/Albedo signing → submission → result parsing.
+ *
+ * @param sourcePublicKey - Stellar public key authorizing the invocation
+ * @param contractId - Soroban contract address
+ * @param functionName - Contract entrypoint name (snake_case)
+ * @param args - Pre-encoded xdr.ScVal arguments
+ * @returns ContractCallResult with success/failure and optional txHash
+ */
 async function signAndSubmit(
   sourcePublicKey: string,
   contractId: string,
