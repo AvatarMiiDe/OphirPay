@@ -2,19 +2,71 @@
 
 ## System Overview
 
-OphirPay is a payment orchestration layer built on the Stellar blockchain. It consists of three layers:
+OphirPay is a payment orchestration layer built on the Stellar blockchain. It consists of four layers:
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  Frontend (Next.js)              │
-│  15 pages · Freighter wallet · SSE streaming     │
-├─────────────────────────────────────────────────┤
-│              API Layer (Next.js Routes)          │
-│  CRUD · Webhooks · Analytics · Auth · Rate Limit │
-├─────────────────────────────────────────────────┤
-│         Soroban Smart Contracts (Rust)           │
-│  OphirPayContract · PaymentEventEmitter          │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER                                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────────┐  │
+│  │ Next.js  │  │  React   │  │ Tailwind │  │  6 Wallet          │  │
+│  │ App Router│  │ Query v5 │  │  CSS v4  │  │  Connectors        │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────────┬──────────┘  │
+│       │              │              │                  │             │
+├───────┼──────────────┼──────────────┼──────────────────┼─────────────┤
+│       │         DATA FETCHING       │                  │             │
+│  ┌────┴────────────────────────────┴──────────────────┴──────────┐  │
+│  │                    useApiQuery / useApiMutation                │  │
+│  │          30s stale · 5min GC · 2 retries · auto-invalidate    │  │
+│  └────────────────────────────────┬──────────────────────────────┘  │
+│                                   │                                  │
+├───────────────────────────────────┼──────────────────────────────────┤
+│                           API LAYER                                  │
+│  ┌──────────┐  ┌──────────┐  ┌────┴─────┐  ┌────────────────────┐  │
+│  │ Zod      │  │ CSRF     │  │ 39 API   │  │ In-Memory          │  │
+│  │ Schemas  │  │ Tokens   │  │  Routes  │  │ TTL Cache          │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────────┬──────────┘  │
+│       │              │             │                   │            │
+│  ┌────┴──────────────┴─────────────┴───────────────────┴────────┐   │
+│  │              Middleware Pipeline (per-route)                  │   │
+│  │  verifyCsrf → validateBody(Zod) → rateLimit → handler → 200  │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                       CONTRACT LAYER (Soroban)                       │
+│                                                                      │
+│  ┌─────────────────────────────────┐    ┌──────────────────────────┐│
+│  │       OphirPayContract          │    │     PaymentEventEmitter  ││
+│  │  ─────────────────────────────  │    │  ─────────────────────── ││
+│  │  Payments · Escrows · Streams   │    │  emit_payment()          ││
+│  │  Batches · Recurring · Refunds  │◄───│  pause() / unpause()     ││
+│  │  Multisig (N-of-M) · RBAC       │ cc │  get_event() / count()   ││
+│  │  Governance · Timelocks         │    │                          ││
+│  │  Fee Config · Hooks · Audit     │    │  14 error codes          ││
+│  │  94 error codes · 329 tests     │    │  6 tests                 ││
+│  └───────────────┬─────────────────┘    └──────────────────────────┘│
+│                  │                                                    │
+│  ┌───────────────┴────────────────────────────────────────────────┐  │
+│  │                    Storage Architecture                         │  │
+│  │  Instance: counters · config · owner · paused · fee_config      │  │
+│  │  Persistent: payments · escrows · streams · batches · audit    │  │
+│  │  Namespaced keys: Payment_0xN · Escrow_0xN · Stream_0xN        │  │
+│  │  TTL: 50,000 ledgers with auto-extend_ttl on every write       │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│                       INFRASTRUCTURE                                  │
+│                                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────────┐  │
+│  │ Vercel   │  │ Docker   │  │ K8s +    │  │ GitHub Actions     │  │
+│  │ Deploy   │  │ distroless│  │ Helm     │  │ 21 Jobs            │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────────┬──────────┘  │
+│       │              │             │                   │            │
+│  ┌────┴──────────────┴─────────────┴───────────────────┴────────┐   │
+│  │                    Monitoring & Observability                 │   │
+│  │  Prometheus metrics · Grafana dashboard · Sentry errors       │   │
+│  │  SSE event stream · Webhook delivery · Audit logs             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Diagram
@@ -67,14 +119,14 @@ All writes call `extend_ttl(5000, 50000)` to prevent archival.
 
 ### 5. Error Handling
 
-50 typed error codes from `NotInitialized=1` to `RefundWindowExpired=50`. Contract functions return `Result<T, PaymentError>` — no panics in production code.
+94 typed error codes from `NotInitialized=1` to `HookDispatcherUndefined=93`, with codes 100-255 reserved for future expansion. Contract functions return `Result<T, PaymentError>` — no panics in production code.
 
 ## Directory Structure
 
 ```
 ophirpay/
 ├── contracts/              # Soroban smart contracts (Rust)
-│   ├── ophirpay/           # Core payment contract (3600+ lines)
+│   ├── ophirpay/           # Core payment contract (4800+ lines, 94 error codes)
 │   └── emitter/            # Event emission contract
 ├── src/
 │   ├── app/                # Next.js App Router pages (15 routes)
@@ -103,7 +155,7 @@ ophirpay/
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (184), Rust `#[test]` (62), Playwright (71 E2E+API) |
-| CI/CD | GitHub Actions (13 jobs) |
+| Testing | Vitest (329), Rust `#[test]` (64), Playwright (71 E2E+API) |
+| CI/CD | GitHub Actions (21 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |
