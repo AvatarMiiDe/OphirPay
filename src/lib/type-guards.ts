@@ -19,6 +19,25 @@ export function isNumber(value: unknown): value is number {
   return typeof value === "number" && !isNaN(value);
 }
 
+/**
+ * Check if a value is a valid on-chain record id (a positive u64 integer).
+ *
+ * Soroban contract records (refunds, hooks, etc.) are addressed by u64 ids,
+ * while Prisma rows use cuid strings. Passing a cuid string through
+ * Number() yields NaN, which fails at the contract boundary — so callers
+ * must only invoke on-chain actions when this guard passes.
+ */
+export function isOnChainId(value: unknown): value is number {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) && value > 0;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isSafeInteger(n) && n > 0 && /^\d+$/.test(value.trim());
+  }
+  return false;
+}
+
 /** Check if a value is a valid Stellar public key. */
 export function isStellarKey(value: unknown): value is string {
   return typeof value === "string" && /^G[A-Z0-9]{55}$/.test(value);

@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { useApiQuery } from "@/hooks/useApiQuery";
+import { isOnChainId } from "@/lib/type-guards";
 import { requestRefund, approveRefund, processRefund } from "@/lib/contract-advanced";
 
 const REASON_CODES = [
@@ -105,10 +106,24 @@ export default function RefundsPage() {
     }
   };
 
+  // On-chain refunds are addressed by u64 ids in the Soroban contract, while
+  // the rows listed here come from the Prisma DB (cuid string ids). Only
+  // invoke approve/process when the id is a real on-chain id; otherwise the
+  // Number() conversion yields NaN and the contract call always fails.
+  const requireOnChainRefund = (refundId: string | number): number | null => {
+    if (!isOnChainId(refundId)) {
+      toast.error("This refund is an off-chain record — no on-chain refund id is linked. Approve/process on-chain only.");
+      return null;
+    }
+    return Number(refundId);
+  };
+
   const handleApprove = async (refundId: string | number) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
+    const onChainId = requireOnChainRefund(refundId);
+    if (onChainId === null) return;
     try {
-      const result = await approveRefund(wallet.publicKey, Number(refundId));
+      const result = await approveRefund(wallet.publicKey, onChainId);
       if (result.success) {
         toast.success("Refund approved on-chain");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
@@ -121,8 +136,10 @@ export default function RefundsPage() {
   };
 
   const handleProcess = async (refundId: string | number) => {
+    const onChainId = requireOnChainRefund(refundId);
+    if (onChainId === null) return;
     try {
-      const result = await processRefund(Number(refundId));
+      const result = await processRefund(onChainId);
       if (result.success) {
         toast.success("Refund processed on-chain — tokens returned");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
@@ -267,15 +284,25 @@ export default function RefundsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {statusKey === "REQUESTED" && (
-                    <Button size="sm" variant="primary" onClick={() => handleApprove(r.id)}>
-                      Approve
-                    </Button>
-                  )}
-                  {statusKey === "APPROVED" && (
-                    <Button size="sm" variant="primary" onClick={() => handleProcess(r.id)}>
-                      Process
-                    </Button>
+                  {isOnChainId(r.id) ? (
+                    <>
+                      {statusKey === "REQUESTED" && (
+                        <Button size="sm" variant="primary" onClick={() => handleApprove(r.id)}>
+                          Approve
+                        </Button>
+                      )}
+                      {statusKey === "APPROVED" && (
+                        <Button size="sm" variant="primary" onClick={() => handleProcess(r.id)}>
+                          Process
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    (statusKey === "REQUESTED" || statusKey === "APPROVED") && (
+                      <span className="text-xs text-gray-400 italic max-w-[160px] text-right">
+                        Off-chain record — no on-chain action available
+                      </span>
+                    )
                   )}
                   {statusKey === "PROCESSED" && (
                     <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">

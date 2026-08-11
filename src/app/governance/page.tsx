@@ -43,7 +43,12 @@ export default function GovernancePage() {
     isLoading,
     isError,
     refetch,
-  } = useApiQuery<Proposal[]>(["governance", "proposals"], "/api/governance/proposals");
+  } = useApiQuery<Proposal[]>(
+    ["governance", "proposals"],
+    "/api/governance/proposals",
+    // Enumerating proposals is an N+1 contract read — skip focus refetches.
+    { refetchOnWindowFocus: false }
+  );
 
   // ── React Query: create proposal mutation ────────────────
   const createMutation = useApiMutation<Record<string, unknown>, { txHash?: string }>(

@@ -7,6 +7,7 @@ import { createGovernanceProposal } from "@/lib/contract-advanced";
 import { cachedFetch } from "@/lib/api-cache";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, createProposalSchema } from "@/lib/validation-schemas";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
 /**
  * GET /api/governance/proposals — list governance proposals
@@ -28,10 +29,35 @@ export async function GET(request: Request) {
     );
 
     if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse({ proposals: [], available: false });
+      return successResponse([]);
     }
 
-    return successResponse(countResult.returnValue ?? 0);
+    const totalCount = Number(countResult.returnValue ?? 0);
+    if (totalCount === 0) return successResponse([]);
+
+    // Enumerate proposals by id (most recent last). Cap the loop to bound the
+    // N+1 read pattern (one RPC per proposal).
+    const maxProposals = 100;
+    const toFetch = Math.min(totalCount, maxProposals);
+
+    const proposals: unknown[] = [];
+    for (let id = 1; id <= toFetch; id++) {
+      const result = await cachedFetch(
+        `gov:proposal:${id}`,
+        () => simulateContractCall(
+          DEFAULT_CONTRACT_ID,
+          "get_proposal",
+          CHAIN_READ_SOURCE,
+          [nativeToScVal(id, { type: "u64" })]
+        ),
+        30_000,
+      );
+      if (result.status !== "SIMULATION_FAILED" && result.returnValue) {
+        proposals.push(result.returnValue);
+      }
+    }
+
+    return successResponse(proposals);
   } catch (err) {
     return handleApiError(err, "GET /api/governance/proposals");
   }

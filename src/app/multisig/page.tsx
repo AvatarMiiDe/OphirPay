@@ -255,8 +255,13 @@ export default function MultisigPage() {
             </svg>
           }
           title="No Pending Approvals"
-          description="Propose a payment to begin the multisig approval workflow."
-          actionLabel="Propose Payment"
+          description={
+            config?.enabled
+              ? "Propose a payment to begin the multisig approval workflow."
+              : "Multisig is not configured yet — set a threshold and signers to enable the approval workflow."
+          }
+          actionLabel={config?.enabled ? "Propose Payment" : "Configure Multisig"}
+          onAction={() => (config?.enabled ? setShowPropose(true) : setShowConfig(true))}
         />
       ) : (
         <div className="space-y-3">

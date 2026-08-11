@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { useApiQuery } from "@/hooks/useApiQuery";
+import { isOnChainId } from "@/lib/type-guards";
 import { registerHook, unregisterHook } from "@/lib/contract-advanced";
 
 const EVENT_TYPES = [
@@ -75,6 +76,12 @@ export default function HooksPage() {
 
   const handleDeactivate = async (hookId: string | number) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
+    // On-chain hooks are u64 ids in the contract; the listed rows are Prisma
+    // records (cuid ids). Only call the contract for real on-chain ids.
+    if (!isOnChainId(hookId)) {
+      toast.error("This hook is an off-chain record — no on-chain hook id is linked. Deactivate on-chain only.");
+      return;
+    }
     try {
       const result = await unregisterHook(wallet.publicKey, Number(hookId));
       if (result.success) {
@@ -162,7 +169,7 @@ export default function HooksPage() {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  {hook.active && (
+                  {hook.active && isOnChainId(hook.id) && (
                     <Button
                       size="sm"
                       variant="danger"
@@ -170,6 +177,9 @@ export default function HooksPage() {
                     >
                       Deactivate
                     </Button>
+                  )}
+                  {hook.active && !isOnChainId(hook.id) && (
+                    <span className="text-xs text-gray-400 italic">Off-chain record</span>
                   )}
                 </div>
               </div>
