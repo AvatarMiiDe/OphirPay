@@ -5,6 +5,7 @@
 import { MultiWalletProvider } from "@/hooks/useMultiWallet";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { QueryProvider } from "@/components/QueryProvider";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -13,6 +14,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
+      <QueryProvider>
       <MultiWalletProvider>
         <ToastProvider>
           <OfflineBanner />
@@ -26,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </ToastProvider>
       </MultiWalletProvider>
+      </QueryProvider>
     </ThemeProvider>
   );
 }
