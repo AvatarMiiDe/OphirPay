@@ -37,6 +37,7 @@ const TIMELOCK_KEY: Symbol = symbol_short!("T_REC");
 const PROPOSAL_KEY: Symbol = symbol_short!("G_REC");
 const APPROVAL_KEY: Symbol = symbol_short!("A_REQ");
 const HOOK_KEY: Symbol = symbol_short!("H_REC");
+const VOTE_KEY: Symbol = symbol_short!("V_REC");
 const BATCH_KEY: Symbol = symbol_short!("B_REC");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
 const REFUND_CNT: Symbol = symbol_short!("REF_CNT");
@@ -68,12 +69,14 @@ const STAT_AMT_ESCROWED: Symbol = symbol_short!("S_AE");
 const STAT_AMT_STREAMED: Symbol = symbol_short!("S_AS");
 const STAT_AMT_BATCHED: Symbol = symbol_short!("S_AB");
 
-/// Running total of funds locked in active escrows + streams.
-/// Incremented on create_escrow / create_stream.
-/// Decremented on release_escrow / claim_escrow / claim_stream / cancel_stream.
+/// Running total of funds locked in active escrows + streams + proposal deposits.
+/// Incremented on create_escrow / create_stream / create_proposal (deposit).
+/// Decremented on release_escrow / claim_escrow / claim_stream / cancel_stream
+/// / execute_proposal (deposit refund).
 /// emergency_withdraw enforces: withdraw_amount <= contract_balance - LOCKED_BALANCE.
 /// Prevents the owner from draining user-deposited funds (critical invariant).
 const LOCKED_BALANCE: Symbol = symbol_short!("LOCKED");
+const REENTRANCY_LOCK: Symbol = symbol_short!("RE_LOCK");
 
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
@@ -271,6 +274,8 @@ pub struct Proposal {
     pub voting_ends_at: u64,
     pub executed: bool,
     pub created_at: u64,
+    pub deposit_asset: Address,   // asset locked as proposal deposit
+    pub deposit_amount: i128,     // amount locked (>= min_proposal_deposit)
 }
 
 /// A timelocked admin action. Proposed now, executable after `unlocks_at`.
@@ -461,7 +466,9 @@ pub enum PaymentError {
     RefundAlreadyProcessed = 48,
     PaymentAlreadyRefunded = 49,
     RefundWindowExpired = 50,
-    // NOTE: InsufficientUnlockedBalance would be 51 if needed;
+    AlreadyVoted = 51,
+    ReentrantCall = 52,
+    // NOTE: InsufficientUnlockedBalance would be 53 if needed;
     // using NoTokensToWithdraw (19) for the locked-funds invariant check
     // to stay within soroban-sdk's contracterror variant limits.
 }
@@ -554,6 +561,23 @@ fn require_not_paused(env: &Env) -> Result<(), PaymentError> {
         return Err(PaymentError::ContractPaused);
     }
     Ok(())
+}
+
+/// Reentrancy guard: set lock before cross-contract calls.
+/// Soroban contracts are single-threaded per invocation, but reentrancy
+/// can occur when a cross-contract call loops back to this contract.
+fn acquire_reentrancy_lock(env: &Env) -> Result<(), PaymentError> {
+    let locked: bool = env.storage().instance().get(&REENTRANCY_LOCK).unwrap_or(false);
+    if locked {
+        return Err(PaymentError::ReentrantCall);
+    }
+    env.storage().instance().set(&REENTRANCY_LOCK, &true);
+    Ok(())
+}
+
+/// Release the reentrancy lock after cross-contract calls complete.
+fn release_reentrancy_lock(env: &Env) {
+    env.storage().instance().set(&REENTRANCY_LOCK, &false);
 }
 
 /// Calculate linearly vested amount with overflow protection.
@@ -1118,6 +1142,10 @@ impl OphirPayContract {
     }
 
     /// Create a governance proposal. Requires minimum deposit.
+    /// If min_proposal_deposit > 0, proposer must transfer that amount in
+    /// `deposit_asset` to the contract. The deposit is locked until the
+    /// proposal is executed (passed or defeated), at which point it can
+    /// be reclaimed by the proposer. This prevents spam proposals.
     pub fn create_proposal(
         env: Env,
         proposer: Address,
@@ -1126,6 +1154,8 @@ impl OphirPayContract {
         action_type: String,
         target: String,
         data: String,
+        deposit_asset: Address,
+        deposit_amount: i128,
     ) -> Result<u64, PaymentError> {
         proposer.require_auth();
         require_not_paused(&env)?;
@@ -1138,6 +1168,20 @@ impl OphirPayContract {
 
         if !config.enabled {
             return Err(PaymentError::GovernanceNotConfigured);
+        }
+
+        // Enforce minimum proposal deposit
+        if deposit_amount < config.min_proposal_deposit {
+            return Err(PaymentError::DepositTooLow);
+        }
+
+        // Transfer deposit from proposer to contract (if deposit > 0)
+        if deposit_amount > 0 {
+            let token_client = token::Client::new(&env, &deposit_asset);
+            let contract_addr = env.current_contract_address();
+            token_client.transfer(&proposer, &contract_addr, &deposit_amount);
+            // Track deposit in LOCKED_BALANCE so emergency_withdraw can't drain it
+            add_locked(&env, deposit_amount);
         }
 
         let now = env.ledger().timestamp();
@@ -1157,6 +1201,8 @@ impl OphirPayContract {
             voting_ends_at: now.saturating_add(config.voting_period),
             executed: false,
             created_at: now,
+            deposit_asset: deposit_asset.clone(),
+            deposit_amount,
         };
 
         env.storage().persistent().set(&(PROPOSAL_KEY, count), &proposal);
@@ -1174,21 +1220,18 @@ impl OphirPayContract {
         Ok(count)
     }
 
-    /// Vote on a proposal. Voting power is determined off-chain; this
-    /// records the raw yes/no count. Anyone can vote with their weight.
+    /// Vote on a proposal. Each address gets exactly 1 vote per proposal.
+    /// Voting weight is NOT self-reported — it is always 1 per unique voter.
+    /// This prevents the "self-reported weight" attack where a caller could
+    /// claim arbitrary voting power.
     pub fn vote_on_proposal(
         env: Env,
         voter: Address,
         proposal_id: u64,
         support: bool,  // true = yes, false = no
-        weight: i128,    // voting power (1 token = 1 vote typically)
     ) -> Result<(), PaymentError> {
         voter.require_auth();
         require_not_paused(&env)?;
-
-        if weight <= 0 {
-            return Err(PaymentError::InvalidAmount);
-        }
 
         let mut proposal: Proposal = env
             .storage()
@@ -1205,10 +1248,19 @@ impl OphirPayContract {
             return Err(PaymentError::VotingPeriodEnded);
         }
 
+        // Prevent double-voting: each address votes exactly once per proposal
+        let vote_key = (VOTE_KEY, proposal_id, voter.clone());
+        if env.storage().persistent().has(&vote_key) {
+            return Err(PaymentError::AlreadyVoted);
+        }
+        env.storage().persistent().set(&vote_key, &true);
+        env.storage().persistent().extend_ttl(&vote_key, 5000, 50000);
+
+        // Each voter contributes exactly 1 vote (1 address = 1 vote)
         if support {
-            proposal.yes_votes = proposal.yes_votes.saturating_add(weight);
+            proposal.yes_votes = proposal.yes_votes.saturating_add(1);
         } else {
-            proposal.no_votes = proposal.no_votes.saturating_add(weight);
+            proposal.no_votes = proposal.no_votes.saturating_add(1);
         }
 
         env.storage().persistent().set(&(PROPOSAL_KEY, proposal_id), &proposal);
@@ -1224,6 +1276,8 @@ impl OphirPayContract {
 
     /// Execute a passed proposal after voting ends.
     /// Returns true if the proposal passed (yes > no).
+    /// Refunds the deposit to the proposer regardless of outcome — deposit
+    /// exists to prevent spam, not to punish defeated proposals.
     pub fn execute_proposal(
         env: Env,
         proposal_id: u64,
@@ -1247,6 +1301,16 @@ impl OphirPayContract {
         proposal.executed = true;
         env.storage().persistent().set(&(PROPOSAL_KEY, proposal_id), &proposal);
         env.storage().persistent().extend_ttl(&(PROPOSAL_KEY, proposal_id), 5000, 50000);
+
+        // Refund the deposit to the proposer regardless of outcome.
+        // The deposit serves as spam-protection, not punishment.
+        if proposal.deposit_amount > 0 {
+            let token_client = token::Client::new(&env, &proposal.deposit_asset);
+            let contract_addr = env.current_contract_address();
+            token_client.transfer(&contract_addr, &proposal.proposer, &proposal.deposit_amount);
+            // Release deposit from LOCKED_BALANCE now that it's refunded
+            add_locked(&env, -proposal.deposit_amount);
+        }
 
         env.events().publish(
             (Symbol::new(&env, "governance"), Symbol::new(&env, "executed")),
@@ -1612,6 +1676,7 @@ impl OphirPayContract {
     pub fn emergency_pause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
         require_owner(&env, &caller)?;
+        acquire_reentrancy_lock(&env)?;
 
         // Pause OphirPay
         env.storage().instance().set(&PAUSED, &true);
@@ -1624,6 +1689,8 @@ impl OphirPayContract {
             let _: () = env.invoke_contract(&emitter, &pause_fn, args);
         }
 
+        release_reentrancy_lock(&env);
+
         record_audit(&env, "emergency_pause_all", &caller, 0, "All contracts paused");
         Ok(())
     }
@@ -1633,6 +1700,7 @@ impl OphirPayContract {
     pub fn emergency_unpause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
         caller.require_auth();
         require_owner(&env, &caller)?;
+        acquire_reentrancy_lock(&env)?;
 
         // Unpause OphirPay
         env.storage().instance().set(&PAUSED, &false);
@@ -1644,6 +1712,8 @@ impl OphirPayContract {
             let args = soroban_sdk::vec![&env, caller.to_val()];
             let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
         }
+
+        release_reentrancy_lock(&env);
 
         record_audit(&env, "emergency_unpause_all", &caller, 0, "All contracts unpaused");
         Ok(())
@@ -1678,6 +1748,8 @@ impl OphirPayContract {
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
+        acquire_reentrancy_lock(&env)?;
+
         // INVARIANT: cannot withdraw locked user funds
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
@@ -1685,10 +1757,13 @@ impl OphirPayContract {
         let locked: i128 = env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0);
         let unlocked = contract_balance.saturating_sub(locked);
         if amount > unlocked {
+            release_reentrancy_lock(&env);
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
         token_client.transfer(&contract_addr, &owner, &amount);
+
+        release_reentrancy_lock(&env);
 
         record_audit(&env, "emergency_withdraw", &caller, 0, "Emergency withdrawal");
 
@@ -3909,6 +3984,8 @@ mod tests {
 
         client.configure_governance(&owner, &0i128, &1000u64, &51u32, &true);
 
+        // min_proposal_deposit = 0, so any deposit_asset/amount works
+        let deposit_asset = Address::generate(&env);
         let pid = client.create_proposal(
             &proposer,
             &String::from_str(&env, "Test Proposal"),
@@ -3916,14 +3993,17 @@ mod tests {
             &String::from_str(&env, "upgrade"),
             &String::from_str(&env, "execute_upgrade"),
             &String::from_str(&env, "hash"),
+            &deposit_asset,
+            &0i128,
         );
         assert_eq!(pid, 1);
         assert_eq!(client.get_proposal_count(), 1);
 
-        client.vote_on_proposal(&voter, &1, &true, &100i128);
+        // Each voter contributes exactly 1 vote (no self-reported weight)
+        client.vote_on_proposal(&voter, &1, &true);
 
         let prop = client.get_proposal(&1);
-        assert_eq!(prop.yes_votes, 100);
+        assert_eq!(prop.yes_votes, 1);
         assert_eq!(prop.no_votes, 0);
 
         env.ledger().set_timestamp(now + 2000);
