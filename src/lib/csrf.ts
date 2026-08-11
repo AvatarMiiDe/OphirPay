@@ -15,11 +15,18 @@ export function generateCsrfToken(): string {
 }
 
 /**
- * Create a CSRF cookie header value (Secure, HttpOnly, SameSite=Strict, __Host- prefixed).
- * Must be set on all pages that contain forms.
+ * Create a CSRF cookie header value (HttpOnly, SameSite=Strict, Max-Age=86400).
+ *
+ * Over HTTPS the cookie uses the `__Host-` prefix plus `Secure` (the strongest
+ * form — the prefix itself mandates Secure, no Domain, and Path=/). Over plain
+ * http in development the `__Host-`/`Secure` pair is dropped: browsers reject
+ * Secure cookies on non-localhost http origins, which would otherwise break
+ * every mutation for developers running on a LAN IP.
  */
-export function csrfCookieHeader(token: string): string {
-  return `${CSRF_COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=86400`;
+export function csrfCookieHeader(token: string, secure = true): string {
+  const prefix = secure ? "__Host-" : "";
+  const secureAttr = secure ? "; Secure" : "";
+  return `${prefix}${CSRF_COOKIE}=${token}; Path=/;${secureAttr} HttpOnly; SameSite=Strict; Max-Age=86400`;
 }
 
 /**
