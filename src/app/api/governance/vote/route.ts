@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, badRequestError, unauthorizedError, handleApiError } from "@/lib/api-response";
+import { successResponse, unauthorizedError, handleApiError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { voteOnProposal } from "@/lib/contract-advanced";
+import { validateBody, voteOnProposalSchema } from "@/lib/validation-schemas";
 
 /**
  * POST /api/governance/vote — cast a vote on a proposal
@@ -17,17 +18,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { voter, proposalId, support } = body;
-
-    if (!voter || !proposalId) {
-      return badRequestError("voter and proposalId are required");
-    }
+    const parsed = await validateBody(request, voteOnProposalSchema);
+    if (!parsed.success) return parsed.response;
+    const { voter, proposalId, support } = parsed.data;
 
     const result = await voteOnProposal(
       voter,
       proposalId,
-      support ?? true,
+      support,
     );
 
     if (!result.success) {
