@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, badRequestError, unauthorizedError, handleApiError } from "@/lib/api-response";
+import { successResponse, unauthorizedError, handleApiError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
+import { validateBody, proposeMultisigPaymentSchema } from "@/lib/validation-schemas";
 import { proposeMultisigPayment } from "@/lib/contract-advanced";
 
 /**
@@ -10,26 +12,24 @@ import { proposeMultisigPayment } from "@/lib/contract-advanced";
  */
 export async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
-      return unauthorizedError(
-        "Authentication required. Connect your wallet or provide an API key."
-      );
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { caller, payee, amount, asset, txHash } = body;
-
-    if (!caller || !payee || !amount) {
-      return badRequestError("caller, payee, and amount are required");
-    }
+    const parsed = await validateBody(request, proposeMultisigPaymentSchema);
+    if (!parsed.success) return parsed.response;
+    const { payee, amount, assetCode, memo } = parsed.data;
 
     const result = await proposeMultisigPayment(
-      caller,
+      auth.publicKey ?? auth.userId,
       payee,
       amount,
-      asset ?? "native",
-      txHash ?? `multisig_${Date.now().toString(36)}`
+      assetCode ?? "native",
+      memo ?? `multisig_${Date.now().toString(36)}`
     );
 
     if (!result.success) {

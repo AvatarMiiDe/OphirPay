@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, badRequestError, unauthorizedError, handleApiError } from "@/lib/api-response";
+import { successResponse, unauthorizedError, handleApiError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
+import { validateBody, approveMultisigSchema } from "@/lib/validation-schemas";
 import { approveMultisigPayment } from "@/lib/contract-advanced";
 
 /**
@@ -10,21 +12,19 @@ import { approveMultisigPayment } from "@/lib/contract-advanced";
  */
 export async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
-      return unauthorizedError(
-        "Authentication required. Connect your wallet or provide an API key."
-      );
+      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { signer, requestId } = body;
+    const parsed = await validateBody(request, approveMultisigSchema);
+    if (!parsed.success) return parsed.response;
+    const { requestId } = parsed.data;
 
-    if (!signer || !requestId) {
-      return badRequestError("signer and requestId are required");
-    }
-
-    const result = await approveMultisigPayment(signer, requestId);
+    const result = await approveMultisigPayment(auth.publicKey ?? auth.userId, requestId);
 
     if (!result.success) {
       return Response.json(

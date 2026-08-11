@@ -11,6 +11,7 @@ import {
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
 import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
+import { verifyCsrf } from "@/lib/csrf";
 import crypto from "crypto";
 
 // ── GET /api/webhooks ─────────────────────────────────────────
@@ -35,6 +36,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
 
@@ -73,6 +77,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
 

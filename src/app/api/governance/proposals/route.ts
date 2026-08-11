@@ -5,6 +5,8 @@ import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { createGovernanceProposal } from "@/lib/contract-advanced";
 import { cachedFetch } from "@/lib/api-cache";
+import { verifyCsrf } from "@/lib/csrf";
+import { validateBody, createProposalSchema } from "@/lib/validation-schemas";
 
 /**
  * GET /api/governance/proposals — list governance proposals
@@ -41,20 +43,17 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { proposer, title, description, actionType, target, data } = body;
-
-    if (!proposer || !title) {
-      return Response.json(
-        { success: false, error: { code: "BAD_REQUEST", message: "proposer and title are required" } },
-        { status: 400 }
-      );
-    }
+    const parsed = await validateBody(request, createProposalSchema);
+    if (!parsed.success) return parsed.response;
+    const { proposer, title, description, actionType, target, data, depositAsset, depositAmount } = parsed.data;
 
     const result = await createGovernanceProposal(
       proposer,
@@ -62,7 +61,9 @@ export async function POST(request: Request) {
       description ?? "",
       actionType ?? "custom",
       target ?? "",
-      data ?? ""
+      data ?? "",
+      depositAsset ?? "",
+      depositAmount ?? 0
     );
 
     if (!result.success) {
