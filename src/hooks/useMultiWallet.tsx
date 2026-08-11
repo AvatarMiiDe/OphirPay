@@ -144,13 +144,32 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
         // Open a server-side session so API routes can authorize this user.
         // Wallets that support message signing prove ownership by signing a
         // challenge; the session route rejects fresh sessions without proof.
-        await establishSession(
+        const sessionOk = await establishSession(
           publicKey,
           network || "TESTNET",
           connector.signMessage
             ? (message: string) => connector.signMessage!(message)
             : undefined
         );
+        if (!sessionOk && connector.signMessage) {
+          // Proof was attempted but rejected (e.g. the user declined the
+          // signature prompt) — roll back so the UI doesn't show a
+          // "connected" state with no server session behind it.
+          setWallet(initialWalletState);
+          setActiveWalletId(null);
+          setError(
+            "Wallet connected, but the server rejected the session. You may have declined the signature request — reconnect and approve it to use API features."
+          );
+          return;
+        }
+        if (!sessionOk) {
+          // Wallet has no message-signing support: no server session is
+          // issued (proof is required), so wallet-based contract signing
+          // still works but API routes stay unauthenticated.
+          console.warn(
+            `[OphirPay] Session not established — ${connector.name} has no signMessage support. Use Freighter, xBull, or Albedo for full API access.`
+          );
+        }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Failed to connect wallet";

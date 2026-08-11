@@ -27,7 +27,8 @@ export async function GET(request: Request) {
   const challenge = createChallengeToken(publicKey);
   return successResponse({
     challenge,
-    message: challengeMessage(publicKey),
+    // The message embeds the challenge token so the signature is single-use.
+    message: challengeMessage(publicKey, challenge),
     expiresIn: 300, // seconds
   });
 }

@@ -21,6 +21,10 @@
  * The signature is verified against both the raw message and the
  * "Stellar Signed Message: " prefixed variant (SEP-30) so wallets that wrap
  * the message keep working. Base64 and hex signature encodings are accepted.
+ *
+ * SECURITY: the signed message embeds the challenge token itself, so a
+ * signature is bound to one specific (expiring) challenge and cannot be
+ * replayed against a freshly minted one.
  */
 
 import crypto from "crypto";
@@ -87,9 +91,14 @@ export function verifyChallengeToken(
   }
 }
 
-/** The canonical message a wallet must sign for a given challenge token. */
-export function challengeMessage(publicKey: string): string {
-  return `ophirpay:login:${publicKey}`;
+/**
+ * The canonical message a wallet must sign.
+ * Embeds the challenge token so the signature is single-use (dies with the
+ * 5-minute token) — a captured signature cannot be replayed against a
+ * freshly minted challenge for the same key.
+ */
+export function challengeMessage(publicKey: string, challenge: string): string {
+  return `ophirpay:login:${publicKey}:${challenge}`;
 }
 
 // ── Signature verification ────────────────────────────────────
@@ -105,7 +114,12 @@ export function verifyWalletSignature(
   publicKey: string
 ): boolean {
   const sigBytes = decodeSignature(signature);
-  if (!sigBytes || sigBytes.length !== 64) return false;
+  if (!sigBytes) return false;
+  // Some wallets append a key-hint byte (65-byte signatures); verify the
+  // Ed25519 portion (first 64 bytes) in that case.
+  const normalized =
+    sigBytes.length === 65 ? sigBytes.subarray(0, 64) : sigBytes;
+  if (normalized.length !== 64) return false;
 
   let keypair: Keypair;
   try {
@@ -117,7 +131,7 @@ export function verifyWalletSignature(
   const candidates = [message, `${MESSAGE_PREFIX}${message}`];
   return candidates.some((candidate) => {
     try {
-      return keypair.verify(Buffer.from(candidate, "utf8"), sigBytes);
+      return keypair.verify(Buffer.from(candidate, "utf8"), normalized);
     } catch {
       return false;
     }
@@ -128,16 +142,18 @@ function decodeSignature(signature: string): Buffer | null {
   const trimmed = signature.trim();
   if (!trimmed) return null;
   // base64 first (most common), then hex. Buffer.from is lenient — it rarely
-  // throws, so only accept decodes that yield exactly 64 bytes (Ed25519).
+  // throws, so only accept decodes of 64 bytes (Ed25519) or 65 (some wallets
+  // append a key-hint byte).
+  const isValidLength = (n: number) => n === 64 || n === 65;
   try {
     const base64 = Buffer.from(trimmed, "base64");
-    if (base64.length === 64) return base64;
+    if (isValidLength(base64.length)) return base64;
   } catch {
     /* fall through to hex */
   }
   try {
     const hex = Buffer.from(trimmed, "hex");
-    if (hex.length === 64) return hex;
+    if (isValidLength(hex.length)) return hex;
   } catch {
     /* fall through */
   }

@@ -22,8 +22,12 @@ import {
 import { verifyChallengeToken, challengeMessage, verifyWalletSignature } from "@/lib/challenge";
 import { isValidStellarAddress } from "@/lib/stellar";
 import { successResponse, badRequestError, unauthorizedError } from "@/lib/api-response";
+import { verifyCsrf } from "@/lib/csrf";
 
 export async function POST(request: Request) {
+  const csrfError = verifyCsrf(request);
+  if (csrfError) return csrfError;
+
   const body = await request.json().catch(() => null) as
     | { publicKey?: string; network?: string; challenge?: string; signature?: string }
     | null;
@@ -39,7 +43,8 @@ export async function POST(request: Request) {
 
   // Proof-of-ownership: a fresh session requires a valid challenge + wallet
   // signature. Renewing an already-proved session (valid cookie present) is
-  // allowed without re-prompting, so page reloads don't nag the user.
+  // allowed without re-prompting, so page reloads don't nag the user — but
+  // only for the SAME identity the cookie already proves.
   const hasProof = Boolean(body?.challenge && body?.signature);
   const existingSession = readSessionCookie(request);
 
@@ -49,13 +54,21 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!hasProof && existingSession && existingSession.pk !== publicKey) {
+    return unauthorizedError(
+      "Session renewal must be for the same public key as the existing session."
+    );
+  }
+
   if (hasProof && body) {
     const challenge = body.challenge ?? "";
     const signature = body.signature ?? "";
     if (!verifyChallengeToken(challenge, publicKey)) {
       return unauthorizedError("Challenge expired or invalid. Request a fresh challenge and try again.");
     }
-    const message = challengeMessage(publicKey);
+    // The message embeds the challenge token, so this signature is bound to
+    // this specific (expiring) challenge and can't be replayed later.
+    const message = challengeMessage(publicKey, challenge);
     if (!verifyWalletSignature(message, signature, publicKey)) {
       return unauthorizedError(
         "Signature does not match the wallet public key. The session was not issued."
