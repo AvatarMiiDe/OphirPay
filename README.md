@@ -712,6 +712,26 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 
 ---
 
+## ⚡ Performance & Gas
+
+OphirPay is engineered for predictable on-chain costs and fast reads:
+
+- **Gas-report CI gate** — the `contract-gas-report` job compiles both contracts, enforces the 64 KB Soroban WASM protocol limit, estimates base inclusion fees, and uploads a per-function gas report as a build artifact (`docs/GAS.md` mirrors the cost model)
+- **Cached on-chain reads** — read-only simulations are cached server-side (30–60 s TTL) with per-key granularity; governance/multisig/escrow listings hit the RPC once per window instead of per request
+- **Bounded N+1 enumeration** — list endpoints cap per-record reads (e.g. 100 proposals), enumerate the *most recent* tail first, and return an explicit `truncated` flag instead of silently dropping data
+- **Scoped cache invalidation** — mutations invalidate only the affected query keys, so an on-chain write never triggers a full re-enumeration of unrelated (expensive) lists
+- **RPC failover** — the RPC layer retries across endpoints and falls back between public providers to stay available during provider outages
+
+### Audit-Readiness
+
+- **94 typed contract error codes** — every failure path returns a machine-readable `PaymentError`, mirrored 1:1 in the TypeScript error catalog and surfaced as clean HTTP/API errors
+- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (58 in `ophirpay`, 6 in `emitter`) plus 200 vitest suites
+- **Zero failing tests** — the full suite is green in CI (`lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e`, `secret-scan`)
+- **Threat-modeled web layer** — CSRF, SSRF, HMAC sessions, hashed API keys, rate limiting, and CSP are documented in the Security section above and enforced in code
+- **Ready for a professional audit** — the codebase ships with an architecture doc, OpenAPI spec (40 routes), deployment runbooks, and a demo harness; the contract was written for reviewability with explicit `require_auth` on every privileged entrypoint
+
+---
+
 ## 🌐 Community
 
 | Channel | Link |
