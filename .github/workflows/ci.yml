@@ -185,23 +185,67 @@ jobs:
           echo "✅ All 19 pages healthy"
 
   # ══════════════════════════════════════════════════════════════
-  # 7b. E2E TESTS — Playwright against live Vercel deployment
+  # 7b. E2E TESTS — Playwright against a self-hosted production build.
+  #
+  # The E2E suite is deterministic by design (auth-gate 401s, wallet-gated
+  # page states, health 200|503), so it runs against the freshly built
+  # Next.js production bundle + Postgres — NOT the live Vercel deployment,
+  # which races deploys and depends on a working production DATABASE_URL.
   # ══════════════════════════════════════════════════════════════
   e2e-tests:
     name: "7️⃣-bis Frontend — E2E (Playwright)"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    needs: [contract-wasm, next-build]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prisma
+          POSTGRES_PASSWORD: prisma
+          POSTGRES_DB: ophirpay_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_e2e
+      DIRECT_DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_e2e
+      AUTH_SECRET: ci-e2e-auth-secret-00000000000000000000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: "npm" }
       - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Download contract WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contract-wasm
+          path: ./
+      - name: Download Next.js production build
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: ./
+      - name: Apply migrations to test DB
+        run: npx prisma migrate deploy
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: Run E2E tests against live Vercel
+      - name: Serve production build
+        run: |
+          nohup npm run start > /tmp/next-start.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3000/ && break
+            sleep 2
+          done
+          curl -sf -o /dev/null http://localhost:3000/ || { echo "next start failed to come up"; tail -20 /tmp/next-start.log; exit 1; }
+      - name: Run E2E tests against production build
         run: npx playwright test --project=chromium
-        env:
-          E2E_BASE_URL: https://ophirpay.vercel.app
       - name: Upload E2E report on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -251,12 +295,13 @@ jobs:
           DIRECT_DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_ci
       - name: Check for drift (schema vs migrations)
         run: |
-          # If migrations exist, diff must be empty; if none exist yet, skip
+          # If migrations exist, diff must be empty; if none exist yet, skip.
+          # No explicit --shadow-database-url: Prisma auto-creates its own
+          # temporary shadow DB (the service user has CREATE DATABASE rights).
           if [ -d prisma/migrations ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
             npx prisma migrate diff \
               --from-migrations prisma/migrations \
-              --to-schema-datamodel prisma/schema.prisma \
-              --shadow-database-url "postgresql://prisma:prisma@localhost:5432/ophirpay_ci_shadow"
+              --to-schema-datamodel prisma/schema.prisma
             echo "✅ No schema drift detected"
           else
             echo "ℹ️  No migrations directory yet — skipping drift check"
