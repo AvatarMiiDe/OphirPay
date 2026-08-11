@@ -16,30 +16,38 @@ export interface ApiError {
 // Mutation API routes verify a `x-csrf-token` header against the
 // `__Host-csrf` cookie. The cookie is HttpOnly (not readable by JS),
 // so the token is minted server-side at GET /api/csrf, which sets the
-// cookie AND returns the token in the body. We cache it in memory and
-// attach it to every non-GET request. `undefined` = not fetched yet.
+// cookie AND returns the token in the body. We cache the in-flight
+// promise so concurrent mutations share a single mint (avoiding a
+// cookie/header mismatch race) and attach it to every non-GET request.
+// The cache is cleared on failure so a later mutation can retry.
 
-let csrfTokenCache: string | null | undefined;
+let csrfTokenPromise: Promise<string | null> | null = null;
 
-async function getCsrfToken(): Promise<string | null> {
-  if (csrfTokenCache !== undefined) return csrfTokenCache;
-  try {
-    const res = await fetch("/api/csrf", { method: "GET" });
-    if (res.ok) {
-      const json = (await res.json()) as { token?: string };
-      csrfTokenCache = json.token ?? null;
-    } else {
-      csrfTokenCache = null;
-    }
-  } catch {
-    csrfTokenCache = null;
+function getCsrfToken(): Promise<string | null> {
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = (async () => {
+      try {
+        const res = await fetch("/api/csrf", { method: "GET" });
+        if (!res.ok) return null;
+        const json = (await res.json()) as { token?: string };
+        return json.token ?? null;
+      } catch {
+        return null;
+      }
+    })().then((token) => {
+      // On failure, clear the cache so the next mutation can retry.
+      if (token === null) csrfTokenPromise = null;
+      return token;
+    });
   }
-  return csrfTokenCache;
+  return csrfTokenPromise;
 }
 
 /**
  * Fetch wrapper that throws structured ApiError on non-2xx responses.
- * Automatically attaches the CSRF token to mutation requests.
+ * Automatically attaches the CSRF token to mutation requests, and retries
+ * once with a freshly minted token if the cached one is rejected (e.g.
+ * cookie expired or rotated server-side).
  */
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? "GET";
@@ -52,7 +60,21 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     if (token) headers.set("x-csrf-token", token);
   }
 
-  const res = await fetch(url, { ...init, headers });
+  let res = await fetch(url, { ...init, headers });
+
+  // The cached token may be stale (24h cookie expiry, server rotation, or a
+  // prior failed mint). Mint a fresh one and retry the request once.
+  if (res.status === 403 && isMutation) {
+    const csrfBody = await res.json().catch(() => ({}));
+    if (csrfBody?.error?.code === "CSRF_INVALID") {
+      csrfTokenPromise = null;
+      const token = await getCsrfToken();
+      if (token) {
+        headers.set("x-csrf-token", token);
+        res = await fetch(url, { ...init, headers });
+      }
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

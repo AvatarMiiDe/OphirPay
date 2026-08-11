@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
@@ -37,11 +37,34 @@ export default function RBACPage() {
   const [grantRoleVal, setGrantRoleVal] = useState<RoleValue>(Role.Operator);
   const [revokeAddress, setRevokeAddress] = useState("");
 
+  // The contract has no role-enumeration function, so the API can only report
+  // a single address's role (via ?addr=). We seed the list with the connected
+  // wallet's own role and keep grant/revoke updates optimistically.
   const {
-    data: rawAssignments,
+    data: ownRole,
     isLoading: loading,
-  } = useApiQuery<RoleAssignment[]>(["rbac"], "/api/rbac");
-  const assignments = Array.isArray(rawAssignments) ? rawAssignments : [];
+  } = useApiQuery<{ address: string; role: RoleValue | null }>(
+    ["rbac", wallet.publicKey ?? "none"],
+    wallet.publicKey ? `/api/rbac?addr=${encodeURIComponent(wallet.publicKey)}` : undefined,
+    { enabled: !!wallet.publicKey }
+  );
+
+  const [assignments, setAssignments] = useState<RoleAssignment[]>([]);
+
+  // Seed the list with the connected wallet's own role assignment.
+  useEffect(() => {
+    if (!ownRole || ownRole.role === null || ownRole.role === undefined) return;
+    const role = ownRole.role as RoleValue;
+    setAssignments((prev) => {
+      const exists = prev.some((a) => a.address === ownRole.address);
+      if (exists) {
+        return prev.map((a) =>
+          a.address === ownRole.address ? { ...a, role, roleName: ROLE_LABELS[role]?.label ?? "Unknown" } : a
+        );
+      }
+      return [...prev, { address: ownRole.address, role, roleName: ROLE_LABELS[role]?.label ?? "Unknown" }];
+    });
+  }, [ownRole]);
 
   const handleGrant = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -56,6 +79,10 @@ export default function RBACPage() {
         toast.success(`Role granted on-chain`);
         setShowGrant(false);
         setGrantAddress("");
+        setAssignments((prev) => [
+          ...prev.filter((a) => a.address !== grantAddress),
+          { address: grantAddress, role: grantRoleVal, roleName: ROLE_LABELS[grantRoleVal].label },
+        ]);
         queryClient.invalidateQueries({ queryKey: ["rbac"] });
       } else {
         toast.error(result.error || "Grant failed — are you an Admin?");
@@ -80,6 +107,7 @@ export default function RBACPage() {
         toast.success("Role revoked on-chain");
         setShowRevoke(false);
         setRevokeAddress("");
+        setAssignments((prev) => prev.filter((a) => a.address !== revokeAddress));
         queryClient.invalidateQueries({ queryKey: ["rbac"] });
       } else {
         toast.error(result.error || "Revoke failed — are you an Admin?");

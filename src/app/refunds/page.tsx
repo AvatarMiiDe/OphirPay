@@ -23,23 +23,25 @@ const REASON_CODES = [
   { value: 5, label: "Other" },
 ] as const;
 
+// RefundStatus enum values as returned by the API (Prisma enum, uppercase)
 const STATUS_COLORS: Record<string, ReturnType<typeof Badge>["props"]["variant"]> = {
-  Requested: "warning",
-  Approved: "info",
-  Rejected: "danger",
-  Processed: "success",
+  REQUESTED: "warning",
+  APPROVED: "info",
+  REJECTED: "danger",
+  PROCESSED: "success",
 };
 
 interface Refund {
-  id: number;
-  payment_id: number;
-  requester: string;
-  amount: number;
+  id: string;
+  paymentId: string;
+  userId: string;
+  amount: string;
+  asset: string;
   reason: string;
-  reason_code: number;
+  reasonCode: number;
   status: string;
-  requested_at: number;
-  resolved_at: number;
+  requestedAt: string;
+  resolvedAt: string | null;
 }
 
 interface RefundAnalytics {
@@ -103,10 +105,10 @@ export default function RefundsPage() {
     }
   };
 
-  const handleApprove = async (refundId: number) => {
+  const handleApprove = async (refundId: string | number) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     try {
-      const result = await approveRefund(wallet.publicKey, refundId);
+      const result = await approveRefund(wallet.publicKey, Number(refundId));
       if (result.success) {
         toast.success("Refund approved on-chain");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
@@ -118,9 +120,9 @@ export default function RefundsPage() {
     }
   };
 
-  const handleProcess = async (refundId: number) => {
+  const handleProcess = async (refundId: string | number) => {
     try {
-      const result = await processRefund(refundId);
+      const result = await processRefund(Number(refundId));
       if (result.success) {
         toast.success("Refund processed on-chain — tokens returned");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
@@ -242,39 +244,40 @@ export default function RefundsPage() {
         />
       ) : activeTab === "list" ? (
         <div className="space-y-3">
-          {refunds.map((r) => (
+          {refunds.map((r) => {
+            const statusKey = r.status?.toUpperCase() ?? "REQUESTED";
+            return (
             <Card key={r.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-xs text-gray-500">#{r.id}</span>
+                    <span className="font-mono text-xs text-gray-500">#{r.id.slice(0, 8)}</span>
                     <h3 className="font-semibold text-gray-900 dark:text-white">
-                      Payment #{r.payment_id}
+                      Payment #{r.paymentId}
                     </h3>
-                    <Badge variant={STATUS_COLORS[r.status] ?? "info"}>
-                      {r.status}
+                    <Badge variant={STATUS_COLORS[statusKey] ?? "info"}>
+                      {statusKey}
                     </Badge>
-                    <Badge variant="default">{reasonLabel(r.reason_code)}</Badge>
+                    <Badge variant="default">{reasonLabel(r.reasonCode)}</Badge>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{r.reason}</p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                    <span>Amount: {r.amount} stroops</span>
-                    <span>Requester: {r.requester?.slice(0, 10)}...</span>
-                    <span>Requested: {new Date(r.requested_at * 1000).toLocaleDateString()}</span>
+                    <span>Amount: {r.amount} {r.asset || "native"}</span>
+                    <span>Requested: {new Date(r.requestedAt).toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {r.status === "Requested" && (
+                  {statusKey === "REQUESTED" && (
                     <Button size="sm" variant="primary" onClick={() => handleApprove(r.id)}>
                       Approve
                     </Button>
                   )}
-                  {r.status === "Approved" && (
+                  {statusKey === "APPROVED" && (
                     <Button size="sm" variant="primary" onClick={() => handleProcess(r.id)}>
                       Process
                     </Button>
                   )}
-                  {r.status === "Processed" && (
+                  {statusKey === "PROCESSED" && (
                     <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                       ✅ Complete
                     </span>
@@ -282,7 +285,8 @@ export default function RefundsPage() {
                 </div>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 

@@ -2,7 +2,6 @@
 
 import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 
 /**
  * GET /api/multisig/requests — list pending approval requests
@@ -17,17 +16,10 @@ export async function GET(request: Request) {
       return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
     }
 
-    const result = await simulateContractCall(
-      DEFAULT_CONTRACT_ID,
-      "get_approval_request",
-      CHAIN_READ_SOURCE
-    );
-
-    if (result.status === "SIMULATION_FAILED") {
-      return successResponse({ requests: [], available: false });
-    }
-
-    return successResponse(result.returnValue ? [result.returnValue] : []);
+    // The contract has no approval-request enumeration function (each request
+    // is read by id), so a full list cannot be assembled on-chain. Return an
+    // empty array with an `available` flag so clients can degrade gracefully.
+    return successResponse({ requests: [], available: false });
   } catch (err) {
     return handleApiError(err, "GET /api/multisig/requests");
   }

@@ -26,13 +26,14 @@ const EVENT_TYPES = [
   "proposal_created",
 ] as const;
 
+// Matches the /api/hooks response (Prisma NotificationHook, camelCase)
 interface Hook {
-  id: number;
-  subscriber: string;
-  event_type: string;
-  webhook_url: string;
+  id: string;
+  userId: string;
+  eventType: string;
+  webhookUrl: string;
   active: boolean;
-  created_at: number;
+  createdAt: string;
 }
 
 export default function HooksPage() {
@@ -72,10 +73,10 @@ export default function HooksPage() {
     }
   };
 
-  const handleDeactivate = async (hookId: number) => {
+  const handleDeactivate = async (hookId: string | number) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     try {
-      const result = await unregisterHook(wallet.publicKey, hookId);
+      const result = await unregisterHook(wallet.publicKey, Number(hookId));
       if (result.success) {
         toast.success("Hook deactivated on-chain");
         queryClient.invalidateQueries({ queryKey: ["hooks"] });
@@ -145,18 +146,18 @@ export default function HooksPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-xs text-gray-500">#{hook.id}</span>
+                    <span className="font-mono text-xs text-gray-500">#{hook.id.slice(0, 8)}</span>
                     <Badge variant={hook.active ? "success" : "danger"}>
                       {hook.active ? "Active" : "Inactive"}
                     </Badge>
-                    <Badge variant="info">{hook.event_type}</Badge>
+                    <Badge variant="info">{hook.eventType}</Badge>
                   </div>
                   <div className="mt-2 space-y-1">
                     <p className="text-sm font-mono text-gray-600 dark:text-gray-400 break-all">
-                      {hook.webhook_url}
+                      {hook.webhookUrl}
                     </p>
                     <p className="text-xs text-gray-400">
-                      Subscriber: {hook.subscriber?.slice(0, 14)}... · Registered: {new Date(hook.created_at * 1000).toLocaleDateString()}
+                      Registered: {new Date(hook.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>

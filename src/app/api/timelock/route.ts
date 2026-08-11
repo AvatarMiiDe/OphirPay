@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       return successResponse(result.returnValue);
     }
 
-    // Get total count
+    // Enumerate actions: read the count, then fetch each action by id.
     const countResult = await simulateContractCall(
       DEFAULT_CONTRACT_ID,
       "get_timelock_count",
@@ -42,10 +42,30 @@ export async function GET(request: Request) {
     );
 
     if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse({ count: 0, actions: [], available: false });
+      return successResponse([]);
     }
 
-    return successResponse({ count: countResult.returnValue ?? 0 });
+    const totalCount = Number(countResult.returnValue ?? 0);
+    if (totalCount === 0) return successResponse([]);
+
+    // Cap enumeration to bound the N+1 read pattern (one RPC per action).
+    const maxActions = 100;
+    const toFetch = Math.min(totalCount, maxActions);
+
+    const actions: unknown[] = [];
+    for (let id = 1; id <= toFetch; id++) {
+      const result = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_timelocked_action",
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(id, { type: "u64" })]
+      );
+      if (result.status !== "SIMULATION_FAILED" && result.returnValue) {
+        actions.push(result.returnValue);
+      }
+    }
+
+    return successResponse(actions);
   } catch (err) {
     return handleApiError(err, "GET /api/timelock");
   }

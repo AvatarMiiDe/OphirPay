@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
@@ -60,10 +60,27 @@ export default function MultisigPage() {
       ? (rawConfig as MultisigConfig)
       : null;
 
+  // The contract cannot enumerate approval requests, so the API returns an
+  // empty list. The page tracks proposals optimistically as the user creates,
+  // approves, and executes them; the query only seeds the list when the API
+  // happens to return real data.
   const {
     data: rawRequests,
-  } = useApiQuery<ApprovalRequest[]>(["multisig", "requests"], "/api/multisig/requests");
-  const requests = Array.isArray(rawRequests) ? rawRequests : [];
+  } = useApiQuery<{ requests?: ApprovalRequest[] } | ApprovalRequest[]>(
+    ["multisig", "requests"],
+    "/api/multisig/requests"
+  );
+  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
+
+  // Seed from API when it returns an array of requests.
+  useEffect(() => {
+    const seed = Array.isArray(rawRequests)
+      ? rawRequests
+      : Array.isArray(rawRequests?.requests)
+        ? rawRequests.requests
+        : [];
+    if (seed.length > 0) setRequests(seed);
+  }, [rawRequests]);
 
   const handleConfigSubmit = async () => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
@@ -99,6 +116,14 @@ export default function MultisigPage() {
         setShowPropose(false);
         setProposePayee("");
         setProposeAmount("");
+        setRequests((prev) => [...prev, {
+          id: Date.now(),
+          proposer: wallet.publicKey!,
+          payee: proposePayee,
+          amount: proposeAmount,
+          approvals_count: 0,
+          executed: false,
+        }]);
         queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Failed to propose payment");
@@ -116,6 +141,9 @@ export default function MultisigPage() {
       const result = await approveMultisigPayment(wallet.publicKey, requestId);
       if (result.success) {
         toast.success("Approval submitted on-chain");
+        setRequests((prev) => prev.map((r) =>
+          r.id === requestId ? { ...r, approvals_count: (r.approvals_count ?? 0) + 1 } : r
+        ));
         queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Approval failed");
@@ -131,6 +159,9 @@ export default function MultisigPage() {
       const result = await executeApprovedPayment(wallet.publicKey, requestId);
       if (result.success) {
         toast.success("Payment executed on-chain");
+        setRequests((prev) => prev.map((r) =>
+          r.id === requestId ? { ...r, executed: true } : r
+        ));
         queryClient.invalidateQueries({ queryKey: ["multisig"] });
       } else {
         toast.error(result.error || "Execution failed — threshold may not be met");

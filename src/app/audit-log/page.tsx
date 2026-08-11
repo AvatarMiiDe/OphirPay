@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useCallback, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -58,19 +57,33 @@ const ACTION_COLORS: Record<string, "success" | "danger" | "warning" | "info"> =
 };
 
 export default function AuditLogPage() {
-  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [connected, setConnected] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
+  // Live SSE entries are kept OUT of the query cache so window-focus refetches
+  // (React Query default) don't wipe entries that streamed in after the last
+  // fetch. They're merged with the fetched list at render time, deduped by id.
+  const [liveEntries, setLiveEntries] = useState<AuditEntry[]>([]);
   const sseRef = useRef<EventSource | null>(null);
 
   const {
     data: rawEntries,
     isLoading: loading,
   } = useApiQuery<AuditEntry[]>(["audit-log"], "/api/audit-log");
-  const entries = Array.isArray(rawEntries) ? rawEntries : [];
 
-  // SSE live streaming — prepend incoming entries into the React Query cache
+  const entries = useMemo(() => {
+    const fetchedEntries = Array.isArray(rawEntries) ? rawEntries : [];
+    const seen = new Set<number>();
+    const merged: AuditEntry[] = [];
+    for (const e of [...liveEntries, ...fetchedEntries]) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      merged.push(e);
+    }
+    return merged.slice(0, 100);
+  }, [liveEntries, rawEntries]);
+
+  // SSE live streaming — prepend incoming entries into local state (survives refetches)
   const connectSSE = useCallback(() => {
     if (sseRef.current) sseRef.current.close();
     const es = new EventSource("/api/audit-log/sse");
@@ -79,14 +92,12 @@ export default function AuditLogPage() {
     es.addEventListener("audit:entry", (e) => {
       try {
         const data = JSON.parse(e.data);
-        queryClient.setQueryData<AuditEntry[]>(["audit-log"], (prev) =>
-          [data, ...(Array.isArray(prev) ? prev : [])].slice(0, 100)
-        );
+        setLiveEntries((prev) => [data, ...prev].slice(0, 100));
       } catch {}
     });
     es.onerror = () => setConnected(false);
     return es;
-  }, [queryClient]);
+  }, []);
 
   const toggleLive = () => {
     if (!liveMode) {
@@ -96,7 +107,7 @@ export default function AuditLogPage() {
       sseRef.current?.close();
       setConnected(false);
       setLiveMode(false);
-      queryClient.invalidateQueries({ queryKey: ["audit-log"] });
+      setLiveEntries([]);
     }
   };
 
