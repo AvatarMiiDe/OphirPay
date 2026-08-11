@@ -8,12 +8,12 @@ import {
   createWebhookSchema,
   createPaymentRequestSchema,
   paginationSchema,
-} from "@/lib/validations";
+} from "@/lib/validation-schemas";
 import {
   validateAmount,
   validateMemo,
   validateMatch,
-} from "@/lib/validation";
+} from "@/lib/validation-helpers";
 
 // Valid 56-char Stellar address (G + 55 alphanumeric chars)
 const VALID_STELLAR = "G" + "A".repeat(55);

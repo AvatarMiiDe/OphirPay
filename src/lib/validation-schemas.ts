@@ -117,6 +117,34 @@ export const createApiKeySchema = z.object({
   userId: z.string().min(1),
 });
 
+// ── Payment Request Schemas (moved from validations.ts) ───────
+
+export const createPaymentRequestSchema = z.object({
+  amount: z.number().positive("Amount must be greater than 0"),
+  assetCode: z.string().default("XLM"),
+  assetIssuer: z.string().optional(),
+  description: z.string().max(500).optional(),
+  recipientAddress: stellarAddress.optional(),
+});
+
+// ── Pagination (moved from validations.ts) ────────────────────
+
+export const paginationSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.string().optional(),
+  search: z.string().optional(),
+});
+
+export type PaginationParams = z.infer<typeof paginationSchema>;
+export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+export type CreateBatchInput = z.infer<typeof createBatchSchema>;
+
+// ── Recurrence alias ───────────────────────────────────────────
+
+/** Alias of createRecurringSchema kept for callers using the older name. */
+export const createRecurrenceSchema = createRecurringSchema;
+
 // ── Refund Schemas ────────────────────────────────────────────
 
 export const requestRefundSchema = z.object({

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { createWebhookSchema } from "@/lib/validations";
+import { createWebhookSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   badRequestError,

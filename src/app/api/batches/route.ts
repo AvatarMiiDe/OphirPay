@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { createBatchSchema } from "@/lib/validations";
+import { createBatchSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,

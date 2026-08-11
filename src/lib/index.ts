@@ -6,7 +6,7 @@
  */
 
 // Validation & Schemas
-export { createPaymentSchema, createBatchSchema, createRecurrenceSchema } from "./validations";
+export { createPaymentSchema, createBatchSchema, createRecurrenceSchema } from "./validation-schemas";
 export { validateEnv, isProduction, getAppUrl } from "./env";
 
 // API Helpers
