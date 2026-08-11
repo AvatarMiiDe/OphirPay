@@ -59,7 +59,7 @@ Configure these in **Settings → Branches → Branch protection rules** for `ma
 ## Testing
 
 ```bash
-npm test              # Run all tests (68 frontend)
+npm test              # Run all tests (184 frontend)
 npm run test:watch    # Watch mode
 npm run coverage      # Coverage report
 npm run typecheck     # TypeScript check

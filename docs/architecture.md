@@ -100,10 +100,10 @@ ophirpay/
 |---|---|
 | Blockchain | Stellar / Soroban SDK 27.0.5 |
 | Contracts | Rust, `#![no_std]`, soroban-sdk 27.0.5, wasm32v1-none target |
-| Frontend | Next.js 15, React 19, Tailwind CSS 4 |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (154), Rust `#[test]` (46), Playwright (31 E2E+API) |
-| CI/CD | GitHub Actions (15 jobs) |
+| Testing | Vitest (184), Rust `#[test]` (62), Playwright (71 E2E+API) |
+| CI/CD | GitHub Actions (13 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |

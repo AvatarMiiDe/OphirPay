@@ -17,7 +17,7 @@
 
 - [ ] My code follows the project's code style and conventions
 - [ ] I have run `npm run lint` and addressed any issues
-- [ ] I have run `npm test` and all tests pass (68 frontend tests)
+- [ ] I have run `npm test` and all tests pass (184 frontend tests)
 - [ ] I have run `npx tsc --noEmit` and there are no type errors
 - [ ] For contract changes: I have run `cargo build --target wasm32v1-none --release`
 - [ ] For contract changes: I have added/updated Rust tests in `contracts/*/src/lib.rs`

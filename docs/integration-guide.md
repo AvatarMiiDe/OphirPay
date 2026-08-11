@@ -185,14 +185,14 @@ Verify with: `HMAC-SHA256(JSON.stringify(payload), yourSecret)`
 ## Testing
 
 ```bash
-# Frontend tests (154)
+# Frontend tests (184)
 npm test
 
 # Contract tests
 cd contracts/ophirpay && cargo test
 cd contracts/emitter && cargo test
 
-# E2E tests (15)
+# E2E tests (71)
 npx playwright test
 ```
 

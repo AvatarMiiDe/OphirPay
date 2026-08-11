@@ -18,10 +18,10 @@
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/badge/CI%20jobs-12-blue.svg?logo=githubactions" alt="12 CI Jobs" />
+      <img src="https://img.shields.io/badge/CI%20jobs-13-blue.svg?logo=githubactions" alt="13 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-203%20passed%20(154%20app%20%2B%2049%20contracts)-brightgreen.svg" alt="203 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-246%20passed%20(184%20app%20%2B%2062%20contracts)-brightgreen.svg" alt="246 Tests Passing" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -38,7 +38,7 @@
   </p>
 
   <p>
-    <sub>      <b>12 CI checks:</b>
+    <sub>      <b>13 CI checks:</b>
       <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
@@ -46,6 +46,7 @@
       <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/build-Next.js-black.svg?logo=nextdotjs" />
       <img src="https://img.shields.io/badge/smoke-19%20pages-000.svg?logo=vercel" />
+      <img src="https://img.shields.io/badge/e2e-Playwright-2EAD33.svg?logo=playwright" />
       <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
       <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
       <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
@@ -114,7 +115,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 203 tests (154 app + 49 contracts)** | ✅ | ⚠️ |
+| **Full CI/CD + 246 tests (184 app + 62 contracts)** | ✅ | ⚠️ |
 
 ---
 
@@ -461,11 +462,11 @@ Automatically builds WASM, uploads, deploys, initializes, and verifies both cont
 
 ## 🧪 Smart Contract Tests
 
-Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (49 tests total):
+Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (62 tests total):
 
 | Contract | Tests | Coverage |
 |---|---|---|
-| `OphirPayContract` | 43 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
+| `OphirPayContract` | 56 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
 | `PaymentEventEmitter` | 6 tests | init, emit, get, count, pause/unpause, access control |
 
 ```bash
@@ -479,7 +480,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (203 total: 154 app + 49 contracts)
+# All tests (246 total: 184 app + 62 contracts)
 npm test
 
 # Watch mode
@@ -494,10 +495,16 @@ npm run ci   # typecheck → lint → test → build
 | Utils | `src/__tests__/utils.test.ts` | 12 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn` |
 | Utils Extended | `src/__tests__/utils-extended.test.ts` | 20 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn`, asset helpers |
 | UI Components | `src/__tests__/ui-components.test.tsx` | 17 | Button, Card, Badge, Modal, Spinner, Toast |
+| Validation | `src/__tests__/validation.test.ts` | 26 | Zod schemas, input validation, memo rules |
+| Auth | `src/__tests__/auth.test.ts` | 26 | Wallet-session auth, API authorization, API keys |
+| API Response | `src/__tests__/api-response.test.ts` | 19 | `handleApiError` mapping, error masking |
+| Auth Session | `src/__tests__/auth-session.test.ts` | 13 | Signed session cookie helpers |
+| Webhook URL Guard | `src/__tests__/webhook-url-guard.test.ts` | 9 | SSRF guard for webhook URLs |
 | Contracts | `src/__tests__/contracts.test.ts` | 6 | `classifyContractError` — NETWORK, CONTRACT, USER_REJECTION |
 | Contract Utils | `src/__tests__/contract-utils.test.ts` | 5 | Soroban contract helpers |
+| Error Codes | `src/__tests__/error-codes.test.ts` | 5 | Error code taxonomy |
 | Stellar | `src/__tests__/stellar.test.ts` | 5 | `isValidStellarAddress`, `getStellarExplorerUrl` |
-| Integration | `src/__tests__/integration.test.ts` | 3 | API endpoint health checks |
+| Integration | `src/__tests__/integration.test.ts` | 21 | API endpoint health checks |
 
 ### Error Classification System
 
@@ -530,9 +537,9 @@ Every push to `main` triggers:
 
 | Job | Command | Purpose |
 |---|---|---|
-| Lint | `next lint --max-warnings 20` | ESLint with zero-error tolerance |
+| Lint | `npx eslint . --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
-| Unit Tests | `vitest run --reporter=verbose` | 154 app tests across 10 suites |
+| Unit Tests | `vitest run --reporter=verbose` | 184 app tests across 13 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
 | Build | `next build` | Production Next.js build verification |
 | Smoke | curl (19 pages) | HTTP 200 check against live Vercel — ~3s |
@@ -578,7 +585,7 @@ Every push to `main` triggers:
 
 | Layer | Technology | Why |
 |---|---|---|
-| **Framework** | [Next.js 15](https://nextjs.org) | App Router, SSR, API routes, Vercel native |
+| **Framework** | [Next.js 16](https://nextjs.org) | App Router, SSR, API routes, Vercel native |
 | **Language** | [TypeScript](https://www.typescriptlang.org) | Strict mode, full type safety |
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com) | Utility-first, dark mode, custom theme |
 | **Blockchain** | [Stellar SDK v13](https://stellar.org) + [Soroban](https://soroban.stellar.org) | Horizon, Soroban RPC, TX building |
@@ -637,7 +644,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 154 tests | **Done** |
+| ✅ CI/CD pipeline + 184 app tests + 62 contract tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |

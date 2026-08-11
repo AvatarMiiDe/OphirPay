@@ -4,6 +4,10 @@ All notable changes to OphirPay will be documented in this file.
 
 ## [Unreleased] — 2026-08-10
 
+### Changed
+- **Next.js 16 upgrade**: bumped `next` + `eslint-config-next` to 16.3 — removed the removed `instrumentationHook` config option (enabled by default in 16), migrated `eslint.config.mjs` to the native flat configs exported by `eslint-config-next` 16, and documented the suppressed react-hooks v6 opinionated rules
+- **Test suite**: 154 → 184 app tests (13 suites) and 62 contract tests (56 OphirPay + 6 Emitter); corrected stale test/CI counts across README, docs, and PR templates
+
 ### Fixed
 - **Startup bootstrap**: `bootstrap()` now called via Next.js instrumentation hook; env validation with Zod
 - **Environment**: Added `.env.example` with all 20+ documented variables
