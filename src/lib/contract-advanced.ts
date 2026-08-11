@@ -9,6 +9,7 @@
  */
 
 import {
+  Asset,
   nativeToScVal,
   type xdr,
 } from "@stellar/stellar-sdk";
@@ -158,6 +159,17 @@ export async function executeApprovedPayment(
 
 // ── Governance Functions ───────────────────────────────────────
 
+/**
+ * Resolve the SAC (Stellar Asset Contract) address for the proposal deposit.
+ * An empty asset resolves to native XLM's SAC address — passing the proposer
+ * (the previous fallback) would make the contract call token::transfer on the
+ * proposer's *address*, which is not a token contract and always fails.
+ */
+function resolveDepositAssetAddress(asset: string): string {
+  if (asset && asset.trim() !== "") return asset.trim();
+  return Asset.native().contractId(NETWORK_PASSPHRASE);
+}
+
 export async function createGovernanceProposal(
   proposer: string,
   title: string,
@@ -175,7 +187,7 @@ export async function createGovernanceProposal(
     nativeToScVal(actionType, { type: "string" }),
     nativeToScVal(target, { type: "string" }),
     nativeToScVal(data, { type: "string" }),
-    nativeToScVal(depositAsset || proposer, { type: "address" }),
+    nativeToScVal(resolveDepositAssetAddress(depositAsset), { type: "address" }),
     nativeToScVal(depositAmount, { type: "i128" }),
   ];
   return signAndSubmit(proposer, CONTRACT_ID, "create_proposal", args);

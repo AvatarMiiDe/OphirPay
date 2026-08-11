@@ -36,6 +36,8 @@ export default function GovernancePage() {
   const [formAction, setFormAction] = useState("upgrade");
   const [formTarget, setFormTarget] = useState("");
   const [formData, setFormData] = useState("");
+  const [formDepositAmount, setFormDepositAmount] = useState("");
+  const [formDepositAsset, setFormDepositAsset] = useState("");
 
   // ── React Query: fetch proposals ────────────────────────
   const {
@@ -69,6 +71,9 @@ export default function GovernancePage() {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
     if (!formTitle || !formDesc) { toast.error("Title and description are required"); return; }
     try {
+      // Deposit is denominated in XLM and converted to stroops (1 XLM = 10^7).
+      // An empty deposit asset resolves to native XLM's SAC address.
+      const depositStroops = Math.round((parseFloat(formDepositAmount) || 0) * 10_000_000);
       await createMutation.mutateAsync({
         proposer: wallet.publicKey,
         title: formTitle,
@@ -76,8 +81,8 @@ export default function GovernancePage() {
         actionType: formAction,
         target: formTarget,
         data: formData,
-        depositAsset: "",
-        depositAmount: 0,
+        depositAsset: formDepositAsset.trim(),
+        depositAmount: depositStroops,
       });
       toast.success("Proposal created on-chain");
       setShowCreate(false);
@@ -85,6 +90,8 @@ export default function GovernancePage() {
       setFormDesc("");
       setFormTarget("");
       setFormData("");
+      setFormDepositAmount("");
+      setFormDepositAsset("");
       refetch();
     } catch (err) {
       const apiErr = err as ApiError;
@@ -243,6 +250,34 @@ export default function GovernancePage() {
               <option value="set_multisig_config">Multisig Configuration</option>
               <option value="transfer_ownership">Transfer Ownership</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Deposit (XLM)
+            </label>
+            <input
+              value={formDepositAmount}
+              onChange={(e) => setFormDepositAmount(e.target.value)}
+              type="number"
+              min="0"
+              step="any"
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
+              placeholder="0.00 (native XLM)"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Locks funds until the proposal is executed. Some governance configs require a minimum deposit.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Deposit Asset (optional)
+            </label>
+            <input
+              value={formDepositAsset}
+              onChange={(e) => setFormDepositAsset(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 font-mono text-sm"
+              placeholder="Leave empty for native XLM"
+            />
           </div>
           <Button onClick={handleCreate} loading={createMutation.isPending} className="w-full">Create Proposal</Button>
         </div>
