@@ -938,6 +938,66 @@ paths:
       responses:
         "200":
           description: Refund data
+    post:
+      tags: [Refunds]
+      summary: Persist a refund ledger row after an on-chain request_refund
+      description: |
+        Called by the UI AFTER the on-chain request_refund transaction succeeds.
+        Stores the contract's refund id (`onChainId`, captured from the tx
+        return value) so approve/process can later target the right record.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentId, amount]
+              properties:
+                paymentId: { type: integer, description: "On-chain payment id" }
+                amount: { type: number, description: "Refund amount in stroops" }
+                asset: { type: string, default: native }
+                reason: { type: string, maxLength: 500 }
+                reasonCode: { type: integer, minimum: 0, maximum: 5 }
+                onChainId: { type: integer, description: "Contract refund id from the tx return value" }
+      responses:
+        "201":
+          description: Refund ledger row created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/refunds/{id}:
+    patch:
+      tags: [Refunds]
+      summary: Update the lifecycle status of a refund ledger row
+      description: |
+        Mirrors an on-chain transition (approve_refund / process_refund) onto
+        the ledger row so the list reflects Request → Approve → Process.
+        Owner-scoped — only the row's user can update it.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [APPROVED, PROCESSED, REJECTED] }
+      responses:
+        "200":
+          description: Refund status updated
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Hooks ─────────────────────────────────────────────────
   /api/hooks:
@@ -952,6 +1012,58 @@ paths:
       responses:
         "200":
           description: Hook list
+    post:
+      tags: [Hooks]
+      summary: Persist a hook ledger row after an on-chain register_hook
+      description: |
+        Called by the UI AFTER the on-chain register_hook transaction succeeds.
+        Stores the contract's hook id (`onChainId`, captured from the tx return
+        value) so Deactivate can later target the right record.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventType, webhookUrl]
+              properties:
+                eventType: { type: string, maxLength: 100 }
+                webhookUrl: { type: string, format: uri }
+                onChainId: { type: integer, description: "Contract hook id from the tx return value" }
+      responses:
+        "201":
+          description: Hook ledger row created
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/hooks/{id}:
+    patch:
+      tags: [Hooks]
+      summary: Deactivate a hook ledger row after an on-chain unregister_hook
+      description: Owner-scoped — only the row's user can update it.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active: { type: boolean }
+      responses:
+        "200":
+          description: Hook updated
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Audit Log ─────────────────────────────────────────────
   /api/audit-log:
