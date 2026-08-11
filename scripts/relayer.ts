@@ -14,6 +14,7 @@
  *   NEXT_PUBLIC_CONTRACT_ID — Soroban OphirPay contract address
  */
 
+import { nativeToScVal } from "@stellar/stellar-sdk";
 import prisma from "@/lib/prisma";
 import { deliverWebhook } from "@/lib/webhook-deliver";
 import { logger } from "@/lib/logger";
@@ -69,7 +70,9 @@ async function pollSorobanAuditLog(
 
     const events: { event: string; data: Record<string, unknown> }[] = [];
 
-    // Read most recent entries (up to 10 per poll)
+    // Read most recent entries (up to 10 per poll). get_audit_log_range requires
+    // both start_id and end_id args — without them the simulation fails and no
+    // events are ever found.
     const endId = totalEntries;
     const startId = Math.max(1, endId - 10);
 
@@ -77,6 +80,10 @@ async function pollSorobanAuditLog(
       CONTRACT_ID,
       "get_audit_log_range",
       READ_SOURCE,
+      [
+        nativeToScVal(startId, { type: "u64" }),
+        nativeToScVal(endId, { type: "u64" }),
+      ],
     );
 
     // Map audit actions to webhook event types
