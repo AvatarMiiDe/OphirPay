@@ -65,3 +65,7 @@ contracts/*/target/
 
 # Soroban test snapshot artifacts (generated on test failure)
 **/test_snapshots/
+
+# Playwright
+playwright-report/
+test-results/
