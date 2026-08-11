@@ -2,6 +2,25 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased] — 2026-08-12 (submission hardening pass)
+
+### Fixed
+- **Governance list renders real proposals**: `GET /api/governance/proposals` now enumerates proposals on-chain (count + by-id, capped at 100, each read cached 30s) and returns an array; the page previously received a bare count number and always showed the empty state
+- **Governance create flow works end-to-end**: the modal now accepts a deposit amount (XLM → stroops) and optional asset; empty asset resolves to native XLM's SAC address instead of the proposer address (which was never a token contract)
+- **Empty-caller tx bugs**: `processRefund` and `executeGovernanceProposal` signed with an empty source account, which can never simulate or submit; both now require the caller's public key
+- **On-chain ids captured from tx meta**: `submitContractInvocation` parses the Soroban return value from the transaction result meta, so proposal/request ids flow back to the UI (multisig now Approve/Execute real requests instead of `Date.now()` placeholders)
+- **Stale governance cache**: vote/execute/create routes invalidate the affected proposal cache entries, so post-mutation refetches show fresh on-chain state
+- **`apiFetch` 403 body double-read**: non-CSRF 403s lost the real server error detail; the body is now read once and shared
+- **Audit-log SSE leak**: EventSource now closes on page unmount, not just on toggle-off
+- **Timelock `?id=` validation**: non-numeric ids return a clean 400 instead of a 500 from `nativeToScVal`
+- **Stale contract-error tests**: `contract-utils.test.ts` asserted the pre-expansion error mapping; expectations now match the 94-code catalog (full suite: 187/187 green)
+
+### Changed
+- **Scoped query invalidation**: governance mutations invalidate only `['governance']` instead of every query (avoids refetching expensive on-chain enumeration queries)
+- **`isOnChainId` guard**: refunds/hooks on-chain actions are gated behind a positive-u64 check with clear messaging; dead action buttons are hidden for off-chain DB records
+- **Multisig empty state**: action button wired; offers Configure when multisig is not yet enabled
+- **Refunds/hooks id reconciliation**: approve/process/deactivate no longer call the contract with `NaN` ids
+
 ## [Unreleased] — 2026-08-11
 
 ### Changed
