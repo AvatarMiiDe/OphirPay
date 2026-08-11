@@ -246,6 +246,10 @@ model Refund {
   reason      String
   reasonCode  Int          @default(0)
   status      RefundStatus @default(REQUESTED)
+  // On-chain refund id returned by the Soroban contract's request_refund.
+  // Lets the UI map a DB ledger row to the contract record for
+  // approve/process, and uniquely identifies the synced on-chain refund.
+  onChainId   Int?         @unique
   requestedAt DateTime     @default(now())
   resolvedAt  DateTime?
   createdAt   DateTime     @default(now())
@@ -274,6 +278,10 @@ model NotificationHook {
   eventType   String
   webhookUrl  String
   active      Boolean  @default(true)
+  // On-chain hook id returned by the Soroban contract's register_hook.
+  // Maps this row to the contract record so Deactivate targets the right
+  // contract hook, and uniquely identifies the synced on-chain hook.
+  onChainId   Int?     @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

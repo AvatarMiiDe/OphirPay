@@ -127,6 +127,34 @@ export const requestRefundSchema = z.object({
   reasonCode: z.number().int().min(0).max(5),
 });
 
+/**
+ * Persists a refund ledger row after a successful on-chain request_refund.
+ * onChainId is the contract's u64 refund id, captured from the tx return value.
+ */
+export const createRefundRecordSchema = requestRefundSchema.extend({
+  onChainId: z.number().int().positive().optional(),
+});
+
+export const updateRefundStatusSchema = z.object({
+  status: z.enum(["APPROVED", "PROCESSED", "REJECTED"]),
+});
+
+// ── Hook Schemas ──────────────────────────────────────────────
+
+/**
+ * Persists a notification hook row after a successful on-chain register_hook.
+ * onChainId is the contract's u64 hook id, captured from the tx return value.
+ */
+export const createHookSchema = z.object({
+  eventType: z.string().min(1).max(100),
+  webhookUrl: z.string().url("Invalid webhook URL"),
+  onChainId: z.number().int().positive().optional(),
+});
+
+export const updateHookSchema = z.object({
+  active: z.boolean(),
+});
+
 // ─── Generic validation helper ────────────────────────────────
 
 /**

@@ -3,10 +3,14 @@
 import prisma from "@/lib/prisma";
 import {
   successResponse,
+  badRequestError,
   unauthorizedError,
   handleApiError,
 } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
+import { validateBody, createHookSchema } from "@/lib/validation-schemas";
+import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
 
 export async function GET(request: Request) {
   try {
@@ -40,5 +44,45 @@ export async function GET(request: Request) {
     return successResponse(hooks);
   } catch (err) {
     return handleApiError(err, "GET /api/hooks");
+  }
+}
+
+// ── POST /api/hooks ───────────────────────────────────────────
+
+/**
+ * Persist a notification hook row AFTER the on-chain register_hook succeeded.
+ * The on-chain id (captured from the tx return value) is stored so Deactivate
+ * can target unregister_hook at the correct contract record.
+ */
+export async function POST(request: Request) {
+  try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
+    const auth = await getAuthContext(request);
+    if (!auth) return unauthorizedError("Authentication required.");
+
+    const parsed = await validateBody(request, createHookSchema);
+    if (!parsed.success) return parsed.response;
+
+    // SSRF guard — reject URLs targeting internal/private networks
+    if (!isSafeWebhookUrl(parsed.data.webhookUrl)) {
+      return badRequestError(
+        "Webhook URL must be a public http(s) endpoint — internal and private addresses are not allowed."
+      );
+    }
+
+    const hook = await prisma.notificationHook.create({
+      data: {
+        eventType: parsed.data.eventType,
+        webhookUrl: parsed.data.webhookUrl,
+        onChainId: parsed.data.onChainId ?? null,
+        userId: auth.userId, // never trust a client-supplied userId
+      },
+    });
+
+    return successResponse(hook, undefined, 201);
+  } catch (err) {
+    return handleApiError(err, "POST /api/hooks");
   }
 }

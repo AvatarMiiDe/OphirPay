@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
-import { useApiQuery } from "@/hooks/useApiQuery";
+import { useApiQuery, apiFetch } from "@/hooks/useApiQuery";
 import { isOnChainId } from "@/lib/type-guards";
 import { requestRefund, approveRefund, processRefund } from "@/lib/contract-advanced";
 
@@ -43,6 +43,8 @@ interface Refund {
   status: string;
   requestedAt: string;
   resolvedAt: string | null;
+  /** Contract u64 refund id returned by request_refund, if linked. */
+  onChainId: number | null;
 }
 
 interface RefundAnalytics {
@@ -88,17 +90,39 @@ export default function RefundsPage() {
         formReason || "Refund requested",
         formReasonCode,
       );
-      if (result.success) {
-        toast.success("Refund requested on-chain");
-        setShowRequest(false);
-        setFormPaymentId("");
-        setFormAmount("");
-        setFormAsset("");
-        setFormReason("");
-        queryClient.invalidateQueries({ queryKey: ["refunds"] });
-      } else {
+      if (!result.success) {
         toast.error(result.error || "Failed to request refund");
+        return;
       }
+      // Persist a ledger row linked to the on-chain refund id (captured from
+      // the tx return value) so the request appears in the list and
+      // approve/process can target the correct contract record.
+      const onChainId =
+        typeof result.data === "number" && isOnChainId(result.data)
+          ? result.data
+          : undefined;
+      const persisted = await apiFetch("/api/refunds", {
+        method: "POST",
+        body: JSON.stringify({
+          paymentId: parseInt(formPaymentId, 10),
+          amount: parseFloat(formAmount) || 0,
+          asset: formAsset || "native",
+          reason: formReason || "Refund requested",
+          reasonCode: formReasonCode,
+          onChainId,
+        }),
+      }).catch(() => null);
+      if (persisted === null) {
+        toast.error("Refund submitted on-chain, but the ledger row could not be saved.");
+      } else {
+        toast.success("Refund requested on-chain");
+      }
+      setShowRequest(false);
+      setFormPaymentId("");
+      setFormAmount("");
+      setFormAsset("");
+      setFormReason("");
+      queryClient.invalidateQueries({ queryKey: ["refunds"] });
     } catch {
       toast.error("Network error");
     } finally {
@@ -106,25 +130,34 @@ export default function RefundsPage() {
     }
   };
 
-  // On-chain refunds are addressed by u64 ids in the Soroban contract, while
-  // the rows listed here come from the Prisma DB (cuid string ids). Only
-  // invoke approve/process when the id is a real on-chain id; otherwise the
-  // Number() conversion yields NaN and the contract call always fails.
-  const requireOnChainRefund = (refundId: string | number): number | null => {
-    if (!isOnChainId(refundId)) {
-      toast.error("This refund is an off-chain record — no on-chain refund id is linked. Approve/process on-chain only.");
+  // On-chain refunds are addressed by u64 ids in the Soroban contract; the DB
+  // rows listed here carry that id in onChainId. Only invoke approve/process
+  // for rows with a linked on-chain id — otherwise the call always fails.
+  const requireOnChainRefund = (refund: Refund): number | null => {
+    if (!isOnChainId(refund.onChainId)) {
+      toast.error("This refund has no linked on-chain id — approve/process requires an on-chain refund.");
       return null;
     }
-    return Number(refundId);
+    return refund.onChainId as number;
   };
 
-  const handleApprove = async (refundId: string | number) => {
+  // Mirror an on-chain transition onto the ledger row so the list reflects
+  // the Request → Approve → Process lifecycle. Non-fatal on failure.
+  const syncRefundStatus = async (refundId: string, status: "APPROVED" | "PROCESSED" | "REJECTED") => {
+    await apiFetch(`/api/refunds/${refundId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }).catch(() => null);
+  };
+
+  const handleApprove = async (refund: Refund) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
-    const onChainId = requireOnChainRefund(refundId);
+    const onChainId = requireOnChainRefund(refund);
     if (onChainId === null) return;
     try {
       const result = await approveRefund(wallet.publicKey, onChainId);
       if (result.success) {
+        await syncRefundStatus(refund.id, "APPROVED");
         toast.success("Refund approved on-chain");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
       } else {
@@ -135,13 +168,14 @@ export default function RefundsPage() {
     }
   };
 
-  const handleProcess = async (refundId: string | number) => {
+  const handleProcess = async (refund: Refund) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
-    const onChainId = requireOnChainRefund(refundId);
+    const onChainId = requireOnChainRefund(refund);
     if (onChainId === null) return;
     try {
       const result = await processRefund(wallet.publicKey, onChainId);
       if (result.success) {
+        await syncRefundStatus(refund.id, "PROCESSED");
         toast.success("Refund processed on-chain — tokens returned");
         queryClient.invalidateQueries({ queryKey: ["refunds"] });
       } else {
@@ -285,15 +319,15 @@ export default function RefundsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {isOnChainId(r.id) ? (
+                  {isOnChainId(r.onChainId) ? (
                     <>
                       {statusKey === "REQUESTED" && (
-                        <Button size="sm" variant="primary" onClick={() => handleApprove(r.id)}>
+                        <Button size="sm" variant="primary" onClick={() => handleApprove(r)}>
                           Approve
                         </Button>
                       )}
                       {statusKey === "APPROVED" && (
-                        <Button size="sm" variant="primary" onClick={() => handleProcess(r.id)}>
+                        <Button size="sm" variant="primary" onClick={() => handleProcess(r)}>
                           Process
                         </Button>
                       )}
@@ -301,7 +335,7 @@ export default function RefundsPage() {
                   ) : (
                     (statusKey === "REQUESTED" || statusKey === "APPROVED") && (
                       <span className="text-xs text-gray-400 italic max-w-[160px] text-right">
-                        Off-chain record — no on-chain action available
+                        No linked on-chain refund — no on-chain action available
                       </span>
                     )
                   )}

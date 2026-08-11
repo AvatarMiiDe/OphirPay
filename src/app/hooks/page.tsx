@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
-import { useApiQuery } from "@/hooks/useApiQuery";
+import { useApiQuery, apiFetch } from "@/hooks/useApiQuery";
 import { isOnChainId } from "@/lib/type-guards";
 import { registerHook, unregisterHook } from "@/lib/contract-advanced";
 
@@ -35,6 +35,8 @@ interface Hook {
   webhookUrl: string;
   active: boolean;
   createdAt: string;
+  /** Contract u64 hook id returned by register_hook, if linked. */
+  onChainId: number | null;
 }
 
 export default function HooksPage() {
@@ -59,14 +61,33 @@ export default function HooksPage() {
     setSubmitting(true);
     try {
       const result = await registerHook(wallet.publicKey, formEventType, formWebhookUrl);
-      if (result.success) {
-        toast.success("Notification hook registered on-chain");
-        setShowRegister(false);
-        setFormWebhookUrl("");
-        queryClient.invalidateQueries({ queryKey: ["hooks"] });
-      } else {
+      if (!result.success) {
         toast.error(result.error || "Failed to register hook");
+        return;
       }
+      // Persist a ledger row linked to the on-chain hook id (captured from the
+      // tx return value) so the hook appears in the list and Deactivate can
+      // target the correct contract record.
+      const onChainId =
+        typeof result.data === "number" && isOnChainId(result.data)
+          ? result.data
+          : undefined;
+      const persisted = await apiFetch("/api/hooks", {
+        method: "POST",
+        body: JSON.stringify({
+          eventType: formEventType,
+          webhookUrl: formWebhookUrl,
+          onChainId,
+        }),
+      }).catch(() => null);
+      if (persisted === null) {
+        toast.error("Hook registered on-chain, but the ledger row could not be saved.");
+      } else {
+        toast.success("Notification hook registered on-chain");
+      }
+      setShowRegister(false);
+      setFormWebhookUrl("");
+      queryClient.invalidateQueries({ queryKey: ["hooks"] });
     } catch {
       toast.error("Network error");
     } finally {
@@ -74,17 +95,22 @@ export default function HooksPage() {
     }
   };
 
-  const handleDeactivate = async (hookId: string | number) => {
+  const handleDeactivate = async (hook: Hook) => {
     if (!wallet.publicKey) { toast.error("Connect your wallet first"); return; }
-    // On-chain hooks are u64 ids in the contract; the listed rows are Prisma
-    // records (cuid ids). Only call the contract for real on-chain ids.
-    if (!isOnChainId(hookId)) {
-      toast.error("This hook is an off-chain record — no on-chain hook id is linked. Deactivate on-chain only.");
+    // On-chain hooks are u64 ids in the contract; the listed rows carry that
+    // id in onChainId. Only call the contract for rows with a linked id.
+    if (!isOnChainId(hook.onChainId)) {
+      toast.error("This hook has no linked on-chain id — deactivation requires an on-chain hook.");
       return;
     }
     try {
-      const result = await unregisterHook(wallet.publicKey, Number(hookId));
+      const result = await unregisterHook(wallet.publicKey, hook.onChainId as number);
       if (result.success) {
+        // Mirror the deactivation onto the ledger row (non-fatal on failure)
+        await apiFetch(`/api/hooks/${hook.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ active: false }),
+        }).catch(() => null);
         toast.success("Hook deactivated on-chain");
         queryClient.invalidateQueries({ queryKey: ["hooks"] });
       } else {
@@ -169,17 +195,17 @@ export default function HooksPage() {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  {hook.active && isOnChainId(hook.id) && (
+                  {hook.active && isOnChainId(hook.onChainId) && (
                     <Button
                       size="sm"
                       variant="danger"
-                      onClick={() => handleDeactivate(hook.id)}
+                      onClick={() => handleDeactivate(hook)}
                     >
                       Deactivate
                     </Button>
                   )}
-                  {hook.active && !isOnChainId(hook.id) && (
-                    <span className="text-xs text-gray-400 italic">Off-chain record</span>
+                  {hook.active && !isOnChainId(hook.onChainId) && (
+                    <span className="text-xs text-gray-400 italic">No linked on-chain hook</span>
                   )}
                 </div>
               </div>
