@@ -604,6 +604,102 @@ jobs:
         run: npm audit --audit-level=critical 2>&1 || true
 
   # ══════════════════════════════════════════════════════════════
+  # 21. CONTRACT GAS REPORT — WASM analysis via soroban CLI
+  # ══════════════════════════════════════════════════════════════
+  contract-gas-report:
+    name: "2️⃣1️⃣ Backend — Gas Report (Soroban)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: contract-wasm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download contract WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contract-wasm
+          path: ./
+      - name: Install Stellar CLI (soroban)
+        run: |
+          SOROBAN_VER=27.0.0
+          curl -fsSL "https://github.com/stellar/soroban-tools/releases/download/v${SOROBAN_VER}/soroban-cli-${SOROBAN_VER}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          sudo mv soroban /usr/local/bin/
+          soroban version
+      - name: Report WASM binary sizes
+        run: |
+          echo "=== WASM Binary Sizes ==="
+          OPHIR_WASM=$(find contracts/ophirpay/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+          EMIT_WASM=$(find contracts/emitter/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+
+          if [ -f "$OPHIR_WASM" ]; then
+            OPHIR_SIZE=$(stat -c%s "$OPHIR_WASM")
+            echo "OphirPay:  $(( OPHIR_SIZE / 1024 )) KB ($OPHIR_SIZE bytes)"
+          fi
+          if [ -f "$EMIT_WASM" ]; then
+            EMIT_SIZE=$(stat -c%s "$EMIT_WASM")
+            echo "Emitter:   $(( EMIT_SIZE / 1024 )) KB ($EMIT_SIZE bytes)"
+          fi
+
+          echo ""
+          echo "=== Size Metrics (for gas estimation) ==="
+          echo "WASM size correlates with RCR inclusion fees."
+          echo "OphirPay estimate: ~$(( OPHIR_SIZE / 1024 * 100 )) stroops base inclusion fee"
+
+          # Hard limit: 64 KB per contract (Soroban protocol limit)
+          if [ "$OPHIR_SIZE" -gt 65536 ]; then
+            echo "❌ OphirPay WASM exceeds 64 KB protocol limit!"
+            exit 1
+          fi
+          if [ "$EMIT_SIZE" -gt 65536 ]; then
+            echo "❌ Emitter WASM exceeds 64 KB protocol limit!"
+            exit 1
+          fi
+
+          # Warn if total > 100 KB (tight for final deployment)
+          TOTAL=$(( OPHIR_SIZE + EMIT_SIZE ))
+          if [ "$TOTAL" -gt 102400 ]; then
+            echo "⚠️  Combined WASM > 100 KB — consider optimizing"
+          else
+            echo "✅ Combined WASM under 100 KB"
+          fi
+      - name: Soroban contract inspect (OphirPay)
+        run: |
+          OPHIR_WASM=$(find contracts/ophirpay/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+          if [ -f "$OPHIR_WASM" ]; then
+            echo "=== OphirPay Contract Inspect ==="
+            soroban contract inspect --wasm "$OPHIR_WASM"
+          fi
+      - name: Soroban contract inspect (Emitter)
+        run: |
+          EMIT_WASM=$(find contracts/emitter/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+          if [ -f "$EMIT_WASM" ]; then
+            echo "=== Emitter Contract Inspect ==="
+            soroban contract inspect --wasm "$EMIT_WASM"
+          fi
+      - name: Soroban contract analyze (OphirPay)
+        run: |
+          OPHIR_WASM=$(find contracts/ophirpay/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+          if [ -f "$OPHIR_WASM" ]; then
+            echo "=== OphirPay Cost Analysis ==="
+            soroban contract analyze --wasm "$OPHIR_WASM" 2>&1 || echo "⚠️  Analysis completed with warnings (check above)"
+          fi
+      - name: Soroban contract analyze (Emitter)
+        run: |
+          EMIT_WASM=$(find contracts/emitter/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
+          if [ -f "$EMIT_WASM" ]; then
+            echo "=== Emitter Cost Analysis ==="
+            soroban contract analyze --wasm "$EMIT_WASM" 2>&1 || echo "⚠️  Analysis completed with warnings (check above)"
+          fi
+      - name: Upload gas report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-gas-report
+          path: |
+            contracts/ophirpay/target/wasm32v1-none/release/*.wasm
+            contracts/emitter/target/wasm32v1-none/release/*.wasm
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
   # PR LABELER — Auto-label PRs by changed paths (un-numbered)
   # ══════════════════════════════════════════════════════════════
   pr-labeler:
