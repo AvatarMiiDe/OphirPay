@@ -107,6 +107,11 @@ export function useApiQuery<T>(
   options?: Omit<UseQueryOptions<T, ApiError>, "queryKey" | "queryFn">,
   queryFn?: () => Promise<T>,
 ) {
+  if (process.env.NODE_ENV === "development" && !url && !queryFn) {
+    console.warn(
+      `useApiQuery [${key.join(",")}]: neither url nor queryFn provided — the query would fetch the root page.`
+    );
+  }
   return useQuery<T, ApiError>({
     queryKey: key,
     queryFn: queryFn ?? (() => apiFetch<T>(url ?? "")),
