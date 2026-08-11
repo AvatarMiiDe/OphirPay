@@ -3,6 +3,8 @@
 import { randomBytes, timingSafeEqual } from "crypto";
 
 const CSRF_COOKIE = "__Host-csrf";
+/** Plain-http dev fallback — `__Host-` cookies are rejected without Secure. */
+const CSRF_COOKIE_INSECURE = "csrf";
 const CSRF_HEADER = "x-csrf-token";
 const TOKEN_BYTES = 32;
 
@@ -17,16 +19,17 @@ export function generateCsrfToken(): string {
 /**
  * Create a CSRF cookie header value (HttpOnly, SameSite=Strict, Max-Age=86400).
  *
- * Over HTTPS the cookie uses the `__Host-` prefix plus `Secure` (the strongest
- * form — the prefix itself mandates Secure, no Domain, and Path=/). Over plain
- * http in development the `__Host-`/`Secure` pair is dropped: browsers reject
- * Secure cookies on non-localhost http origins, which would otherwise break
- * every mutation for developers running on a LAN IP.
+ * Over HTTPS the cookie is named `__Host-csrf` with `Secure` (the strongest
+ * form — the prefix mandates Secure, no Domain, and Path=/). Over plain http
+ * in development a plain `csrf` cookie is used instead: browsers reject both
+ * Secure cookies AND `__Host-`-prefixed cookies without Secure on non-localhost
+ * http origins, which would otherwise break every mutation for developers
+ * running on a LAN IP.
  */
 export function csrfCookieHeader(token: string, secure = true): string {
-  const prefix = secure ? "__Host-" : "";
+  const name = secure ? CSRF_COOKIE : CSRF_COOKIE_INSECURE;
   const secureAttr = secure ? "; Secure" : "";
-  return `${prefix}${CSRF_COOKIE}=${token}; Path=/;${secureAttr} HttpOnly; SameSite=Strict; Max-Age=86400`;
+  return `${name}=${token}; Path=/;${secureAttr} HttpOnly; SameSite=Strict; Max-Age=86400`;
 }
 
 /**
@@ -51,10 +54,13 @@ export function validateCsrfToken(cookieToken: string | null, headerToken: strin
 
 /**
  * Extract the CSRF token from the request cookie header.
+ * Accepts both the `__Host-csrf` (https) and `csrf` (plain-http dev) names.
  */
 export function getCsrfTokenFromCookies(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;
-  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${CSRF_COOKIE}=([^;]*)`));
+  const match = cookieHeader.match(
+    new RegExp(`(?:^|;\\s*)(?:${CSRF_COOKIE}|${CSRF_COOKIE_INSECURE})=([^;]*)`)
+  );
   return match?.[1] ?? null;
 }
 
