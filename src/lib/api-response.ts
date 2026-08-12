@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handlePrismaError } from "@/lib/prisma-errors";
 import { logger } from "@/lib/logger";
+import { ERROR_CODES } from "@/lib/error-codes";
 
 // ── Standard Response Types ────────────────────────────────────
 
@@ -106,7 +107,7 @@ export function errorResponse(
 
 export function validationError(err: z.ZodError) {
   return errorResponse(
-    "VALIDATION_ERROR",
+    ERROR_CODES.VALIDATION_ERROR,
     "Request validation failed",
     400,
     err.issues.map((e) => ({ path: e.path.join("."), message: e.message }))
@@ -114,27 +115,27 @@ export function validationError(err: z.ZodError) {
 }
 
 export function notFoundError(resource = "Resource") {
-  return errorResponse("NOT_FOUND", `${resource} not found`, 404);
+  return errorResponse(ERROR_CODES.NOT_FOUND, `${resource} not found`, 404);
 }
 
 export function serverError(message = "Internal server error") {
-  return errorResponse("INTERNAL_ERROR", message, 500);
+  return errorResponse(ERROR_CODES.INTERNAL_ERROR, message, 500);
 }
 
 export function unauthorizedError(message = "Unauthorized") {
-  return errorResponse("UNAUTHORIZED", message, 401);
+  return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
 }
 
 export function rateLimitError(message = "Too many requests") {
-  return errorResponse("RATE_LIMITED", message, 429);
+  return errorResponse(ERROR_CODES.RATE_LIMITED, message, 429);
 }
 
 export function conflictError(message: string) {
-  return errorResponse("CONFLICT", message, 409);
+  return errorResponse(ERROR_CODES.CONFLICT, message, 409);
 }
 
 export function badRequestError(message: string) {
-  return errorResponse("BAD_REQUEST", message, 400);
+  return errorResponse(ERROR_CODES.BAD_REQUEST, message, 400);
 }
 
 // ── Unified Error Handler ──────────────────────────────────────
@@ -155,7 +156,11 @@ export function handleApiError(err: unknown, context?: string): NextResponse {
 
   // Zod validation errors (check first — before Prisma instance checks)
   if (err instanceof z.ZodError) {
-    return validationError(err);
+    return errorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      err.issues.map((e) => e.message).join("; "),
+      400
+    );
   }
 
   // Prisma errors — use handlePrismaError which knows all Prisma error types

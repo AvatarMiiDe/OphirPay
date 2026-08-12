@@ -54,13 +54,14 @@ describe('ErrorBoundary', () => {
   it('renders without error message when error has no message', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    function ThrowNoMessage() {
+    const ThrowEmpty = () => {
       throw new Error();
-    }
+      return null;
+    };
 
     render(
       <ErrorBoundary>
-        <ThrowNoMessage />
+        <ThrowEmpty />
       </ErrorBoundary>
     );
 

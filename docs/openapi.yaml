@@ -1418,9 +1418,256 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ServerError:
       description: Internal server error
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Service temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Error Codes Catalog (218 codes across 17 HTTP status classes) ──
+  errorCodes:
+    "400":
+      - BAD_REQUEST
+      - VALIDATION_ERROR
+      - MISSING_REQUIRED_FIELD
+      - INVALID_INPUT
+      - INVALID_PAGE
+      - INVALID_LIMIT
+      - INVALID_SORT
+      - INVALID_FILTER
+      - INVALID_CURSOR
+      - INVALID_FORMAT
+      - INVALID_AMOUNT
+      - AMOUNT_TOO_SMALL
+      - AMOUNT_TOO_LARGE
+      - AMOUNT_BELOW_MINIMUM
+      - AMOUNT_EXCEEDS_MAXIMUM
+      - INVALID_ADDRESS
+      - ADDRESS_MALFORMED
+      - MISSING_DESTINATION
+      - SELF_PAYMENT
+      - DESTINATION_INVALID
+      - INVALID_MEMO
+      - MEMO_REQUIRED
+      - MEMO_TOO_LONG
+      - MEMO_INVALID_FORMAT
+      - INVALID_ASSET
+      - ASSET_NOT_SUPPORTED
+      - INVALID_TRUSTLINE
+      - CSV_IMPORT_ERROR
+      - CSV_FORMAT_ERROR
+      - CSV_TOO_LARGE
+      - CSV_EMPTY
+      - CSV_MALFORMED_ROW
+      - EXPORT_FORMAT_INVALID
+      - EXPORT_TOO_LARGE
+      - DATE_RANGE_INVALID
+      - DATE_RANGE_TOO_LARGE
+      - INVALID_SIGNATURE
+      - INVALID_TIMESTAMP
+      - INVALID_CHALLENGE
+      - CHALLENGE_EXPIRED
+      - PAYMENT_CANCELLED
+      - PAYMENT_EXPIRED
+      - PAYMENT_PENDING
+      - PAYMENT_ALREADY_PROCESSED
+      - STREAM_PAUSED
+      - STREAM_RESUMED
+      - STREAM_CANCELLED
+      - STREAM_COMPLETED
+      - BATCH_PROCESSING
+      - BATCH_CANCELLED
+      - ESCROW_EXPIRED
+      - ESCROW_RESOLVED
+      - THRESHOLD_NOT_MET
+      - INVALID_THRESHOLD
+      - SIGNER_LIMIT_EXCEEDED
+      - SIGNER_WEIGHT_EXCEEDED
+      - SIGNER_WEIGHT_INVALID
+      - PROPOSAL_EXPIRED
+      - PROPOSAL_CANCELLED
+      - PROPOSAL_NOT_ACTIVE
+      - VOTING_ENDED
+      - VOTING_NOT_STARTED
+      - QUORUM_NOT_MET
+      - INSUFFICIENT_VOTING_POWER
+    "401":
+      - UNAUTHORIZED
+      - INVALID_API_KEY
+      - API_KEY_MISSING
+      - API_KEY_DISABLED
+      - EXPIRED_API_KEY
+      - TOKEN_EXPIRED
+      - TOKEN_REVOKED
+      - TOKEN_MISSING
+      - TOKEN_INVALID
+      - SESSION_EXPIRED
+      - SESSION_INVALID
+      - INVALID_CREDENTIALS
+    "402":
+      - INSUFFICIENT_FUNDS
+      - INSUFFICIENT_RESERVE
+    "403":
+      - FORBIDDEN
+      - INSUFFICIENT_PERMISSIONS
+      - ROLE_REQUIRED
+      - NOT_OWNER
+      - NOT_SIGNER
+      - NOT_MEMBER
+      - NOT_APPROVER
+      - NOT_ADMIN
+      - ACCOUNT_DISABLED
+      - ACCOUNT_SUSPENDED
+      - RESOURCE_LOCKED
+      - WALLET_LOCKED
+      - REGION_RESTRICTED
+    "404":
+      - NOT_FOUND
+      - PAYMENT_NOT_FOUND
+      - ESCROW_NOT_FOUND
+      - STREAM_NOT_FOUND
+      - BATCH_NOT_FOUND
+      - WEBHOOK_NOT_FOUND
+      - USER_NOT_FOUND
+      - ACCOUNT_NOT_FOUND
+      - WALLET_NOT_FOUND
+      - SIGNER_NOT_FOUND
+      - ASSET_NOT_FOUND
+      - API_KEY_NOT_FOUND
+      - KEY_NOT_FOUND
+      - TOKEN_NOT_FOUND
+      - CONTRACT_NOT_FOUND
+      - FUNCTION_NOT_FOUND
+      - FILE_NOT_FOUND
+      - EXPORT_NOT_FOUND
+      - NOTIFICATION_NOT_FOUND
+      - ROUTE_NOT_FOUND
+      - PROPOSAL_NOT_FOUND
+    "408":
+      - REQUEST_TIMEOUT
+      - TRANSACTION_TIMEOUT
+      - CONTRACT_TIMEOUT
+      - RPC_TIMEOUT
+    "409":
+      - CONFLICT
+      - UNIQUE_CONSTRAINT
+      - DUPLICATE_REQUEST
+      - STATE_CONFLICT
+      - VERSION_CONFLICT
+      - SEQUENCE_NUMBER_MISMATCH
+      - OPERATION_IN_PROGRESS
+      - RESOURCE_IN_USE
+      - WALLET_ALREADY_CONNECTED
+      - STREAM_ALREADY_ACTIVE
+      - ESCROW_ALREADY_FUNDED
+      - ESCROW_ALREADY_COMPLETED
+      - USER_EXISTS
+      - EMAIL_EXISTS
+      - WALLET_EXISTS
+      - SIGNER_EXISTS
+      - WEBHOOK_EXISTS
+      - BATCH_CONFLICT
+      - ALREADY_APPROVED
+      - ALREADY_EXECUTED
+      - ALREADY_VOTED
+      - PROPOSAL_ALREADY_EXECUTED
+      - ESCROW_DISPUTED
+    "413":
+      - PAYLOAD_TOO_LARGE
+      - BATCH_TOO_LARGE
+      - FILE_TOO_LARGE
+      - REQUEST_BODY_TOO_LARGE
+    "429":
+      - RATE_LIMITED
+      - RATE_LIMIT_IP
+      - RATE_LIMIT_USER
+      - RATE_LIMIT_WALLET
+      - RATE_LIMIT_API_KEY
+      - RATE_LIMIT_GLOBAL
+      - RATE_LIMIT_BACKOFF
+    "500":
+      - INTERNAL_ERROR
+      - DATABASE_ERROR
+      - DATABASE_QUERY_FAILED
+      - DATABASE_CONNECTION_FAILED
+      - DATABASE_TRANSACTION_FAILED
+      - DATABASE_DEADLOCK
+      - CONTRACT_ERROR
+      - CONTRACT_CALL_FAILED
+      - CONTRACT_DEPLOY_FAILED
+      - CONTRACT_COMPILE_FAILED
+      - CONTRACT_VERIFY_FAILED
+      - RPC_ERROR
+      - RPC_NODE_ERROR
+      - NETWORK_ERROR
+      - NETWORK_TIMEOUT
+      - STELLAR_ERROR
+      - HORIZON_ERROR
+      - SOROBAN_ERROR
+      - EMAIL_SEND_FAILED
+      - NOTIFICATION_FAILED
+      - WEBHOOK_DELIVERY_FAILED
+      - WEBHOOK_SIGNATURE_INVALID
+      - FILE_UPLOAD_FAILED
+      - FILE_PROCESSING_FAILED
+      - EXPORT_FAILED
+      - IMPORT_FAILED
+      - SEARCH_INDEX_ERROR
+      - SEARCH_FAILED
+      - CACHE_ERROR
+      - CACHE_MISS
+      - CONFIG_ERROR
+      - FEATURE_NOT_ENABLED
+      - MAINTENANCE_MODE
+      - UNKNOWN_ERROR
+      - PAYMENT_FAILED
+      - TRANSACTION_FAILED
+      - TRANSACTION_EXPIRED
+      - TRANSACTION_REJECTED
+      - BATCH_PARTIAL_SUCCESS
+      - BATCH_FAILED
+      - MULTISIG_NOT_CONFIGURED
+      - WALLET_NOT_INSTALLED
+      - WALLET_CONNECTION_FAILED
+      - WALLET_DISCONNECTED
+      - WALLET_NETWORK_MISMATCH
+      - WALLET_SIGN_FAILED
+      - WALLET_SIGN_REJECTED
+      - WALLET_NOT_SUPPORTED
+    "503":
+      - CONTRACT_UNAVAILABLE
+      - SERVICE_UNAVAILABLE
+      - OVERLOADED
+      - DEPENDENCY_UNAVAILABLE
+      - STELLAR_UNAVAILABLE
+      - HORIZON_UNAVAILABLE
+      - SOROBAN_UNAVAILABLE
+      - RPC_UNAVAILABLE
+      - DATABASE_UNAVAILABLE
+      - CACHE_UNAVAILABLE
+      - EMAIL_UNAVAILABLE
