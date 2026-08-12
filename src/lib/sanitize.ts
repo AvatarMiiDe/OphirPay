@@ -7,7 +7,7 @@
  */
 
 const XSS_PATTERNS = /[<>"'&]/g;
-const SQL_INJECTION_PATTERNS = /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER)\b)/gi;
+const SQL_INJECTION_PATTERNS = /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER)\b)/i;
 
 /**
  * Strip potentially dangerous HTML characters from user input.
