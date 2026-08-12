@@ -61,6 +61,8 @@ export default defineConfig({
         "src/lib/prisma-logger.ts",
         "src/lib/query-params.ts",
         "src/lib/soft-delete.ts",
+        "src/components/ui/index.ts",
+        "src/hooks/index.ts",
         "src/lib/test-factory.ts",
         "src/lib/time.ts",
         "src/lib/trustline.ts",
