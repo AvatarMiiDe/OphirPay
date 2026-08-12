@@ -61,6 +61,7 @@ contracts/**/Cargo.lock
 # Soroban
 .soroban/
 contracts/*/target/
+contracts/**/spec/target/
 .demo-frames/
 
 # Soroban test snapshot artifacts (generated on test failure)

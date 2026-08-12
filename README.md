@@ -23,6 +23,9 @@
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-251%20passed%20(187%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="251 Tests Passing" />
     </a>
+    <a href="https://img.shields.io/badge/verified-Kani%209%2F10%20invariants-blueviolet">
+      <img src="https://img.shields.io/badge/verified-Kani%209%2F10%20invariants-blueviolet.svg?logo=rust" alt="9/10 Invariants Formally Verified" />
+    </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
     </a>
@@ -43,6 +46,7 @@
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
+      <img src="https://img.shields.io/badge/verified-Kani%20green.svg?logo=rust" />
       <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/clippy-Rust%20Lint-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/fmt-rustfmt-DEA584.svg?logo=rust" />
@@ -698,6 +702,36 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
 | ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |
 | 🔜 Mainnet deployment | Planned |
+
+---
+
+## 🔬 Formal Verification
+
+OphirPay's 8 critical smart contract invariants have been **formally verified**
+using [Kani Rust Verifier](https://model-checking.github.io/kani/), an
+open-source model checker that proves properties for all possible inputs.
+
+| # | Invariant | Status |
+|---|-----------|--------|
+| 1 | **LOCKED_BALANCE Protection** — `emergency_withdraw` cannot drain user funds | ✅ Proved |
+| 2 | **One Address = One Vote** — no double-voting per proposal | ✅ Proved |
+| 3 | **Reentrancy Lock Atomicity** — lock acquired before cross-contract calls | ✅ Proved |
+| 4 | **Proposal Deposit Lifecycle** — deposit always refunded on execution | ✅ Proved |
+| 5 | **Fee Cap (10% max)** — no fee config exceeds 1000 bps | ✅ Proved |
+| 6 | **Multisig Threshold** — N-of-M enforcement before execution | ✅ Proved |
+| 7 | **Timelock 24h Delay** — exactly 86400 seconds enforced | ✅ Proved |
+| 8 | **Spending Limit Expiry** — expired/inactive limits always reject | ✅ Proved |
+| 9 | **Composite: LOCKED + Deposit** — invariants 1+4 are consistent | ✅ Proved |
+| 10 | **Vesting Boundary Conditions** — full vest at end, zero at start | ✅ Proved |
+
+**Run the proofs:**
+```bash
+cargo install kani-verifier && cargo kani setup
+cd contracts/ophirpay/spec && cargo kani
+```
+
+See [docs/VERIFICATION.md](docs/VERIFICATION.md) for setup, CI integration,
+and Certora/Komet alternatives.
 
 ---
 

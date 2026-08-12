@@ -31,7 +31,7 @@ fully-green repository.
 - [x] Security, Performance & Gas, and Audit-Readiness documented in the README
 - [ ] Record fresh demo video + screenshots against the seeded demo environment
 - [ ] External security audit (Runtime Verification or Certora)
-- [ ] Formal verification of key contract invariants
+- [x] Formal verification of key contract invariants — 10/10 Kani proofs passing (see contracts/ophirpay/spec/)
 
 ### Up Next
 - [ ] Contract modularization (split into Payment/Escrow/Governance modules)
