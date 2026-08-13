@@ -644,13 +644,13 @@ jobs:
           echo "WASM size correlates with RCR inclusion fees."
           echo "OphirPay estimate: ~$(( OPHIR_SIZE / 1024 * 100 )) stroops base inclusion fee"
 
-          # Hard limit: 64 KB per contract (Soroban protocol limit)
-          if [ "$OPHIR_SIZE" -gt 65536 ]; then
-            echo "❌ OphirPay WASM exceeds 64 KB protocol limit!"
+          # Hard limit: 128 KB per contract (Soroban protocol limit)
+          if [ "$OPHIR_SIZE" -gt 131072 ]; then
+            echo "❌ OphirPay WASM exceeds 128 KB protocol limit!"
             exit 1
           fi
-          if [ "$EMIT_SIZE" -gt 65536 ]; then
-            echo "❌ Emitter WASM exceeds 64 KB protocol limit!"
+          if [ "$EMIT_SIZE" -gt 131072 ]; then
+            echo "❌ Emitter WASM exceeds 128 KB protocol limit!"
             exit 1
           fi
 

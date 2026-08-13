@@ -75,7 +75,7 @@ cd contracts/ophirpay && cargo test   # 58 contract tests
 cd contracts/emitter && cargo test    # 6 emitter tests
 ```
 
-Contract WASM size is enforced in CI (hard limit: 64 KB per contract, the
+Contract WASM size is enforced in CI (hard limit: 128 KB per contract, the
 Soroban protocol limit) and a per-function gas report is uploaded as a build
 artifact — see the `contract-gas-report` job in `.github/workflows/ci.yml`.
 

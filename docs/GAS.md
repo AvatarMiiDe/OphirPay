@@ -204,8 +204,8 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
   All 64 contract unit tests (58 ophirpay + 6 emitter) now run in CI via plain
   `cargo test`.
 
-- **WASM size:** OphirPay contract is 83 KB (81,043 bytes) with `opt-level="z"`.
-  The Soroban mainnet upload limit is ~200 KB. Headroom: 117 KB for future features.
+- **WASM size:** OphirPay contract is 92 KB (94,096 bytes) with `opt-level="z"`.
+  The Soroban mainnet upload limit is ~128 KB (131,072 bytes). Headroom: ~36 KB for future features.
 
 ## Future Optimizations (Not Yet Implemented)
 
@@ -255,10 +255,10 @@ Compiled with Rust 1.91.0, soroban-sdk 27.0.5, `--release`, `wasm32v1-none`, `op
 
 | Contract | Size | Headroom |
 |---|---|---|
-| `ophirpay_contract.wasm` | **84,522 bytes (82.5 KB)** | 115.5 KB (mainnet limit: 200 KB) |
-| `ophirpay_emitter.wasm` | **7,031 bytes (6.9 KB)** | 193 KB |
+| `ophirpay_contract.wasm` | **94,096 bytes (91.9 KB)** | 36.1 KB (mainnet limit: 128 KB) |
+| `ophirpay_emitter.wasm` | **7,338 bytes (7.2 KB)** | 121 KB (mainnet limit: 128 KB) |
 
-The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 300 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
+The OphirPay contract at 92 KB is reasonable for its scope (~5,000 lines, 50+ functions, 18 struct types, 300 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
 
 ---
 
@@ -270,11 +270,11 @@ The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ fu
 | **Cheapest write TX** | 17K stroops (init) | 🟢 Minimal |
 | **Most expensive TX** | 169K stroops (create_escrow) | 🟡 Expected (SAC transfer) |
 | **Read operations** | 0 stroops (all) | 🟢 Free |
-| **WASM size** | 82 KB / 200 KB limit | 🟢 41% utilized |
+| **WASM size** | 92 KB / 128 KB limit | 🟢 72% utilized |
 | **Storage efficiency** | 16 bytes/counter | 🟢 92% vs monolith |
 | **Locked-funds overhead** | ~2% per op | 🟢 Acceptable |
 
-**Verdict:** The OphirPay contract is production-ready for gas efficiency. All write operations cost under 0.17 XLM, most under 0.10 XLM. The 82 KB WASM leaves ample headroom for future features. The cross-contract emergency pause (~80K gas estimate) is the only operation above 0.20 XLM and is justified by its atomicity guarantee.
+**Verdict:** The OphirPay contract is production-ready for gas efficiency. All write operations cost under 0.17 XLM, most under 0.10 XLM. The 92 KB WASM leaves ample headroom for future features. The cross-contract emergency pause (~80K gas estimate) is the only operation above 0.20 XLM and is justified by its atomicity guarantee.
 
 > **Note:** Contract unit tests run natively with `cargo test` (soroban-sdk 27
 > fixed the `rand_core`/`ed25519-dalek` conflict from env-host 22.1.3). The

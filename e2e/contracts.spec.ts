@@ -68,7 +68,7 @@ test.describe("Contract WASM Artifacts", () => {
       "ophirpay_contract.wasm"
     );
     const wasm = readFileSync(wasmPath);
-    // Soroban mainnet upload limit is ~200 KB; we budget 100 KB
+    // Soroban mainnet upload limit is ~128 KB; we budget 100 KB
     expect(wasm.length).toBeLessThan(100 * 1024);
   });
 });
