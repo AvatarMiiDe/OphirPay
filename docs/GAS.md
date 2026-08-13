@@ -193,15 +193,15 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 
 ## Operational Notes
 
-- **Contracterror variant limit:** soroban-sdk v27 supports at most 50
-  `#[contracterror]` variants. The 51st variant causes a macro panic.
-  OphirPay uses 50 variants; if more are needed, consider hierarchical
-  error codes or splitting into multiple error enums.
+- **Contracterror variant count:** OphirPay's `PaymentError` enum defines 199
+  `#[contracterror]` variants and compiles cleanly on soroban-sdk 27. If the
+  catalog grows further, consider hierarchical error codes or splitting into
+  multiple error enums.
 
 - **Host test compilation:** Fixed. The `ed25519-dalek` 3.0 / `rand_chacha`
   0.3 trait incompatibility that broke `cargo test` on `soroban-env-host`
   22.1.3 is resolved in soroban-sdk 27 (env-host pins `ed25519-dalek = "2.0.0"`).
-  All 56 contract unit tests (50 ophirpay + 6 emitter) now run in CI via plain
+  All 64 contract unit tests (58 ophirpay + 6 emitter) now run in CI via plain
   `cargo test`.
 
 - **WASM size:** OphirPay contract is 83 KB (81,043 bytes) with `opt-level="z"`.
@@ -238,7 +238,7 @@ The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88
 
 Upgraded both contracts from v22 to **soroban-sdk 27.0.5** (Rust 1.91.0,
 `wasm32v1-none` target). This fixed the env-host dependency conflict that
-blocked `cargo test` — all **56 contract unit tests** (50 ophirpay + 6 emitter)
+blocked `cargo test` — all **64 contract unit tests** (58 ophirpay + 6 emitter)
 now run in CI. It also surfaced and fixed a **critical storage bug**: all record
 types previously shared the same plain `u64` persistent key space, so e.g. the
 first audit entry silently overwrote the first payment. Records are now
@@ -258,7 +258,7 @@ Compiled with Rust 1.91.0, soroban-sdk 27.0.5, `--release`, `wasm32v1-none`, `op
 | `ophirpay_contract.wasm` | **84,522 bytes (82.5 KB)** | 115.5 KB (mainnet limit: 200 KB) |
 | `ophirpay_emitter.wasm` | **7,031 bytes (6.9 KB)** | 193 KB |
 
-The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 51 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
+The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 199 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
 
 ---
 

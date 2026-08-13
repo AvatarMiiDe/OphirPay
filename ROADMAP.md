@@ -6,7 +6,7 @@
 - [x] Voting weight security fix (1 address = 1 vote)
 - [x] Reentrancy guard on cross-contract calls
 - [x] Minimum proposal deposit enforcement
-- [x] Error code expansion (52 → 94)
+- [x] Error code expansion (52 → 199)
 - [x] React Query data fetching layer
 - [x] Zod validation on API routes
 - [x] CSRF protection for mutations
@@ -17,7 +17,7 @@
   - [x] On-chain return values (proposal/request/refund/hook ids) captured from tx meta
   - [x] Refund & hook lifecycles synced end-to-end (DB ledger rows linked by `onChainId`)
   - [x] No empty-caller contract invocations anywhere in the UI/API
-  - [x] Stale test expectations aligned with the 94-code catalog — full suite green
+  - [x] Stale test expectations aligned with the 199-code catalog — full suite green
   - [x] OpenAPI spec expanded to cover all 40 API routes
   - [x] Docs numbers (tests, versions, gas) aligned with reality
 
@@ -25,13 +25,13 @@
 
 **Goal:** submit OphirPay to Stellar Drips Wave + Grantfox with a demo-ready,
 fully-green repository.
-- [x] 0 failing tests across 200 vitest + 64 Rust contract tests
+- [x] 0 failing tests across 800 vitest + 64 Rust contract tests
 - [x] End-to-end refund lifecycle (Request → Approve → Process) demonstrable in the UI
 - [x] Multisig approve/execute address real on-chain request ids
 - [x] Security, Performance & Gas, and Audit-Readiness documented in the README
 - [ ] Record fresh demo video + screenshots against the seeded demo environment
 - [ ] External security audit (Runtime Verification or Certora)
-- [x] Formal verification of key contract invariants — 10/10 Kani proofs passing (see contracts/ophirpay/spec/)
+- [ ] Formal verification of key contract invariants — 10/10 Kani *model* proofs exist but do not verify the deployed contract (see contracts/ophirpay/spec/ and docs/AUDIT.md)
 
 ### Up Next
 - [ ] Contract modularization (split into Payment/Escrow/Governance modules)

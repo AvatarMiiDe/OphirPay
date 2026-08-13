@@ -42,7 +42,7 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │  │  Multisig (N-of-M) · RBAC       │ cc │  get_event() / count()   ││
 │  │  Governance · Timelocks         │    │                          ││
 │  │  Fee Config · Hooks · Audit     │    │  14 error codes          ││
-│  │  94 error codes · 251 tests     │    │  6 tests                 ││
+│  │  199 error codes · 58 tests    │    │  6 tests                 ││
 │  └───────────────┬─────────────────┘    └──────────────────────────┘│
 │                  │                                                    │
 │  ┌───────────────┴────────────────────────────────────────────────┐  │
@@ -119,14 +119,14 @@ All writes call `extend_ttl(5000, 50000)` to prevent archival.
 
 ### 5. Error Handling
 
-94 typed error codes from `NotInitialized=1` to `HookDispatcherUndefined=93`, with codes 100-255 reserved for future expansion. Contract functions return `Result<T, PaymentError>` — no panics in production code.
+199 typed error variants from `NotInitialized=1` to `SystemOverloaded=199` (many reserved for unimplemented features). Contract functions return `Result<T, PaymentError>` — no panics in production code.
 
 ## Directory Structure
 
 ```
 ophirpay/
 ├── contracts/              # Soroban smart contracts (Rust)
-│   ├── ophirpay/           # Core payment contract (4800+ lines, 94 error codes)
+│   ├── ophirpay/           # Core payment contract (4800+ lines, 199 error variants)
 │   └── emitter/            # Event emission contract
 ├── src/
 │   ├── app/                # Next.js App Router pages (15 routes)
@@ -155,7 +155,7 @@ ophirpay/
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (187), Rust `#[test]` (64), Playwright (71 E2E+API) |
+| Testing | Vitest (800), Rust `#[test]` (64), Playwright (97 E2E+API) |
 | CI/CD | GitHub Actions (21 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |
