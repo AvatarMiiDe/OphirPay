@@ -17,9 +17,6 @@
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
       <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
     </a>
-    <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/badge/CI%20jobs-21-blue.svg?logo=githubactions" alt="21 CI Jobs" />
-    </a>
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-864%20passed%20(800%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="864 Tests Passing" />
     </a>
@@ -38,34 +35,7 @@
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
     </a>
-  </p>
-
-  <p>
-    <sub>      <b>21 CI checks:</b>
-      <img src="https://img.shields.io/badge/lint-ESLint-4c1.svg?logo=eslint" />
-      <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
-      <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
-      <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
-      <img src="https://img.shields.io/badge/formal%20verification-model-only%20(pending)-yellow.svg?logo=rust" />
-      <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
-      <img src="https://img.shields.io/badge/clippy-Rust%20Lint-DEA584.svg?logo=rust" />
-      <img src="https://img.shields.io/badge/fmt-rustfmt-DEA584.svg?logo=rust" />
-      <img src="https://img.shields.io/badge/build-Next.js-black.svg?logo=nextdotjs" />
-      <img src="https://img.shields.io/badge/smoke-19%20pages-000.svg?logo=vercel" />
-      <img src="https://img.shields.io/badge/e2e-Playwright-2EAD33.svg?logo=playwright" />
-      <img src="https://img.shields.io/badge/schema-Prisma-2D3748.svg?logo=prisma" />
-      <img src="https://img.shields.io/badge/secrets-Gitleaks-FF4B4B.svg?logo=shield" />
-      <img src="https://img.shields.io/badge/docker-Build-2496ED.svg?logo=docker" />
-      <img src="https://img.shields.io/badge/bundle-Size%20Check-F7DF1E.svg?logo=javascript" />
-      <img src="https://img.shields.io/badge/a11y-axe%20core-6B46C1.svg?logo=axe" />
-      <img src="https://img.shields.io/badge/openapi-Redocly-000.svg?logo=openapiinitiative" />
-      <img src="https://img.shields.io/badge/spell-typos-lightgrey.svg?logo=textpattern" />
-      <img src="https://img.shields.io/badge/manifests-kubeconform-326CE5.svg?logo=kubernetes" />
-      <img src="https://img.shields.io/badge/chart-Helm%20Lint-0F1689.svg?logo=helm" />
-      <img src="https://img.shields.io/badge/gas-Soroban%20Analyze-7B68EE.svg?logo=stellar" />
-      <img src="https://img.shields.io/badge/audit-npm-CB3837.svg?logo=npm" />
-    </sub>
-  </p>
+    <a href="https://github.com/OphirPay/OphirPay/releases">
       <img src="https://img.shields.io/badge/version-v0.1.0-blue.svg" alt="v0.1.0" />
     </a>
   </p>
