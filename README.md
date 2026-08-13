@@ -21,10 +21,10 @@
       <img src="https://img.shields.io/badge/CI%20jobs-21-blue.svg?logo=githubactions" alt="21 CI Jobs" />
     </a>
     <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-251%20passed%20(187%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="251 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-864%20passed%20(800%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="864 Tests Passing" />
     </a>
-    <a href="https://img.shields.io/badge/verified-Kani%209%2F10%20invariants-blueviolet">
-      <img src="https://img.shields.io/badge/verified-Kani%209%2F10%20invariants-blueviolet.svg?logo=rust" alt="9/10 Invariants Formally Verified" />
+    <a href="docs/AUDIT.md">
+      <img src="https://img.shields.io/badge/audit-manual%20review-orange.svg" alt="Manual security review completed" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
@@ -46,7 +46,7 @@
       <img src="https://img.shields.io/badge/typecheck-tsc-3178C6.svg?logo=typescript" />
       <img src="https://img.shields.io/badge/tests-Vitest-6E9F18.svg?logo=vitest" />
       <img src="https://img.shields.io/badge/coverage-v8-6E9F18.svg?logo=vitest" />
-      <img src="https://img.shields.io/badge/verified-Kani%20green.svg?logo=rust" />
+      <img src="https://img.shields.io/badge/formal%20verification-model-only%20(pending)-yellow.svg?logo=rust" />
       <img src="https://img.shields.io/badge/contracts-Rust%20WASM-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/clippy-Rust%20Lint-DEA584.svg?logo=rust" />
       <img src="https://img.shields.io/badge/fmt-rustfmt-DEA584.svg?logo=rust" />
@@ -127,7 +127,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 251 tests (187 app + 64 contracts)** | ✅ | ⚠️ |
+| **Full CI/CD + 864 tests (800 app + 64 contracts)** | ✅ | ⚠️ |
 
 ---
 
@@ -478,7 +478,7 @@ Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (6
 
 | Contract | Tests | Coverage |
 |---|---|---|
-| `OphirPayContract` | 56 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
+| `OphirPayContract` | 58 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
 | `PaymentEventEmitter` | 6 tests | init, emit, get, count, pause/unpause, access control |
 
 ```bash
@@ -492,7 +492,7 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (251 total: 187 app + 64 contracts)
+# All tests (864 total: 800 app + 64 contracts)
 npm test
 
 # Watch mode
@@ -502,21 +502,43 @@ npm run test:watch
 npm run ci   # typecheck → lint → test → build
 ```
 
-| Suite | File | Tests | Focus |
-|---|---|---|---|
-| Utils | `src/__tests__/utils.test.ts` | 12 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn` |
-| Utils Extended | `src/__tests__/utils-extended.test.ts` | 20 | `shortenAddress`, `formatAmount`, `getStatusColor`, `timeAgo`, `cn`, asset helpers |
-| UI Components | `src/__tests__/ui-components.test.tsx` | 17 | Button, Card, Badge, Modal, Spinner, Toast |
-| Validation | `src/__tests__/validation.test.ts` | 26 | Zod schemas, input validation, memo rules |
-| Auth | `src/__tests__/auth.test.ts` | 26 | Wallet-session auth, API authorization, API keys |
-| API Response | `src/__tests__/api-response.test.ts` | 19 | `handleApiError` mapping, error masking |
-| Auth Session | `src/__tests__/auth-session.test.ts` | 13 | Signed session cookie helpers |
-| Webhook URL Guard | `src/__tests__/webhook-url-guard.test.ts` | 9 | SSRF guard for webhook URLs |
-| Contracts | `src/__tests__/contracts.test.ts` | 6 | `classifyContractError` — NETWORK, CONTRACT, USER_REJECTION |
-| Contract Utils | `src/__tests__/contract-utils.test.ts` | 5 | Soroban contract helpers |
-| Error Codes | `src/__tests__/error-codes.test.ts` | 5 | Error code taxonomy |
-| Stellar | `src/__tests__/stellar.test.ts` | 5 | `isValidStellarAddress`, `getStellarExplorerUrl` |
-| Integration | `src/__tests__/integration.test.ts` | 21 | API endpoint health checks |
+All app tests live in `src/__tests__/` (32 files, 800 cases):
+
+| File | Test cases |
+|---|---|
+| `api-response.test.ts` | 19 |
+| `api-response-branches.test.ts` | 29 |
+| `auth.test.ts` | 26 |
+| `auth-session.test.ts` | 13 |
+| `challenge.test.ts` | 11 |
+| `contract-utils.test.ts` | 8 |
+| `contracts.test.ts` | 6 |
+| `csrf.test.ts` | 9 |
+| `error-codes.test.ts` | 21 |
+| `integration.test.ts` | 21 |
+| `lib-coverage.test.ts` | 74 |
+| `lib-coverage-2.test.ts` | 45 |
+| `lib-coverage-3.test.ts` | 24 |
+| `lib-coverage-4.test.ts` | 31 |
+| `lib-coverage-5.test.ts` | 27 |
+| `lib-coverage-6.test.ts` | 167 |
+| `request-id.test.ts` | 7 |
+| `stellar.test.ts` | 5 |
+| `transaction-simulator.test.ts` | 5 |
+| `type-guards.test.ts` | 13 |
+| `utils.test.ts` | 12 |
+| `utils-extended.test.ts` | 20 |
+| `validation.test.ts` | 26 |
+| `validation-schemas.test.ts` | 5 |
+| `webhook-url-guard.test.ts` | 9 |
+| `branch-coverage.test.tsx` | 66 |
+| `error-boundary.test.tsx` | 4 |
+| `lib-coverage-6-hooks.test.tsx` | 22 |
+| `loading-boundary.test.tsx` | 4 |
+| `ui-components.test.tsx` | 17 |
+| `ui-components-2.test.tsx` | 25 |
+| `ui-hooks-coverage.test.tsx` | 29 |
+| **Total** | **800** |
 
 ### Error Classification System
 
@@ -551,7 +573,7 @@ Every push to `main` triggers:
 |---|---|---|
 | Lint | `npx eslint . --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
-| Unit Tests | `vitest run --reporter=verbose` | 187 app tests across 13 suites |
+| Unit Tests | `vitest run --reporter=verbose` | 800 app tests across 32 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
 | Build | `next build` | Production Next.js build verification |
 | Smoke | curl (19 pages) | HTTP 200 check against live Vercel — ~3s |
@@ -677,7 +699,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 187 app tests + 64 contract tests | **Done** |
+| ✅ CI/CD pipeline + 800 app tests + 64 contract tests | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
@@ -697,7 +719,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
 | ✅ Policy versioning (immutable config history, capped at 100) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
-| ✅ soroban-sdk 27 upgrade — 56 contract unit tests green in CI (was 0) | **Done** |
+| ✅ soroban-sdk 27 upgrade — 58 contract unit tests green in CI (was 0) | **Done** |
 | ✅ Gas optimization (92% storage savings, avg 90K stroops) | **Done** |
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
 | ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |
@@ -707,31 +729,50 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 
 ## 🔬 Formal Verification
 
-OphirPay's 8 critical smart contract invariants have been **formally verified**
-using [Kani Rust Verifier](https://model-checking.github.io/kani/), an
-open-source model checker that proves properties for all possible inputs.
+> ⚠️ **Honest status:** the Kani harnesses in `contracts/ophirpay/spec/` verify hand-written
+> **models** — they share no code with the deployed `OphirPayContract`, are not run in CI, and
+> several are tautological. The list below reflects *modeled intent*, **not** proof of the deployed
+> contract. See [docs/AUDIT.md](docs/AUDIT.md) for details.
 
 | # | Invariant | Status |
 |---|-----------|--------|
-| 1 | **LOCKED_BALANCE Protection** — `emergency_withdraw` cannot drain user funds | ✅ Proved |
-| 2 | **One Address = One Vote** — no double-voting per proposal | ✅ Proved |
-| 3 | **Reentrancy Lock Atomicity** — lock acquired before cross-contract calls | ✅ Proved |
-| 4 | **Proposal Deposit Lifecycle** — deposit always refunded on execution | ✅ Proved |
-| 5 | **Fee Cap (10% max)** — no fee config exceeds 1000 bps | ✅ Proved |
-| 6 | **Multisig Threshold** — N-of-M enforcement before execution | ✅ Proved |
-| 7 | **Timelock 24h Delay** — exactly 86400 seconds enforced | ✅ Proved |
-| 8 | **Spending Limit Expiry** — expired/inactive limits always reject | ✅ Proved |
-| 9 | **Composite: LOCKED + Deposit** — invariants 1+4 are consistent | ✅ Proved |
-| 10 | **Vesting Boundary Conditions** — full vest at end, zero at start | ✅ Proved |
+| 1 | **LOCKED_BALANCE Protection** — `emergency_withdraw` cannot drain user funds | ⚠️ Model only — see HIGH-1 in audit |
+| 2 | **One Address = One Vote** — no double-voting per proposal | ⚠️ Model only |
+| 3 | **Reentrancy Lock Atomicity** — lock acquired before cross-contract calls | ⚠️ Model only — see MEDIUM-4 in audit |
+| 4 | **Proposal Deposit Lifecycle** — deposit always refunded on execution | ⚠️ Model only |
+| 5 | **Fee Cap (10% max)** — no fee config exceeds 1000 bps | ⚠️ Model only |
+| 6 | **Multisig Threshold** — N-of-M enforcement before execution | ⚠️ Model only |
+| 7 | **Timelock 24h Delay** — exactly 86400 seconds enforced | ⚠️ Model only — not wired to admin fns |
+| 8 | **Spending Limit Expiry** — expired/inactive limits always reject | ⚠️ Model only — `check_spending` omits expiry |
 
-**Run the proofs:**
+**Run the (model) proofs:**
 ```bash
 cargo install kani-verifier && cargo kani setup
 cd contracts/ophirpay/spec && cargo kani
 ```
 
-See [docs/VERIFICATION.md](docs/VERIFICATION.md) for setup, CI integration,
-and Certora/Komet alternatives.
+See [docs/VERIFICATION.md](docs/VERIFICATION.md) for setup and the Certora/Komet roadmap.
+
+---
+
+## 🛡️ Security Audit
+
+A **manual security review** of both Soroban contracts was completed on 2026-08-13. The full
+report lives in **[docs/AUDIT.md](docs/AUDIT.md)**.
+
+**Findings summary:**
+
+| Severity | Count | Headline |
+|---|---|---|
+| Critical | 0 | — |
+| High | 2 | Refund path bypasses `LOCKED_BALANCE` (owner can drain user funds); "10/10 formally verified" claim is not substantiated |
+| Medium | 6 | Unauthenticated `check_spending` mutation · unbounded enumeration · unallowlisted emitter · incomplete reentrancy coverage · `emergency_pause_all` ignores cross-contract result · SSRF bypass via webhook redirects |
+| Low | 11 | Vesting overflow, missing pause guards on refunds, webhook HMAC body mismatch, plain SHA-256 API keys, error-code inflation, misc |
+| Informational | 5 | Admin actions not timelocked on-chain, permissionless executors, untrusted on-chain records |
+
+**Status:** ⚠️ **Not yet audited by a third party.** The codebase is *audit-ready*, but the
+findings above should be remediated and an independent audit (Runtime Verification, Certora,
+Trail of Bits, or OtterSec) commissioned before mainnet deployment.
 
 ---
 
@@ -744,10 +785,10 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 - **Fund-safety invariant** — `emergency_withdraw` is capped at `contract_balance − LOCKED_BALANCE`, so even the contract **owner cannot drain** funds locked in active escrows, streams, or governance deposits
 - **Reentrancy guard** — `REENTRANCY_LOCK` blocks cross-contract reentrancy on `emergency_withdraw` / `emergency_pause_all` / `emergency_unpause_all`
 - **Pause circuit breaker** — `require_not_paused()` guards every state-changing function
-- **Timelocked admin actions** — 24h delay on upgrades, ownership transfer, and other sensitive operations
+- **Timelocked upgrades & ownership** — 24h delay on WASM upgrades and two-step ownership transfer (other admin actions are *not* timelocked on-chain — see [docs/AUDIT.md](docs/AUDIT.md))
 - **1 address = 1 vote** — governance votes are tracked per-address on-chain; double-voting returns `AlreadyVoted`
 - **Spam-resistant governance** — proposals require a minimum deposit (locked in `LOCKED_BALANCE`, refunded on execution)
-- **No panics** — all contract functions return `Result<T, PaymentError>` with 94 typed error codes
+- **No panics** — contract functions return `Result<T, PaymentError>` (the enum defines ~199 variants, many reserved for unimplemented features — see [docs/AUDIT.md](docs/AUDIT.md))
 - **TTL management** — every write calls `extend_ttl(5000, 50000)` so records can never be archived
 
 ### Web & API Hardening
@@ -779,11 +820,11 @@ OphirPay is engineered for predictable on-chain costs and fast reads:
 
 ### Audit-Readiness
 
-- **94 typed contract error codes** — every failure path returns a machine-readable `PaymentError`, mirrored 1:1 in the TypeScript error catalog and surfaced as clean HTTP/API errors
-- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (58 in `ophirpay`, 6 in `emitter`) plus 200 vitest suites
+- **~199 typed contract error variants** — every failure path returns a machine-readable `PaymentError` (many variants reserved for unimplemented features), mirrored in the TypeScript error catalog and surfaced as clean HTTP/API errors
+- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (58 in `ophirpay`, 6 in `emitter`) plus 800 app vitest cases
 - **Zero failing tests** — the full suite is green in CI (`lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e`, `secret-scan`)
 - **Threat-modeled web layer** — CSRF, SSRF, HMAC sessions, hashed API keys, rate limiting, and CSP are documented in the Security section above and enforced in code
-- **Ready for a professional audit** — the codebase ships with an architecture doc, OpenAPI spec (40 routes), deployment runbooks, and a demo harness; the contract was written for reviewability with explicit `require_auth` on every privileged entrypoint
+- **Manual security review completed** — a full review of both Soroban contracts and the web/API security layer is in [docs/AUDIT.md](docs/AUDIT.md) (2 High, 6 Medium findings); a third-party audit is still pending before mainnet
 
 ---
 
