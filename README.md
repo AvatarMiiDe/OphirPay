@@ -20,6 +20,12 @@
     <a href="src/__tests__/">
       <img src="https://img.shields.io/badge/tests-864%20passed%20(800%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="864 Tests Passing" />
     </a>
+    <a href="#-testing--quality">
+      <img src="https://img.shields.io/badge/coverage-88%25-brightgreen.svg?logo=vitest" alt="88% Coverage" />
+    </a>
+    <a href="docs/GAS.md">
+      <img src="https://img.shields.io/badge/gas-optimized-brightgreen.svg?logo=stellar" alt="Gas Optimized" />
+    </a>
     <a href="docs/AUDIT.md">
       <img src="https://img.shields.io/badge/audit-manual%20review-orange.svg" alt="Manual security review completed" />
     </a>
