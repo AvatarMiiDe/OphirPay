@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { type RefObject } from 'react';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePagination } from '@/hooks/usePagination';
@@ -56,7 +57,7 @@ describe('useOnClickOutside', () => {
 
   it('does nothing when ref is null', () => {
     const handler = vi.fn();
-    const ref = { current: null } as any;
+    const ref: RefObject<HTMLElement | null> = { current: null };
     renderHook(() => useOnClickOutside(ref, handler));
     act(() => { document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
     expect(true).toBe(true);

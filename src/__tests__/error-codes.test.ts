@@ -189,7 +189,7 @@ describe("ERROR_CODES", () => {
 
   it("every ERROR_STATUS has a valid HTTP code", () => {
     const validHttpCodes = [400, 401, 402, 403, 404, 405, 406, 408, 409, 410, 413, 415, 422, 429, 451, 500, 503];
-    for (const [code, status] of Object.entries(ERROR_STATUS)) {
+    for (const [, status] of Object.entries(ERROR_STATUS)) {
       expect(validHttpCodes).toContain(status);
     }
   });

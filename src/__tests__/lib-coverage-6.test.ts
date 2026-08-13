@@ -12,8 +12,8 @@ import { logger } from '@/lib/logger';
 import { generateRandomHex, generateId, timingSafeEqual } from '@/lib/crypto';
 import { sendEmail, EMAIL_TEMPLATES } from '@/lib/email';
 import { validateEnv, isProduction, getDatabaseProvider, getAppUrl } from '@/lib/env';
-import { FEATURE_FLAGS, isFeatureEnabled, overrideFeatureFlag } from '@/lib/feature-flags';
-import { estimateTransactionFee, estimateBatchFee } from '@/lib/fee-estimator';
+import { FEATURE_FLAGS, isFeatureEnabled, overrideFeatureFlag, type FeatureFlag } from '@/lib/feature-flags';
+import { estimateBatchFee } from '@/lib/fee-estimator';
 import { trapFocus } from '@/lib/focus-trap';
 import { captureHealthSnapshot, formatHealthSnapshot, logMemoryUsage } from '@/lib/monitoring';
 import { PRELOAD_ROUTES } from '@/lib/prefetch';
@@ -22,7 +22,7 @@ import { computeAnalytics, groupByDay, percentChange } from '@/lib/analytics-hel
 import { DURATIONS, getStaggerDelay, EASING, waitForAnimation } from '@/lib/animation';
 import { sanitizeHtml, escapeHtml, hasSqlInjectionPatterns, sanitizeStellarAddress, sanitizeSlug } from '@/lib/sanitize';
 import { cn, shortenAddress, formatAmount, formatDate, timeAgo, getStatusColor } from '@/lib/utils';
-import { COLORS, CHART_COLORS, lighten } from '@/lib/color-utils';
+import { COLORS, lighten } from '@/lib/color-utils';
 import { getSecurityHeaders, getCorsHeaders } from '@/lib/headers';
 import { searchRecords, rankSearchResults } from '@/lib/search-index';
 import { buildTxSummary, buildBatchSummary, shortenAddress as sbShorten, buildEventMessage } from '@/lib/string-builder';
@@ -53,9 +53,8 @@ describe('form-helpers', () => {
     it('sets isSubmitting during submission', async () => {
       const handler = vi.fn().mockImplementation(() => new Promise(r => setTimeout(r, 50)));
       const { result } = renderHook(() => useFormSubmit(handler));
-      let promise: Promise<void>;
       await act(async () => {
-        promise = result.current.submit();
+        result.current.submit();
       });
       // After act, the promise is pending and state should be updated
       expect(handler).toHaveBeenCalledTimes(1);
@@ -96,7 +95,7 @@ describe('form-helpers', () => {
   describe('useFormReset', () => {
     it('returns a function', () => {
       const ref = { current: null };
-      const { result } = renderHook(() => useFormReset(ref as any));
+      const { result } = renderHook(() => useFormReset(ref as Parameters<typeof useFormReset>[0]));
       expect(typeof result.current).toBe('function');
     });
 
@@ -104,14 +103,14 @@ describe('form-helpers', () => {
       const form = document.createElement('form');
       const resetSpy = vi.spyOn(form, 'reset');
       const ref = { current: form };
-      const { result } = renderHook(() => useFormReset(ref as any));
+      const { result } = renderHook(() => useFormReset(ref as Parameters<typeof useFormReset>[0]));
       act(() => { result.current(); });
       expect(resetSpy).toHaveBeenCalled();
     });
 
     it('handles null ref gracefully', () => {
       const ref = { current: null };
-      const { result } = renderHook(() => useFormReset(ref as any));
+      const { result } = renderHook(() => useFormReset(ref as Parameters<typeof useFormReset>[0]));
       expect(() => act(() => { result.current(); })).not.toThrow();
     });
   });
@@ -446,7 +445,7 @@ describe('feature-flags', () => {
     });
 
     it('returns false for unknown flag', () => {
-      expect(isFeatureEnabled('UNKNOWN_FLAG' as any)).toBe(false);
+      expect(isFeatureEnabled('UNKNOWN_FLAG' as unknown as FeatureFlag)).toBe(false);
     });
   });
 

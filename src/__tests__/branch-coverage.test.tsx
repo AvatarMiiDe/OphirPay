@@ -3,16 +3,12 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { renderHook, act } from '@testing-library/react';
 
 // Components with low branch coverage
 import { Pagination } from '@/components/ui/Pagination';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input, Textarea, Select } from '@/components/ui/Form';
-import { Modal } from '@/components/ui/Modal';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { StatusBadge } from '@/components/ui/Badge';
 
 // Lib modules with branch gaps
 import { isProduction, getDatabaseProvider, getAppUrl } from '@/lib/env';
@@ -21,7 +17,7 @@ import { logger } from '@/lib/logger';
 import { computePagination, prismaPagination } from '@/lib/pagination-utils';
 import { isRateLimited, getRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { generateRandomHex, generateId, timingSafeEqual } from '@/lib/crypto';
-import { FEATURE_FLAGS, isFeatureEnabled } from '@/lib/feature-flags';
+import { FEATURE_FLAGS, isFeatureEnabled, type FeatureFlag } from '@/lib/feature-flags';
 import { truncate, truncateMiddle, pluralize, titleCase, formatBytes } from '@/lib/text';
 import { cn, shortenAddress, formatAmount, formatDate, timeAgo, getStatusColor } from '@/lib/utils';
 import { getSecurityHeaders, getCorsHeaders } from '@/lib/headers';
@@ -229,7 +225,7 @@ describe('Env branches', () => {
 // ═══════════════════════════════════════════════════════════════
 describe('Feature flags branches', () => {
   it('isFeatureEnabled returns false for unknown', () => {
-    expect(isFeatureEnabled('UNKNOWN' as any)).toBe(false);
+    expect(isFeatureEnabled('UNKNOWN' as unknown as FeatureFlag)).toBe(false);
   });
 
   it('FEATURE_FLAGS has all known flags', () => {

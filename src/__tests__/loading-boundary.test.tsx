@@ -15,7 +15,7 @@ describe('LoadingBoundary', () => {
   });
 
   it('renders with custom fallback via Suspense boundary', () => {
-    const { container } = render(
+    render(
       <LoadingBoundary fallback={<div>Custom loading...</div>}>
         <div>Loaded</div>
       </LoadingBoundary>
@@ -38,7 +38,7 @@ describe('LoadingBoundary', () => {
   });
 
   it('uses card variant by default', () => {
-    const { container } = render(
+    render(
       <LoadingBoundary>
         <span>Default</span>
       </LoadingBoundary>

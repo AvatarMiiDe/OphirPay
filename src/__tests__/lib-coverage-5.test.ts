@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { exportToCsv } from '@/lib/csv';
 import { getDateRange, getDateRangePresets } from '@/lib/date-range';
 import { formatXlm, formatFiat, formatTokenAmount, formatCompact } from '@/lib/format-currency';

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Targeted branch-coverage tests for api-response.ts
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { jsonSafe, errorResponse, successResponse, handleApiError, notFoundError, serverError, unauthorizedError, rateLimitError, conflictError, badRequestError, validationError } from '@/lib/api-response';
 import { z } from 'zod';
 
@@ -34,7 +34,7 @@ describe('jsonSafe branches', () => {
 
   it('handles arrays recursively', () => {
     const input = [BigInt(1), BigInt(2), 'hello'];
-    const result = jsonSafe(input) as any[];
+    const result = jsonSafe(input) as unknown[];
     expect(result).toHaveLength(3);
     expect(result[0]).toBe(1);
     expect(result[2]).toBe('hello');
@@ -42,7 +42,7 @@ describe('jsonSafe branches', () => {
 
   it('handles nested objects', () => {
     const input = { a: BigInt(10), b: { c: BigInt(20) } };
-    const result = jsonSafe(input) as any;
+    const result = jsonSafe(input) as { a: number; b: { c: number } };
     expect(result.a).toBe(10);
     expect(result.b.c).toBe(20);
   });
@@ -80,7 +80,7 @@ describe('handleApiError branches', () => {
       value: { name: 'PrismaClientKnownRequestError' },
       configurable: true,
     });
-    (err as any).code = 'P2002';
+    (err as { code?: string }).code = 'P2002';
     const res = handleApiError(err);
     expect(res.status).toBeGreaterThanOrEqual(400);
   });

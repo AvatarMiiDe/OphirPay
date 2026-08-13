@@ -17,7 +17,7 @@ describe('transaction-simulator', () => {
         loadAccount: vi.fn().mockRejectedValue(new Error('Account not found')),
         fetchBaseFee: vi.fn(),
       };
-      (getHorizonServer as any).mockReturnValue(mockServer);
+      vi.mocked(getHorizonServer).mockReturnValue(mockServer as unknown as ReturnType<typeof getHorizonServer>);
 
       const result = await simulatePayment({
         sourcePublicKey: 'GABC',
@@ -37,7 +37,7 @@ describe('transaction-simulator', () => {
         loadAccount: vi.fn().mockRejectedValue('unknown error'),
         fetchBaseFee: vi.fn(),
       };
-      (getHorizonServer as any).mockReturnValue(mockServer);
+      vi.mocked(getHorizonServer).mockReturnValue(mockServer as unknown as ReturnType<typeof getHorizonServer>);
 
       const result = await simulatePayment({
         sourcePublicKey: 'GABC',
@@ -57,7 +57,7 @@ describe('transaction-simulator', () => {
         loadAccount: vi.fn().mockRejectedValue(new Error('Network Error')),
         fetchBaseFee: vi.fn(),
       };
-      (getHorizonServer as any).mockReturnValue(mockServer);
+      vi.mocked(getHorizonServer).mockReturnValue(mockServer as unknown as ReturnType<typeof getHorizonServer>);
 
       const result = await simulatePayment({
         sourcePublicKey: 'GABC',
@@ -75,7 +75,7 @@ describe('transaction-simulator', () => {
         loadAccount: vi.fn().mockRejectedValue(new Error('Timeout')),
         fetchBaseFee: vi.fn(),
       };
-      (getHorizonServer as any).mockReturnValue(mockServer);
+      vi.mocked(getHorizonServer).mockReturnValue(mockServer as unknown as ReturnType<typeof getHorizonServer>);
 
       const result = await simulatePayment({
         sourcePublicKey: 'GABC',
@@ -93,7 +93,7 @@ describe('transaction-simulator', () => {
         loadAccount: vi.fn().mockRejectedValue(new Error('Stellar error')),
         fetchBaseFee: vi.fn(),
       };
-      (getHorizonServer as any).mockReturnValue(mockServer);
+      vi.mocked(getHorizonServer).mockReturnValue(mockServer as unknown as ReturnType<typeof getHorizonServer>);
 
       const result = await simulatePayment({
         sourcePublicKey: 'GABC',
