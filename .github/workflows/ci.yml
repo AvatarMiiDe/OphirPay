@@ -199,6 +199,7 @@ jobs:
         with:
           name: next-build
           path: .next/
+          include-hidden-files: true
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════
@@ -274,7 +275,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: contract-wasm
-          path: ./
+          path: contracts/
       - name: Apply migrations to test DB
         run: npx prisma migrate deploy
       - name: Build Next.js production bundle
@@ -396,7 +397,7 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Verify image structure
         run: |
-          docker run --rm ophirpay:ci-test ls -la /app/.next/standalone/server.js && \
+          docker run --rm ophirpay:ci-test -e "require('fs').accessSync('/app/server.js')" && \
           echo "✅ Docker image built and verified"
 
   # ══════════════════════════════════════════════════════════════
@@ -604,7 +605,7 @@ jobs:
         run: npm audit --audit-level=critical 2>&1 || true
 
   # ══════════════════════════════════════════════════════════════
-  # 21. CONTRACT GAS REPORT — WASM analysis via soroban CLI
+  # 21. CONTRACT GAS REPORT — WASM analysis via stellar CLI
   # ══════════════════════════════════════════════════════════════
   contract-gas-report:
     name: "2️⃣1️⃣ Backend — Gas Report (Soroban)"
@@ -617,13 +618,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: contract-wasm
-          path: ./
-      - name: Install Stellar CLI (soroban)
+          path: contracts/
+      - name: Install Stellar CLI
         run: |
-          SOROBAN_VER=27.0.0
-          curl -fsSL "https://github.com/stellar/soroban-tools/releases/download/v${SOROBAN_VER}/soroban-cli-${SOROBAN_VER}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
-          sudo mv soroban /usr/local/bin/
-          soroban version
+          STELLAR_VER=27.0.0
+          curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_VER}/stellar-cli-${STELLAR_VER}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          sudo mv stellar /usr/local/bin/
+          stellar version
       - name: Report WASM binary sizes
         run: |
           echo "=== WASM Binary Sizes ==="
@@ -661,33 +662,19 @@ jobs:
           else
             echo "✅ Combined WASM under 100 KB"
           fi
-      - name: Soroban contract inspect (OphirPay)
+      - name: Stellar contract info (OphirPay)
         run: |
           OPHIR_WASM=$(find contracts/ophirpay/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
           if [ -f "$OPHIR_WASM" ]; then
-            echo "=== OphirPay Contract Inspect ==="
-            soroban contract inspect --wasm "$OPHIR_WASM"
+            echo "=== OphirPay Contract Interface ==="
+            stellar contract info interface --wasm "$OPHIR_WASM"
           fi
-      - name: Soroban contract inspect (Emitter)
+      - name: Stellar contract info (Emitter)
         run: |
           EMIT_WASM=$(find contracts/emitter/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
           if [ -f "$EMIT_WASM" ]; then
-            echo "=== Emitter Contract Inspect ==="
-            soroban contract inspect --wasm "$EMIT_WASM"
-          fi
-      - name: Soroban contract analyze (OphirPay)
-        run: |
-          OPHIR_WASM=$(find contracts/ophirpay/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
-          if [ -f "$OPHIR_WASM" ]; then
-            echo "=== OphirPay Cost Analysis ==="
-            soroban contract analyze --wasm "$OPHIR_WASM" 2>&1 || echo "⚠️  Analysis completed with warnings (check above)"
-          fi
-      - name: Soroban contract analyze (Emitter)
-        run: |
-          EMIT_WASM=$(find contracts/emitter/target/wasm32v1-none/release -name '*.wasm' -not -name '*.wasm.gz' | head -1)
-          if [ -f "$EMIT_WASM" ]; then
-            echo "=== Emitter Cost Analysis ==="
-            soroban contract analyze --wasm "$EMIT_WASM" 2>&1 || echo "⚠️  Analysis completed with warnings (check above)"
+            echo "=== Emitter Contract Interface ==="
+            stellar contract info interface --wasm "$EMIT_WASM"
           fi
       - name: Upload gas report artifact
         if: always()

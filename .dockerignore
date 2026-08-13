@@ -8,8 +8,14 @@ node_modules
 .env.*
 coverage
 test-results
-.next
 dist
 .million
 turbo
 .cache
+playwright-report
+# Rust/Soroban build artifacts — not needed by the Next.js image and
+# can be multiple GB (contracts/**/target/ is 3+ GB after a cargo build)
+contracts/**/target/
+contracts/*/target/
+contracts/**/Cargo.lock
+**/test_snapshots/

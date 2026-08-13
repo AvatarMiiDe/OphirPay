@@ -823,7 +823,7 @@ paths:
                             action_type: { type: string }
                             yes_votes: { type: integer }
                             no_votes: { type: integer }
-                            voting_ends_at: { type: integer, nullable: true }
+                            voting_ends_at: { type: [integer, 'null'] }
                             executed: { type: boolean }
                             proposer: { type: string }
                       total: { type: integer, description: "Total proposal count on-chain" }
@@ -1194,17 +1194,17 @@ components:
         id: { type: string }
         amount: { type: number }
         assetCode: { type: string }
-        assetIssuer: { type: string, nullable: true }
-        description: { type: string, nullable: true }
-        memo: { type: string, nullable: true }
+        assetIssuer: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        memo: { type: [string, 'null'] }
         status: { type: string }
-        transactionHash: { type: string, nullable: true }
+        transactionHash: { type: [string, 'null'] }
         sourceAccountId: { type: string }
         userId: { type: string }
-        batchId: { type: string, nullable: true }
+        batchId: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
-        completedAt: { type: string, format: date-time, nullable: true }
-        errorMessage: { type: string, nullable: true }
+        completedAt: { type: [string, 'null'], format: date-time }
+        errorMessage: { type: [string, 'null'] }
 
     PaginatedPayments:
       type: object
@@ -1228,7 +1228,7 @@ components:
         amount:
           type: number
           minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Payment request amount
         assetCode:
           type: string
@@ -1251,7 +1251,7 @@ components:
         amount:
           type: number
           minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
           description: Payment amount in stroops for XLM, or smallest unit for other assets
         assetCode:
           type: string
@@ -1298,7 +1298,7 @@ components:
               amount:
                 type: number
                 minimum: 0
-                exclusiveMinimum: true
+                exclusiveMinimum: 0
               assetCode:
                 type: string
                 default: XLM
@@ -1322,7 +1322,7 @@ components:
         amount:
           type: number
           minimum: 0
-          exclusiveMinimum: true
+          exclusiveMinimum: 0
         assetCode:
           type: string
           default: XLM
@@ -1367,12 +1367,12 @@ components:
                   type: object
                   properties:
                     status: { type: string, enum: [ok, error] }
-                    latencyMs: { type: integer, nullable: true }
+                    latencyMs: { type: [integer, 'null'] }
                 redis:
                   type: object
                   properties:
                     status: { type: string, enum: [ok, error, disabled] }
-                    latencyMs: { type: integer, nullable: true }
+                    latencyMs: { type: [integer, 'null'] }
                 stellar:
                   type: object
                   properties:
@@ -1382,7 +1382,7 @@ components:
                       type: object
                       properties:
                         status: { type: string, enum: [ok, error, unchecked] }
-                        latencyMs: { type: integer, nullable: true }
+                        latencyMs: { type: [integer, 'null'] }
             uptime: { type: number }
         meta:
           type: object
@@ -1449,8 +1449,8 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
 
-  # ── Error Codes Catalog (218 codes across 17 HTTP status classes) ──
-  errorCodes:
+  # ── Error Codes Catalog (209 codes across 11 HTTP status classes) ──
+  x-error-codes:
     "400":
       - BAD_REQUEST
       - VALIDATION_ERROR

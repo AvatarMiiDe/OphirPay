@@ -1,6 +1,11 @@
 #![no_std]
+// env.events().publish → #[contractevent] migration is deferred (see docs/GAS.md);
+// suppress until that migration lands.
+#![allow(deprecated)]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
+};
 
 // ── Storage Keys ───────────────────────────────────────────────
 const EVENT_COUNT: Symbol = symbol_short!("EVT_CNT");
@@ -107,11 +112,7 @@ impl PaymentEventEmitter {
 
         // Native event emission
         env.events().publish(
-            (
-                Symbol::new(&env, "payment_event"),
-                payer,
-                payee,
-            ),
+            (Symbol::new(&env, "payment_event"), payer, payee),
             (amount, tx_hash),
         );
 
@@ -169,11 +170,7 @@ impl PaymentEventEmitter {
             .get(&UPGRADE_HASH)
             .ok_or(EmitterError::UpgradeNotProposed)?;
 
-        let unlock_at: u64 = env
-            .storage()
-            .instance()
-            .get(&UPGRADE_TIMELOCK)
-            .unwrap_or(0);
+        let unlock_at: u64 = env.storage().instance().get(&UPGRADE_TIMELOCK).unwrap_or(0);
 
         if env.ledger().timestamp() < unlock_at {
             return Err(EmitterError::UpgradeTimelockActive);
@@ -220,7 +217,9 @@ impl PaymentEventEmitter {
             return Err(EmitterError::Unauthorized);
         }
         env.storage().instance().set(&PENDING_OWNER, &new_owner);
-        env.storage().instance().set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
         env.storage().instance().extend_ttl(5000, 50000);
         Ok(())
     }
@@ -236,7 +235,11 @@ impl PaymentEventEmitter {
         if caller != pending {
             return Err(EmitterError::Unauthorized);
         }
-        let proposed_at: u64 = env.storage().instance().get(&OWNER_PROPOSED_AT).unwrap_or(0);
+        let proposed_at: u64 = env
+            .storage()
+            .instance()
+            .get(&OWNER_PROPOSED_AT)
+            .unwrap_or(0);
         let now = env.ledger().timestamp();
         if now.saturating_sub(proposed_at) < 86400 {
             return Err(EmitterError::UpgradeTimelockActive);

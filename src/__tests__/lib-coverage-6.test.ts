@@ -330,7 +330,7 @@ describe('crypto', () => {
     });
 
     it('returns false for different strings', () => {
-      expect(timingSafeEqual('abc', 'abd')).toBe(false);
+      expect(timingSafeEqual('abc', 'abx')).toBe(false);
     });
 
     it('returns false for different length strings', () => {
