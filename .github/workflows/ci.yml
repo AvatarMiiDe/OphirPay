@@ -46,7 +46,7 @@ jobs:
       - run: npx tsc --noEmit
 
   # ══════════════════════════════════════════════════════════════
-  # 3. UNIT TESTS — Vitest (184 frontend tests)
+  # 3. UNIT TESTS — Vitest (800 frontend tests)
   # ══════════════════════════════════════════════════════════════
   unit-tests:
     name: "3️⃣ Frontend — Unit Tests (Vitest)"

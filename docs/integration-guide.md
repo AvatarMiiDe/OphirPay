@@ -208,7 +208,7 @@ reject requests missing a valid signature.
 ## Testing
 
 ```bash
-# Frontend tests (184)
+# Frontend tests (800)
 npm test
 
 # Contract tests
