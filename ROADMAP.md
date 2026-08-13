@@ -6,7 +6,7 @@
 - [x] Voting weight security fix (1 address = 1 vote)
 - [x] Reentrancy guard on cross-contract calls
 - [x] Minimum proposal deposit enforcement
-- [x] Error code expansion (52 → 199)
+- [x] Error code expansion (52 → 300)
 - [x] React Query data fetching layer
 - [x] Zod validation on API routes
 - [x] CSRF protection for mutations
@@ -17,7 +17,7 @@
   - [x] On-chain return values (proposal/request/refund/hook ids) captured from tx meta
   - [x] Refund & hook lifecycles synced end-to-end (DB ledger rows linked by `onChainId`)
   - [x] No empty-caller contract invocations anywhere in the UI/API
-  - [x] Stale test expectations aligned with the 199-code catalog — full suite green
+  - [x] Stale test expectations aligned with the 300-code catalog — full suite green
   - [x] OpenAPI spec expanded to cover all 40 API routes
   - [x] Docs numbers (tests, versions, gas) aligned with reality
 

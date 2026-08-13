@@ -42,7 +42,7 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │  │  Multisig (N-of-M) · RBAC       │ cc │  get_event() / count()   ││
 │  │  Governance · Timelocks         │    │                          ││
 │  │  Fee Config · Hooks · Audit     │    │  14 error codes          ││
-│  │  199 error codes · 58 tests    │    │  6 tests                 ││
+│  │  300 error codes · 58 tests    │    │  6 tests                 ││
 │  └───────────────┬─────────────────┘    └──────────────────────────┘│
 │                  │                                                    │
 │  ┌───────────────┴────────────────────────────────────────────────┐  │
@@ -119,14 +119,14 @@ All writes call `extend_ttl(5000, 50000)` to prevent archival.
 
 ### 5. Error Handling
 
-199 typed error variants from `NotInitialized=1` to `SystemOverloaded=199` (many reserved for unimplemented features). Contract functions return `Result<T, PaymentError>` — no panics in production code.
+300 typed error variants from `NotInitialized=1` to `SystemOverloaded=300` (many reserved for unimplemented features). Contract functions return `Result<T, PaymentError>` — no panics in production code.
 
 ## Directory Structure
 
 ```
 ophirpay/
 ├── contracts/              # Soroban smart contracts (Rust)
-│   ├── ophirpay/           # Core payment contract (4800+ lines, 199 error variants)
+│   ├── ophirpay/           # Core payment contract (4800+ lines, 300 error variants)
 │   └── emitter/            # Event emission contract
 ├── src/
 │   ├── app/                # Next.js App Router pages (15 routes)

@@ -788,7 +788,7 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 - **Timelocked upgrades & ownership** — 24h delay on WASM upgrades and two-step ownership transfer (other admin actions are *not* timelocked on-chain — see [docs/AUDIT.md](docs/AUDIT.md))
 - **1 address = 1 vote** — governance votes are tracked per-address on-chain; double-voting returns `AlreadyVoted`
 - **Spam-resistant governance** — proposals require a minimum deposit (locked in `LOCKED_BALANCE`, refunded on execution)
-- **No panics** — contract functions return `Result<T, PaymentError>` (the enum defines ~199 variants, many reserved for unimplemented features — see [docs/AUDIT.md](docs/AUDIT.md))
+- **No panics** — contract functions return `Result<T, PaymentError>` (the enum defines ~300 variants, many reserved for unimplemented features — see [docs/AUDIT.md](docs/AUDIT.md))
 - **TTL management** — every write calls `extend_ttl(5000, 50000)` so records can never be archived
 
 ### Web & API Hardening
@@ -820,7 +820,7 @@ OphirPay is engineered for predictable on-chain costs and fast reads:
 
 ### Audit-Readiness
 
-- **~199 typed contract error variants** — every failure path returns a machine-readable `PaymentError` (many variants reserved for unimplemented features), mirrored in the TypeScript error catalog and surfaced as clean HTTP/API errors
+- **~300 typed contract error variants** — every failure path returns a machine-readable `PaymentError` (many variants reserved for unimplemented features), mirrored in the TypeScript error catalog and surfaced as clean HTTP/API errors
 - **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (58 in `ophirpay`, 6 in `emitter`) plus 800 app vitest cases
 - **Zero failing tests** — the full suite is green in CI (`lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e`, `secret-scan`)
 - **Threat-modeled web layer** — CSRF, SSRF, HMAC sessions, hashed API keys, rate limiting, and CSP are documented in the Security section above and enforced in code

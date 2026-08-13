@@ -193,7 +193,7 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 
 ## Operational Notes
 
-- **Contracterror variant count:** OphirPay's `PaymentError` enum defines 199
+- **Contracterror variant count:** OphirPay's `PaymentError` enum defines 300
   `#[contracterror]` variants and compiles cleanly on soroban-sdk 27. If the
   catalog grows further, consider hierarchical error codes or splitting into
   multiple error enums.
@@ -258,7 +258,7 @@ Compiled with Rust 1.91.0, soroban-sdk 27.0.5, `--release`, `wasm32v1-none`, `op
 | `ophirpay_contract.wasm` | **84,522 bytes (82.5 KB)** | 115.5 KB (mainnet limit: 200 KB) |
 | `ophirpay_emitter.wasm` | **7,031 bytes (6.9 KB)** | 193 KB |
 
-The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 199 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
+The OphirPay contract at 82 KB is reasonable for its scope (~3,000 lines, 50+ functions, 18 struct types, 300 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
 
 ---
 

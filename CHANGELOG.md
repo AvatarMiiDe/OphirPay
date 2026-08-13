@@ -13,7 +13,7 @@ All notable changes to OphirPay will be documented in this file.
 - **`apiFetch` 403 body double-read**: non-CSRF 403s lost the real server error detail; the body is now read once and shared
 - **Audit-log SSE leak**: EventSource now closes on page unmount, not just on toggle-off
 - **Timelock `?id=` validation**: non-numeric ids return a clean 400 instead of a 500 from `nativeToScVal`
-- **Stale contract-error tests**: `contract-utils.test.ts` asserted the pre-expansion error mapping; expectations now match the 199-code catalog (full suite: 800/800 green)
+- **Stale contract-error tests**: `contract-utils.test.ts` asserted the pre-expansion error mapping; expectations now match the 300-code catalog (full suite: 800/800 green)
 
 ### Changed
 - **Scoped query invalidation**: governance mutations invalidate only `['governance']` instead of every query (avoids refetching expensive on-chain enumeration queries)
