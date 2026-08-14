@@ -15,13 +15,13 @@
 
   <p>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(20%20jobs)&logo=githubactions&logoColor=white" alt="CI — 20 jobs" />
+      <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(22%20jobs)&logo=githubactions&logoColor=white" alt="CI — 22 jobs" />
     </a>
     <a href="#-testing--quality">
       <img src="https://img.shields.io/badge/tests-970%20passed%20(806%20app%20%2B%2067%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="970 Tests Passing" />
     </a>
     <a href="#-testing--quality">
-      <img src="https://img.shields.io/badge/coverage-88.4%25%20lines-brightgreen.svg?logo=vitest" alt="88.4% Line Coverage" />
+      <img src="https://img.shields.io/badge/coverage-89.1%25%20lines-brightgreen.svg?logo=vitest" alt="89.1% Line Coverage" />
     </a>
     <a href="docs/AUDIT.md">
       <img src="https://img.shields.io/badge/audit-HIGH%2FMEDIUM%20fixed-brightgreen.svg" alt="HIGH/MEDIUM findings fixed" />
@@ -359,7 +359,7 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 |---|---|
 | **Contract ID** | `CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET` |
 | **Network** | Stellar Testnet (verified live via Soroban RPC) |
-| **WASM Hash** | `2114b304...` (matches current `main` build) |
+| **WASM Hash** | Deployed: `2114b304...` · Hardened `31d9aa78...` proposed (24h timelock, security fixes) |
 | **State** | Initialized, actively recording payments on-chain |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET) |
 
@@ -403,7 +403,7 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 | Detail | Value |
 |---|---|
 | **Contract ID** | `CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN` |
-| **WASM Hash** | `6ff35169...` (matches current `main` build) |
+| **WASM Hash** | Deployed: `6ff35169...` · Allow-list `6d02394b...` proposed (24h timelock) |
 | **Purpose** | Receives cross-contract payment events |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN) |
 
@@ -415,6 +415,8 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 | `get_event_count()` | Read | Total events emitted |
 | `get_owner()` | Read | Query emitter owner |
 | `pause()` / `unpause()` | Admin | Circuit breaker |
+| `set_allowed_source(source)` | Admin | Allow-list the orchestrator contract that may emit events (MEDIUM-3 fix) |
+| `get_allowed_source()` | Read | Query the allow-listed source (if set) |
 | `propose_upgrade(...)` / `execute_upgrade()` | Admin | Timelocked upgrades |
 
 ### 🔨 Building & Deploying
@@ -496,22 +498,22 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All app tests (800 cases across 32 suites)
+# All app tests (806 cases across 33 suites)
 npm test
 
-# Coverage report (86.2% statements / 81.7% branches / 91.5% functions / 88.4% lines)
+# Coverage report (87.0% statements / 82.3% branches / 92.1% functions / 89.1% lines)
 npm run coverage
 
-# E2E tests (97 cases across 8 Playwright specs)
+# E2E tests (97 cases across 7 Playwright specs)
 npx playwright test
 
 # Full CI pipeline
 npm run ci   # typecheck → lint → test → build
 ```
 
-### Unit Tests (Vitest) — 800 cases
+### Unit Tests (Vitest) — 806 cases
 
-All app tests live in `src/__tests__/` (32 files, 800 cases): auth & sessions, CSRF, API responses & branches, error codes, contract utilities & invocation, Stellar integration, transaction simulation, webhook URL guard, validation schemas, type guards, UI components, hooks, loading & error boundaries, and branch coverage suites.
+All app tests live in `src/__tests__/` (33 files, 806 cases): auth & sessions, CSRF, API responses & branches, error codes, contract utilities & invocation, Stellar integration, transaction simulation, webhook URL guard & delivery, validation schemas, type guards, UI components, hooks, loading & error boundaries, and branch coverage suites.
 
 ### E2E Tests (Playwright) — 97 cases
 
@@ -541,7 +543,7 @@ Each type renders with distinct colors (yellow/red/orange) and actionable messag
 
 ## 🔄 CI/CD Pipeline
 
-Every push to `main` triggers **20 jobs** across six tracks:
+Every push to `main` triggers **22 jobs** across six tracks:
 
 ```
 ┌─ Frontend ─────────────────────────────────────────────────┐
@@ -571,7 +573,7 @@ Every push to `main` triggers **20 jobs** across six tracks:
 | Bundle Size | bundle-size check | Regression guard on JS payloads |
 | A11y | axe-core audit | WCAG accessibility scan |
 | E2E | Playwright | 97 end-to-end scenarios |
-| Smoke | curl (22 pages) | HTTP 200 check against live Vercel |
+| Smoke | curl (19 pages) | HTTP 200 check against live Vercel |
 
 ### Backend (6 jobs)
 
@@ -584,7 +586,7 @@ Every push to `main` triggers **20 jobs** across six tracks:
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
 | Audit | `npm audit` | Dependency vulnerability scan |
 
-### Infra, Docs, Security & Meta (5 jobs)
+### Infra, Docs, Security & Meta (7 jobs)
 
 | Job | Purpose |
 |---|---|
@@ -644,7 +646,7 @@ Every push to `main` triggers **20 jobs** across six tracks:
 | **Wallet** | [Freighter](https://freighter.app) · [xBull](https://xbull.app) · [Rabet](https://rabet.io) · [Albedo](https://albedo.link) · [Lobstr](https://lobstr.co) · [Ledger](https://ledger.com) | 6-wallet connector abstraction |
 | **Database** | [Prisma](https://prisma.io) + PostgreSQL (Neon) / SQLite | Type-safe ORM, provider switching |
 | **Testing** | [Vitest](https://vitest.dev) + React Testing Library + [Playwright](https://playwright.dev) | Unit, integration & E2E coverage |
-| **CI/CD** | [GitHub Actions](https://github.com/features/actions) | 20-job pipeline on push |
+| **CI/CD** | [GitHub Actions](https://github.com/features/actions) | 22-job pipeline on push |
 | **Hosting** | [Vercel](https://vercel.com) | Auto-deploy from `main`, edge network |
 
 ---
@@ -696,7 +698,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline (20 jobs) + 806 app tests + 67 contract tests + 97 e2e | **Done** |
+| ✅ CI/CD pipeline (22 jobs) + 806 app tests + 67 contract tests + 97 e2e | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Rabet, Lobstr, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
@@ -741,7 +743,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | 5 | **Fee Cap (10% max)** — no fee config exceeds 1000 bps | ⚠️ Model only |
 | 6 | **Multisig Threshold** — N-of-M enforcement before execution | ⚠️ Model only |
 | 7 | **Timelock 24h Delay** — exactly 86400 seconds enforced | ⚠️ Model only — not wired to admin fns |
-| 8 | **Spending Limit Expiry** — expired/inactive limits always reject | ⚠️ Model only — `check_spending` omits expiry |
+| 8 | **Spending Limit Expiry** — expired/inactive limits always reject | ⚠️ Model only — `check_spending` is a read-only check; expiry enforced in `atomic_spend` |
 
 **Run the (model) proofs:**
 ```bash
@@ -764,7 +766,7 @@ report lives in **[docs/AUDIT.md](docs/AUDIT.md)**.
 |---|---|---|
 | Critical | 0 | — |
 | High | 2 | ~~Refund path bypasses `LOCKED_BALANCE`~~ ✅ fixed (validation + owner-auth refunds); "10/10 formally verified" claim ~~not substantiated~~ ✅ removed, `docs/VERIFICATION.md` now documents model-only status |
-| Medium | 6 | Unauthenticated `check_spending` mutation · unbounded enumeration · unallowlisted emitter · incomplete reentrancy coverage · `emergency_pause_all` ignores cross-contract result · SSRF bypass via webhook redirects |
+| Medium | 6 | ~~Unauthenticated `check_spending` mutation · unbounded enumeration · unallowlisted emitter · incomplete reentrancy coverage · `emergency_pause_all` ignores cross-contract result · SSRF bypass via webhook redirects~~ ✅ **all fixed** in code (pending on-chain upgrade) |
 | Low | 11 | Vesting overflow, missing pause guards on refunds, webhook HMAC body mismatch, plain SHA-256 API keys, error-code inflation, misc |
 | Informational | 5 | Admin actions not timelocked on-chain, permissionless executors, untrusted on-chain records |
 
@@ -781,7 +783,7 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 ### Smart Contract Invariants
 
 - **Fund-safety invariant** — `emergency_withdraw` is capped at `contract_balance − LOCKED_BALANCE`, so even the contract **owner cannot drain** funds locked in active escrows, streams, or governance deposits
-- **Reentrancy guard** — `REENTRANCY_LOCK` blocks cross-contract reentrancy on `emergency_withdraw` / `emergency_pause_all` / `emergency_unpause_all`
+- **Reentrancy guard** — `REENTRANCY_LOCK` blocks cross-contract reentrancy on **every** token-transfer path: escrow create/release/claim, stream create/claim/cancel, governance deposit/refund, refund processing, and the emergency pause/unpause/withdraw functions
 - **Pause circuit breaker** — `require_not_paused()` guards every state-changing function
 - **Timelocked upgrades & ownership** — 24h delay on WASM upgrades and two-step ownership transfer (other admin actions are *not* timelocked on-chain — see [docs/AUDIT.md](docs/AUDIT.md))
 - **1 address = 1 vote** — governance votes are tracked per-address on-chain; double-voting returns `AlreadyVoted`
