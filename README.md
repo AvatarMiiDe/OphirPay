@@ -15,13 +15,16 @@
 
   <p>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
-      <img src="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
-    </a>
-    <a href="src/__tests__/">
-      <img src="https://img.shields.io/badge/tests-864%20passed%20(800%20app%20%2B%2064%20contracts)-brightgreen.svg" alt="864 Tests Passing" />
+      <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(20%20jobs)&logo=githubactions&logoColor=white" alt="CI — 20 jobs" />
     </a>
     <a href="#-testing--quality">
-      <img src="https://img.shields.io/badge/coverage-88%25-brightgreen.svg?logo=vitest" alt="88% Coverage" />
+      <img src="https://img.shields.io/badge/tests-961%20passed%20(800%20app%20%2B%2064%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="961 Tests Passing" />
+    </a>
+    <a href="#-testing--quality">
+      <img src="https://img.shields.io/badge/coverage-88.4%25%20lines-brightgreen.svg?logo=vitest" alt="88.4% Line Coverage" />
+    </a>
+    <a href="e2e/">
+      <img src="https://img.shields.io/badge/e2e-Playwright%2097%20cases-blue.svg?logo=playwright" alt="97 E2E Tests" />
     </a>
     <a href="docs/GAS.md">
       <img src="https://img.shields.io/badge/gas-optimized-brightgreen.svg?logo=stellar" alt="Gas Optimized" />
@@ -30,10 +33,10 @@
       <img src="https://img.shields.io/badge/audit-manual%20review-orange.svg" alt="Manual security review completed" />
     </a>
     <a href="https://ophirpay.vercel.app">
-      <img src="https://img.shields.io/badge/vercel-deployed-black.svg?logo=vercel" alt="Vercel Deployed" />
+      <img src="https://img.shields.io/badge/vercel-live-black.svg?logo=vercel" alt="Live on Vercel" />
     </a>
     <a href="./public/demo.mp4">
-      <img src="https://img.shields.io/badge/demo-2%20min-8A2BE2.svg?logo=video" alt="2-Minute Demo" />
+      <img src="https://img.shields.io/badge/demo-2.5%20min-8A2BE2.svg?logo=video" alt="2.5-Minute Demo" />
     </a>
     <a href="https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
@@ -64,7 +67,11 @@
 - [🛠 Tech Stack](#-tech-stack)
 - [🤝 Contributing](#-contributing)
 - [🗺 Roadmap](#-roadmap)
+- [🔬 Formal Verification](#-formal-verification)
+- [🛡️ Security Audit](#️-security-audit)
 - [🔒 Security](#-security)
+- [⚡ Performance & Gas](#-performance--gas)
+- [🌐 Community](#-community)
 - [📄 License & Credits](#-license--credits)
 
 ---
@@ -85,7 +92,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Multi-wallet support** (6 wallets: Freighter, xBull, Rabet, Albedo, Lobstr, Ledger) | ✅ | ❌ |
 | **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
 | **PWA with offline support** | ✅ | ❌ |
-| **Classified error handling** (3 types) | ✅ | ❌ |
+| **Classified error handling** (3 types, 300 contract variants) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
 | **PostgreSQL + SQLite** (provider switching) | ✅ | ⚠️ |
 | **Multisig approvals** (N-of-M signers) | ✅ | ❌ |
@@ -103,7 +110,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 864 tests (800 app + 64 contracts)** | ✅ | ⚠️ |
+| **Full CI/CD + 961 tests (800 app + 64 contracts + 97 e2e)** | ✅ | ⚠️ |
 
 ---
 
@@ -113,7 +120,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 ### 🔗 **[ophirpay.vercel.app](https://ophirpay.vercel.app)**
 
-*Deployed on Vercel — automatic builds from `main` on every push.*
+*Deployed on Vercel — automatic builds from `main` on every push. PostgreSQL (Neon), Soroban testnet contracts, and a live wallet flow are all wired in.*
 
 ### 🎥 Demo Video (2.5 min)
 
@@ -159,10 +166,10 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  │  ┌──────────────────┐    cross-contract   ┌─────────┐ │  │
 │  │  │ OphirPayContract │ ───────────────────→ │ Emitter │ │  │
 │  │  │  · record_payment│    invoke_contract   │ Contract│ │  │
-│  │  │  · create_escrow │                      │· events │ │  │
+│  │  │  · propose_payment│                     │· events │ │  │
 │  │  │  · grant_role    │                      └────┬────┘ │  │
 │  │  │  · set_fee_config│                           │      │  │
-│  │  │  · 50+ functions │                           │      │  │
+│  │  │  · 60+ functions │                           │      │  │
 │  │  └──────────────────┘                          │      │  │
 │  └────────────────────────────────────────────────┼──────┘  │
 │                                                   │         │
@@ -174,9 +181,9 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │                  Data Layer                           │   │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │   │
-│  │  │  Prisma  │  │  SQLite  │  │  API Routes      │   │   │
-│  │  │  (ORM)   │  │  (local) │  │  /api/batches    │   │   │
-│  │  │          │  │          │  │  /api/health     │   │   │
+│  │  │  Prisma  │  │PostgreSQL│  │  API Routes      │   │   │
+│  │  │  (ORM)   │  │ (Neon)   │  │  /api/batches    │   │   │
+│  │  │          │  │SQLite dev│  │  /api/health     │   │   │
 │  │  └──────────┘  └──────────┘  └──────────────────┘   │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -246,7 +253,7 @@ NEXT_PUBLIC_STELLAR_RPC_URL="https://soroban-testnet.stellar.org:443"
 NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 
-# Soroban Contracts (deployed on testnet)
+# Soroban Contracts (deployed on testnet — verified live)
 NEXT_PUBLIC_CONTRACT_ID="CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA"
 NEXT_PUBLIC_EMITTER_CONTRACT_ID="CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX"
 
@@ -265,7 +272,7 @@ OphirPay supports multiple Stellar wallets through a unified connector abstracti
 
 | Feature | Implementation |
 |---|---|
-| **Multi-wallet** | Connector interface for Freighter, Albedo, xBull, Ledger |
+| **Multi-wallet** | Connector interface for Freighter, Albedo, xBull, Rabet, Lobstr, Ledger |
 | **Connect** | Wallet selector modal → `connector.connect()` |
 | **Disconnect** | Full state reset + connector-specific cleanup |
 | **Session persistence** | Auto-detects existing connections on page load |
@@ -332,7 +339,7 @@ OphirPay deploys **two Soroban contracts** that communicate via cross-contract i
 ### 🔗 Inter-Contract Flow
 
 ```
-OphirPayContract.create_payment(payer, payee, amount, tx_hash)
+OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
   │
   ├─ 1. Increments payment counter
   ├─ 2. Stores Payment struct in persistent storage
@@ -348,40 +355,52 @@ OphirPayContract.create_payment(payer, payee, amount, tx_hash)
 | Detail | Value |
 |---|---|
 | **Contract ID** | `CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA` |
-| **Network** | Stellar Testnet |
-| **WASM Hash** | `44ac9d15...` |
-| **Deploy TX** | Verified on-chain |
-| **Cross-Contract TX** | Verified on-chain |
+| **Network** | Stellar Testnet (verified live via Soroban RPC) |
+| **WASM Hash** | `2114b304...` (matches current `main` build) |
+| **State** | Initialized, actively recording payments on-chain |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA) |
 
 | Function | Access | Description |
 |---|---|---|
-| `init(owner, emitter)` | Admin | Initialize contract with owner & emitter address |
-| `create_payment(...)` | Public | Store payment + cross-contract emit event |
-| `create_escrow(...)` | Public | Create time-locked escrow with SAC token transfer |
-| `create_stream(...)` | Public | Create recurring payment stream |
-| `create_batch(...)` | Public | Record multiple payments in one transaction |
+| `init(owner)` | Admin | Initialize contract with owner address |
+| `record_payment(payer, payee, amount, asset, tx_hash, metadata)` | Public | Store payment + cross-contract emit event |
+| `cancel_payment(id)` | Public | Cancel a recorded payment |
+| `propose_payment(...)` | Multisig | Propose a multisig payment request |
 | `approve_payment(id)` | Multisig | Approve a multisig payment request |
 | `execute_approved_payment(id)` | Multisig | Execute an approved payment |
-| `grant_role(grantee, role)` | Admin | Grant RBAC role (Admin/Operator/Auditor) |
-| `revoke_role(grantee)` | Admin | Revoke a role |
+| `set_multisig_config(...)` | Admin | Configure N-of-M thresholds (versioned) |
 | `set_fee_config(...)` | Admin | Configure per-operation fee basis points |
+| `set_fee_collector(...)` | Admin | Designate fee recipient |
 | `propose_timelocked_action(...)` | Admin | Propose admin action with mandatory delay |
 | `execute_timelocked_action(id)` | Admin | Execute after delay expires |
-| `create_proposal(...)` | Governance | Create DAO governance proposal |
-| `vote_on_proposal(id, support)` | Governance | Vote YES/NO on a proposal |
-| `request_refund(...)` | Public | Request refund with 6 reason codes |
+| `cancel_timelocked_action(id)` | Admin | Cancel a pending action |
+| `configure_governance(...)` | Admin | Set governance parameters |
+| `create_proposal(...)` | Governance | Create DAO governance proposal (deposit required) |
+| `vote_on_proposal(id, support)` | Governance | Vote YES/NO on a proposal (1 address = 1 vote) |
+| `execute_proposal(id)` | Governance | Execute a passed proposal |
+| `set_spending_limit(...)` | Admin | Set per-user spending limits |
+| `check_spending(user, amount)` | Read | Check limit + escalation tiers |
+| `atomic_spend(...)` | Operator | Spend with limit enforcement |
+| `grant_role(grantee, role)` | Admin | Grant RBAC role (Admin/Operator/Auditor) |
+| `revoke_role(grantee)` | Admin | Revoke a role |
+| `set_emitter(emitter)` | Admin | Point to the event emitter contract |
 | `emergency_pause_all()` | Admin | Atomic cross-contract pause |
-| `get_payment(id)` | Read | Retrieve payment by ID |
-| `get_stats()` | Read | All 11 counters (gas-optimized) |
-| `get_fee_config()` | Read | Current fee configuration |
-| `calculate_fee(...)` | Read | Pure computation, 0 storage |
+| `emergency_unpause_all()` | Admin | Resume operations |
+| `emergency_withdraw(...)` | Admin | Withdraw capped at `balance − LOCKED_BALANCE` |
+| `propose_upgrade(...)` / `execute_upgrade()` | Admin | 24h-timelocked WASM upgrades |
+| `transfer_ownership(...)` / `accept_ownership()` | Admin | Two-step ownership rotation (24h timelock) |
+| `get_payment(id)` / `get_payments_range(...)` | Read | Retrieve payments |
+| `get_payment_count()` | Read | Total payments recorded |
+| `get_stats()` | Read | All contract counters (gas-optimized) |
+| `get_fee_config()` / `get_fee_config_history()` | Read | Fee configuration + immutable history |
+| `get_audit_log_count()` / `get_audit_entry(id)` | Read | Immutable on-chain audit trail |
 
 ### 📡 Emitter Contract — `PaymentEventEmitter`
 
 | Detail | Value |
 |---|---|
 | **Contract ID** | `CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX` |
+| **WASM Hash** | `6ff35169...` (matches current `main` build) |
 | **Purpose** | Receives cross-contract payment events |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX) |
 
@@ -392,6 +411,8 @@ OphirPayContract.create_payment(payer, payee, amount, tx_hash)
 | `get_event(event_id)` | Read | Retrieve event by ID |
 | `get_event_count()` | Read | Total events emitted |
 | `get_owner()` | Read | Query emitter owner |
+| `pause()` / `unpause()` | Admin | Circuit breaker |
+| `propose_upgrade(...)` / `execute_upgrade()` | Admin | Timelocked upgrades |
 
 ### 🔨 Building & Deploying
 
@@ -429,11 +450,15 @@ stellar contract deploy \
   --rpc-url "https://soroban-testnet.stellar.org:443" \
   --network-passphrase "Test SDF Network ; September 2015"
 
-# 4. Init main contract with emitter
+# 4. Init main contract + point at emitter
 stellar contract invoke --id <OPHIRPAY_ID> --source-account <SECRET_KEY> \
   --rpc-url "https://soroban-testnet.stellar.org:443" \
   --network-passphrase "Test SDF Network ; September 2015" \
-  -- init --owner <OWNER_PUBLIC_KEY> --emitter <EMITTER_ID>
+  -- init --owner <OWNER_PUBLIC_KEY>
+stellar contract invoke --id <OPHIRPAY_ID> --source-account <SECRET_KEY> \
+  --rpc-url "https://soroban-testnet.stellar.org:443" \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- set_emitter --emitter <EMITTER_ID>
 ```
 </details>
 
@@ -468,53 +493,34 @@ cd contracts/emitter && cargo test
 ## 📊 Testing & Quality
 
 ```bash
-# All tests (864 total: 800 app + 64 contracts)
+# All app tests (800 cases across 32 suites)
 npm test
 
-# Watch mode
-npm run test:watch
+# Coverage report (86.2% statements / 81.7% branches / 91.5% functions / 88.4% lines)
+npm run coverage
+
+# E2E tests (97 cases across 8 Playwright specs)
+npx playwright test
 
 # Full CI pipeline
 npm run ci   # typecheck → lint → test → build
 ```
 
-All app tests live in `src/__tests__/` (32 files, 800 cases):
+### Unit Tests (Vitest) — 800 cases
 
-| File | Test cases |
+All app tests live in `src/__tests__/` (32 files, 800 cases): auth & sessions, CSRF, API responses & branches, error codes, contract utilities & invocation, Stellar integration, transaction simulation, webhook URL guard, validation schemas, type guards, UI components, hooks, loading & error boundaries, and branch coverage suites.
+
+### E2E Tests (Playwright) — 97 cases
+
+| Spec | Focus |
 |---|---|
-| `api-response.test.ts` | 19 |
-| `api-response-branches.test.ts` | 29 |
-| `auth.test.ts` | 26 |
-| `auth-session.test.ts` | 13 |
-| `challenge.test.ts` | 11 |
-| `contract-utils.test.ts` | 8 |
-| `contracts.test.ts` | 6 |
-| `csrf.test.ts` | 9 |
-| `error-codes.test.ts` | 21 |
-| `integration.test.ts` | 21 |
-| `lib-coverage.test.ts` | 74 |
-| `lib-coverage-2.test.ts` | 45 |
-| `lib-coverage-3.test.ts` | 24 |
-| `lib-coverage-4.test.ts` | 31 |
-| `lib-coverage-5.test.ts` | 27 |
-| `lib-coverage-6.test.ts` | 167 |
-| `request-id.test.ts` | 7 |
-| `stellar.test.ts` | 5 |
-| `transaction-simulator.test.ts` | 5 |
-| `type-guards.test.ts` | 13 |
-| `utils.test.ts` | 12 |
-| `utils-extended.test.ts` | 20 |
-| `validation.test.ts` | 26 |
-| `validation-schemas.test.ts` | 5 |
-| `webhook-url-guard.test.ts` | 9 |
-| `branch-coverage.test.tsx` | 66 |
-| `error-boundary.test.tsx` | 4 |
-| `lib-coverage-6-hooks.test.tsx` | 22 |
-| `loading-boundary.test.tsx` | 4 |
-| `ui-components.test.tsx` | 17 |
-| `ui-components-2.test.tsx` | 25 |
-| `ui-hooks-coverage.test.tsx` | 29 |
-| **Total** | **800** |
+| `critical-flows.spec.ts` | Core user journeys (connect → send → record) |
+| `dashboard.spec.ts` | Dashboard rendering + wallet state |
+| `api.spec.ts` | API route contracts & error shapes |
+| `contracts.spec.ts` | Contract page + on-chain status |
+| `error-codes.spec.ts` | Error catalog & classification |
+| `multisig.spec.ts` | Multisig propose/approve flows |
+| `governance.spec.ts` | Proposal lifecycle |
 
 ### Error Classification System
 
@@ -526,50 +532,66 @@ All contract failures route through a 3-tier classifier:
 | `CONTRACT` | 📜 | HostError, panics, SCError, bad args |
 | `USER_REJECTION` | 🚫 | User declined Freighter prompt |
 
-Each type renders with distinct colors (yellow/red/orange) and actionable messaging in the UI.
+Each type renders with distinct colors (yellow/red/orange) and actionable messaging in the UI — backed by a ~300-variant typed error catalog mirrored between the Rust contract and the TypeScript API layer.
 
 ---
 
 ## 🔄 CI/CD Pipeline
 
-Every push to `main` triggers:
+Every push to `main` triggers **20 jobs** across six tracks:
 
 ```
-┌─ Frontend ──────────────────────────────────────────┐  ┌─ Backend ───────────────┐
-│ Lint → TypeCheck → Unit Tests → Coverage → Build → Smoke │  │ Contracts → Prisma → Audit │
-└─────────────────────────────────────────────────────┘  └──────────────────────────┘
-                              ┌─ Infra ──┐
-                              │ K8s → Helm │
-                              └───────────┘
+┌─ Frontend ─────────────────────────────────────────────────┐
+│ Lint → TypeCheck → Unit Tests → Coverage → Build → Bundle   │
+│ Size → A11y (axe-core) → E2E (Playwright) → Smoke (curl)    │
+└─────────────────────────────────────────────────────────────┘
+┌─ Backend ──────────────────────────────────────────────────┐
+│ Contracts (WASM + Tests) → Clippy → rustfmt → Gas Report →  │
+│ Prisma (Validate + DB) → npm Audit                          │
+└─────────────────────────────────────────────────────────────┘
+┌─ Infra · Docs · Security · Meta ───────────────────────────┐
+│ Docker Build → K8s (kubeconform) → Helm Lint → OpenAPI      │
+│ Validate → Spell Check (typos) → Secrets (Gitleaks) →       │
+│ PR Labeler                                                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Frontend (6 jobs)
+### Frontend (9 jobs)
 
 | Job | Command | Purpose |
 |---|---|---|
 | Lint | `npx eslint . --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
 | Unit Tests | `vitest run --reporter=verbose` | 800 app tests across 32 suites |
-| Coverage | `vitest run --coverage` | v8 coverage report + CI artifact |
+| Coverage | `vitest run --coverage` | v8 coverage report + thresholds |
 | Build | `next build` | Production Next.js build verification |
-| Smoke | curl (19 pages) | HTTP 200 check against live Vercel — ~3s |
+| Bundle Size | bundle-size check | Regression guard on JS payloads |
+| A11y | axe-core audit | WCAG accessibility scan |
+| E2E | Playwright | 97 end-to-end scenarios |
+| Smoke | curl (22 pages) | HTTP 200 check against live Vercel |
 
-### Backend (3 jobs)
+### Backend (6 jobs)
 
 | Job | Command | Purpose |
 |---|---|---|
 | Contracts | `cargo build --target wasm32v1-none` | Both Soroban contracts to WASM |
+| Clippy | `cargo clippy -- -D warnings` | Rust lint, zero warnings |
+| Format | `cargo fmt --check` | rustfmt conformance |
+| Gas Report | `cargo build` + estimate | Per-function gas report artifact |
 | Prisma | `prisma validate` + `prisma db push` | Schema integrity + runtime DB test |
 | Audit | `npm audit` | Dependency vulnerability scan |
 
-### Infra + Meta (3 jobs)
+### Infra, Docs, Security & Meta (5 jobs)
 
-| Job | Command | Purpose |
-|---|---|---|
-| K8s | `kubeconform -strict` | Kubernetes manifest validation |
-| Helm | `helm lint --strict` | Chart validation + template render |
-| Scorecard | OpenSSF (weekly) | Security best-practices analysis |
-| PR Labeler | Auto-label PRs | Adds labels by changed paths |
+| Job | Purpose |
+|---|---|
+| Docker Build | Container image build + push |
+| K8s | `kubeconform -strict` manifest validation |
+| Helm | `helm lint --strict` chart validation |
+| OpenAPI | API spec validation |
+| Spell Check | `typos` docs check |
+| Gitleaks | Secrets scanning on every push |
+| PR Labeler | Auto-labels PRs by changed paths |
 
 **→ [View latest CI run](https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml)**
 
@@ -585,28 +607,23 @@ Every push to `main` triggers:
 
 *15 slides: Dashboard → Send → Payments → Escrows → Batches → Recurring → Multisig → Governance → Contracts → RBAC → Fee Config → Timelock → Events → Analytics → Mobile*
 
-> The demo video above is captured from the live Vercel deployment and embedded in the README. For static screenshots, see the [public/screenshots](./public/screenshots/) directory.
+> Screenshots below are captured live from the production deployment on Vercel, with a connected wallet.
 
-### Reproducing the demo assets
+| Dashboard | Send Payment |
+|---|---|
+| ![Dashboard](./public/screenshots/dashboard.png) | ![Send Payment](./public/screenshots/send-payment.png) |
 
-All demo assets are generated from checked-in scripts — no hand-edited media:
+| Payments | Contracts |
+|---|---|
+| ![Payments](./public/screenshots/payments.png) | ![Contracts](./public/screenshots/contracts.png) |
 
-```bash
-# 1. Seed the database and start the app (demo mode)
-./scripts/demo-seed.sh
+| Analytics | Multisig |
+|---|---|
+| ![Analytics](./public/screenshots/analytics.png) | ![Multisig](./public/screenshots/multisig.png) |
 
-# 2. Static UI screenshots (from scripts/mockups/*.html) → public/screenshots/
-node scripts/capture-mockups.js
-
-# 3. Demo video (captures the running app; compile step needs FFmpeg)
-node scripts/create-demo-video.js   # FFMPEG_PATH=/path/to/ffmpeg node ...
-```
-
-The video script captures each slide from a running deployment (set `BASE_URL`
-in the script to point at your local dev server instead of the live site) and
-compiles frames with FFmpeg. FFmpeg is resolved from `FFMPEG_PATH`, a few
-known `/tmp` static-download locations, or `PATH`. `public/demo.mp4` and
-`public/screenshots/` are the outputs referenced by this README.
+| Governance | Mobile Responsive |
+|---|---|
+| ![Governance](./public/screenshots/governance.png) | ![Mobile](./public/screenshots/mobile-responsive.png) |
 
 </div>
 
@@ -620,11 +637,11 @@ known `/tmp` static-download locations, or `PATH`. `public/demo.mp4` and
 | **Language** | [TypeScript](https://www.typescriptlang.org) | Strict mode, full type safety |
 | **Styling** | [Tailwind CSS v4](https://tailwindcss.com) | Utility-first, dark mode, custom theme |
 | **Blockchain** | [Stellar SDK v13](https://stellar.org) + [Soroban](https://soroban.stellar.org) | Horizon, Soroban RPC, TX building |
-| **Contracts** | [Rust](https://www.rust-lang.org) + `soroban-sdk` | WASM compilation, cross-contract invocation |
+| **Contracts** | [Rust](https://www.rust-lang.org) + `soroban-sdk` 27 | WASM compilation, cross-contract invocation |
 | **Wallet** | [Freighter](https://freighter.app) · [xBull](https://xbull.app) · [Rabet](https://rabet.io) · [Albedo](https://albedo.link) · [Lobstr](https://lobstr.co) · [Ledger](https://ledger.com) | 6-wallet connector abstraction |
-| **Database** | [Prisma](https://prisma.io) + SQLite / PostgreSQL | Type-safe ORM, provider switching |
-| **Testing** | [Vitest](https://vitest.dev) + React Testing Library | Fast, Vite-native test runner |
-| **CI/CD** | [GitHub Actions](https://github.com/features/actions) | Build, lint, test, typecheck on push |
+| **Database** | [Prisma](https://prisma.io) + PostgreSQL (Neon) / SQLite | Type-safe ORM, provider switching |
+| **Testing** | [Vitest](https://vitest.dev) + React Testing Library + [Playwright](https://playwright.dev) | Unit, integration & E2E coverage |
+| **CI/CD** | [GitHub Actions](https://github.com/features/actions) | 20-job pipeline on push |
 | **Hosting** | [Vercel](https://vercel.com) | Auto-deploy from `main`, edge network |
 
 ---
@@ -650,6 +667,7 @@ npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
 npm run ci           # Full pipeline
 npm run db:studio    # Prisma Studio GUI
+npx playwright test  # E2E suite
 ```
 
 ### Commit Convention
@@ -675,8 +693,8 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline + 800 app tests + 64 contract tests | **Done** |
-| ✅ Multi-wallet support (Freighter, Albedo, xBull) | **Done** |
+| ✅ CI/CD pipeline (20 jobs) + 800 app tests + 64 contract tests + 97 e2e | **Done** |
+| ✅ Multi-wallet support (Freighter, Albedo, xBull, Rabet, Lobstr, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
 | ✅ Webhook delivery (HMAC signed, retries) | **Done** |
@@ -695,9 +713,10 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract orchestration (atomic pause_all) | **Done** |
 | ✅ Policy versioning (immutable config history, capped at 100) | **Done** |
 | ✅ Two-step admin rotation (24h timelock) | **Done** |
-| ✅ soroban-sdk 27 upgrade — 58 contract unit tests green in CI (was 0) | **Done** |
+| ✅ soroban-sdk 27 upgrade — 58 contract unit tests green in CI | **Done** |
 | ✅ Gas optimization (92% storage savings, avg 90K stroops) | **Done** |
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
+| ✅ Frontend/contract interface alignment (`record_payment` + Horizon verification) | **Done** |
 | ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |
 | 🔜 Mainnet deployment | Planned |
 
@@ -780,7 +799,7 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 - **Error boundaries** — React error boundaries prevent full-page crashes
 - **Secrets scanning** — Gitleaks on every PR; dependency auditing via `npm audit` in CI
 
-> ⚠️ **Production note**: OphirPay uses SQLite locally. For production, migrate to PostgreSQL and set `AUTH_SECRET` (32+ bytes), `REDIS_URL` for distributed rate limiting, and the documented CORS origins. See `docs/deployment-mainnet.md` for the full checklist.
+> ⚠️ **Production note**: OphirPay uses SQLite locally. The live deployment runs PostgreSQL (Neon) with `AUTH_SECRET`, rate limiting, and the documented CORS origins. See `docs/deployment-mainnet.md` for the full checklist.
 
 ---
 
@@ -825,7 +844,7 @@ Open source under the **[MIT License](LICENSE)** — free for personal, commerci
 - [Next.js](https://nextjs.org) — The React framework for production
 - [Tailwind CSS](https://tailwindcss.com) — Rapidly build modern websites
 - [Prisma](https://prisma.io) — Next-generation ORM for Node.js
-- [Vitest](https://vitest.dev) — Blazing fast unit test framework
+- [Vitest](https://vitest.dev) · [Playwright](https://playwright.dev) — Unit & E2E test frameworks
 - [Freighter](https://freighter.app) — Stellar wallet browser extension
 
 ### Acknowledgments
