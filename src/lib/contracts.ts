@@ -236,10 +236,8 @@ export async function submitContractInvocation(signedXdr: string): Promise<{
     // deserialized by the SDK (see "Bad union switch" handling below).
     const txHash = tx.hash().toString("hex");
 
-    let sendHash: string | undefined;
     try {
-      const sendResponse = await server.sendTransaction(tx);
-      sendHash = sendResponse.hash;
+      await server.sendTransaction(tx);
     } catch (err) {
       // SDK v13 cannot deserialize protocol-27 RPC responses ("Bad union
       // switch"). This is a parsing limitation, not a tx failure — the

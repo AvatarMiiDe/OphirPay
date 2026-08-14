@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import crypto from "crypto";
 import {
   signWebhookPayload,
   buildSignedPayload,
@@ -35,7 +36,7 @@ describe("buildSignedPayload", () => {
     const received = JSON.parse(body);
     const stripped = { ...received, signature: "" };
     const canonical = JSON.stringify(stripped);
-    const expected = require("crypto")
+    const expected = crypto
       .createHmac("sha256", SECRET)
       .update(canonical)
       .digest("hex");
@@ -46,7 +47,7 @@ describe("buildSignedPayload", () => {
   it("signs over the body with the signature field emptied (not the raw payload)", () => {
     const { body, signature } = buildSignedPayload(samplePayload, SECRET);
     const canonical = JSON.stringify({ ...samplePayload, signature: "" });
-    const expected = require("crypto")
+    const expected = crypto
       .createHmac("sha256", SECRET)
       .update(canonical)
       .digest("hex");
