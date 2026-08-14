@@ -58,6 +58,11 @@ describe("Badge", () => {
     const { container } = render(<Badge>INFO</Badge>);
     expect(container.querySelector(".bg-gray-400")).toBeNull();
   });
+
+  it("uses WCAG AA-contrast text colors", () => {
+    render(<Badge variant="warning">PENDING</Badge>);
+    expect(screen.getByText("PENDING").className).toContain("text-yellow-800");
+  });
 });
 
 describe("StatusBadge", () => {

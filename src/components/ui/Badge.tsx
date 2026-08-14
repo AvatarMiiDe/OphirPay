@@ -14,17 +14,20 @@ interface BadgeProps {
   className?: string;
 }
 
+// Light-mode text uses the -800 shade so the badge text meets WCAG AA
+// (≥4.5:1 contrast) against the -100 tinted backgrounds. The previous -700
+// shades fell below 4.5:1 for several variants (notably warning/green).
 const variantClasses: Record<BadgeVariant, string> = {
   default:
-    "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300",
+    "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300",
   success:
-    "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+    "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400",
   warning:
-    "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
-  danger: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
-  info: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+    "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400",
+  danger: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400",
+  info: "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400",
   pending:
-    "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400",
+    "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400",
 };
 
 const dotClasses: Record<BadgeVariant, string> = {

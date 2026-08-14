@@ -68,7 +68,7 @@ export function getStatusColor(
     case "PAID":
       return {
         bg: "bg-green-50 dark:bg-green-950/30",
-        text: "text-green-700 dark:text-green-400",
+        text: "text-green-800 dark:text-green-400",
         dot: "bg-green-500",
       };
     case "PENDING":
@@ -76,7 +76,7 @@ export function getStatusColor(
     case "CREATED":
       return {
         bg: "bg-blue-50 dark:bg-blue-950/30",
-        text: "text-blue-700 dark:text-blue-400",
+        text: "text-blue-800 dark:text-blue-400",
         dot: "bg-blue-500",
       };
     case "FAILED":
@@ -84,13 +84,13 @@ export function getStatusColor(
     case "EXPIRED":
       return {
         bg: "bg-red-50 dark:bg-red-950/30",
-        text: "text-red-700 dark:text-red-400",
+        text: "text-red-800 dark:text-red-400",
         dot: "bg-red-500",
       };
     default:
       return {
         bg: "bg-gray-50 dark:bg-gray-800",
-        text: "text-gray-700 dark:text-gray-400",
+        text: "text-gray-800 dark:text-gray-400",
         dot: "bg-gray-500",
       };
   }
