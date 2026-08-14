@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { shortenAddress, formatAmount } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { WalletSelector } from "@/components/WalletSelector";
 import { WALLET_REGISTRY, type WalletId } from "@/lib/wallets";
 
@@ -123,28 +124,30 @@ export function WalletButton() {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <Button
-        onClick={() => setShowSelector(true)}
-        loading={isConnecting}
-        leftIcon={
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
-            />
-          </svg>
-        }
-      >
-        {isConnecting ? "Connecting..." : "Connect Wallet"}
-      </Button>
+      <Tooltip content="Install Freighter wallet extension" position="bottom">
+        <Button
+          onClick={() => setShowSelector(true)}
+          loading={isConnecting}
+          leftIcon={
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
+              />
+            </svg>
+          }
+        >
+          {isConnecting ? "Connecting..." : "Connect Wallet"}
+        </Button>
+      </Tooltip>
       {error && !showSelector && (
         <p className="text-xs text-red-500 dark:text-red-400 max-w-[200px] text-right">
           {error}
