@@ -1,11 +1,19 @@
 # OphirPay Formal Verification
 
-This document describes how to run formal verification against the OphirPay smart
-contracts using [Kani Rust Verifier](https://model-checking.github.io/kani/).
+> ⚠️ **Honest status (2026-08-14):** the Kani harnesses in `contracts/ophirpay/spec/`
+> verify **hand-written models** that share no code with the deployed `OphirPayContract`.
+> They are not run in CI, and several are tautological. The table below documents
+> *modeled intent* — it is **not** proof of the deployed contract, and OphirPay must
+> **not** be presented as "formally verified" until real harnesses against the contract
+> (or an independent audit) exist. See [docs/AUDIT.md](AUDIT.md) HIGH-2.
 
-## Invariants Proved
+This document describes how to run the Kani harnesses and the roadmap toward real
+formal verification of the OphirPay smart contracts using
+[Kani Rust Verifier](https://model-checking.github.io/kani/).
 
-| # | Invariant | Property |
+## Modeled Invariants (not proofs of the deployed contract)
+
+| # | Invariant | Modeled Property |
 |---|-----------|----------|
 | **1** | **LOCKED_BALANCE Protection** | `emergency_withdraw(amount)` succeeds iff `amount ≤ contract_balance - LOCKED_BALANCE`. Prevents owner from draining user-deposited funds (escrows, streams, proposal deposits) even with a compromised owner key. |
 | **2** | **One Address = One Vote** | Each address can vote at most once per governance proposal. Prevents the self-reported-weight attack. |

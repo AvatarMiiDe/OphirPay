@@ -2502,8 +2502,13 @@ impl OphirPayContract {
 
     /// Get range of payments
     pub fn get_payments_range(env: Env, start_id: u64, end_id: u64) -> Vec<Payment> {
+        // Bounded enumeration (MEDIUM-2 audit fix): iterate the most recent
+        // tail first and cap at 100 entries, matching get_audit_log_range.
         let mut payments = Vec::new(&env);
-        for id in start_id..=end_id {
+        for id in (start_id..=end_id).rev() {
+            if payments.len() >= 100 {
+                break;
+            }
             if let Some(p) = env
                 .storage()
                 .persistent()
@@ -3462,7 +3467,10 @@ impl OphirPayContract {
             counts.push_back((*code, 0));
         }
 
-        for id in 1..=total {
+        // Bounded enumeration (MEDIUM-2 audit fix): cap the scan at the most
+        // recent 100 refunds so analytics never iterates the full catalog.
+        let start = total.saturating_sub(99); // last 100 (1-based ids)
+        for id in start..=total {
             if let Some(refund) = env
                 .storage()
                 .persistent()

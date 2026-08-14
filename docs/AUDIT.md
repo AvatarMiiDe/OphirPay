@@ -348,19 +348,19 @@ and re-run the IP/hostname check against the final resolved address after follow
 | Priority | Finding | Status (2026-08-14) | Effort |
 |---|---|---|---|
 | P0 | HIGH-1 refund path bypasses LOCKED_BALANCE | ✅ Fixed | Medium |
-| P0 | HIGH-2 correct or remove "formally verified" claims | ⏳ Open (README honesty note added; badge/claims still to remove) | Low |
+| P0 | HIGH-2 correct or remove "formally verified" claims | ✅ Fixed (README honesty note + badge removed; VERIFICATION.md retitled to "Modeled Invariants" with an explicit caveat) | Low |
 | P1 | MEDIUM-1 `check_spending` unauthenticated mutation | ✅ Fixed | Low |
-| P1 | MEDIUM-2 bound all enumeration | ⏳ Open (see note below) | Low |
+| P1 | MEDIUM-2 bound all enumeration | ✅ Fixed (`get_payments_range` + `get_reason_code_analytics` capped at 100, most-recent-first) | Low |
 | P1 | MEDIUM-3 emitter allow-list | ✅ Fixed (deploy + `set_allowed_source` pending) | Low |
 | P1 | MEDIUM-6 webhook SSRF redirect bypass | ✅ Fixed | Low |
 | P2 | MEDIUM-4 reentrancy on token-moving fns | ⏳ Open (partially mitigated by HIGH-1 fix) | Medium |
 | P2 | MEDIUM-5 cross-contract pause result | ✅ Fixed | Low |
 | P2 | LOW validation/hygiene items | Partially fixed (LOW-9 HMAC, LOW-11 counts) | Low |
 
-> **MEDIUM-2 note:** `get_reason_code_analytics` still iterates all refunds and
-> `get_payments_range` the full requested range. These are read-only enumeration endpoints
-> gated behind auth'd API routes; capping them requires a return-type/API change and is tracked
-> as follow-up work.
+> **MEDIUM-2 note:** `get_payments_range` now iterates the most-recent tail first and stops at
+> 100 entries (matching `get_audit_log_range`), and `get_reason_code_analytics` scans only the
+> most recent 100 refunds. `get_payments_by_batch` and `get_subscriber_hooks` iterate their
+> inherently-bounded inputs (batch payment IDs / subscriber hook IDs) and need no cap.
 
 ---
 

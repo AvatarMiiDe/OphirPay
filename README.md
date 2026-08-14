@@ -763,7 +763,7 @@ report lives in **[docs/AUDIT.md](docs/AUDIT.md)**.
 | Severity | Count | Headline |
 |---|---|---|
 | Critical | 0 | — |
-| High | 2 | Refund path bypasses `LOCKED_BALANCE` (owner can drain user funds); "10/10 formally verified" claim is not substantiated |
+| High | 2 | ~~Refund path bypasses `LOCKED_BALANCE`~~ ✅ fixed (validation + owner-auth refunds); "10/10 formally verified" claim ~~not substantiated~~ ✅ removed, `docs/VERIFICATION.md` now documents model-only status |
 | Medium | 6 | Unauthenticated `check_spending` mutation · unbounded enumeration · unallowlisted emitter · incomplete reentrancy coverage · `emergency_pause_all` ignores cross-contract result · SSRF bypass via webhook redirects |
 | Low | 11 | Vesting overflow, missing pause guards on refunds, webhook HMAC body mismatch, plain SHA-256 API keys, error-code inflation, misc |
 | Informational | 5 | Admin actions not timelocked on-chain, permissionless executors, untrusted on-chain records |
