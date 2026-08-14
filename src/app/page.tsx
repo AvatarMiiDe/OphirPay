@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
+import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { shortenAddress, formatAmount, timeAgo } from "@/lib/utils";
 import { getAccountExplorerUrl, XLM_STROOPS, STELLAR_NETWORK } from "@/lib/stellar";
@@ -111,9 +112,14 @@ export default function TreasuryDashboard() {
             <StatCard
               title="Your XLM Balance"
               value={
-                wallet.balanceLoading
-                  ? "Loading..."
-                  : formatAmount(totalBalance, "XLM")
+                wallet.balanceLoading ? (
+                  "Loading..."
+                ) : (
+                  <AnimatedNumber
+                    value={totalBalance}
+                    format={(n) => formatAmount(n, "XLM")}
+                  />
+                )
               }
               icon="⭐"
               trend={
@@ -135,19 +141,28 @@ export default function TreasuryDashboard() {
           )}
           <StatCard
             title="Total Payments"
-            value={totalCount.toString()}
+            value={
+              <AnimatedNumber
+                value={totalCount}
+                format={(n) => Math.round(n).toLocaleString()}
+              />
+            }
             icon="💳"
             trend="On-chain"
           />
           <StatCard
             title="Recorded Volume"
-            value={formatAmount(volume, "XLM")}
+            value={
+              <AnimatedNumber value={volume} format={(n) => formatAmount(n, "XLM")} />
+            }
             icon="📊"
             trend={`Last ${payments.length} records`}
           />
           <StatCard
             title="Avg Payment"
-            value={formatAmount(avgPayment, "XLM")}
+            value={
+              <AnimatedNumber value={avgPayment} format={(n) => formatAmount(n, "XLM")} />
+            }
             icon="✅"
             trend="On-chain"
           />
@@ -345,6 +360,59 @@ export default function TreasuryDashboard() {
 
 // ── Sub-components ─────────────────────────────────────────────
 
+// ── Count-up animation ────────────────────────────────────────
+
+/** Animate a number from 0 to `target` on mount and between changes. */
+function useCountUp(target: number, duration = 800): number {
+  const [value, setValue] = useState(0);
+  const fromRef = useRef(0);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    fromRef.current = target;
+    if (from === target) return;
+
+    // Skip the animation for users who prefer reduced motion.
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      setValue(target);
+      return;
+    }
+
+    let frame = 0;
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setValue(from + (target - from) * eased);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, duration]);
+
+  return value;
+}
+
+/** Renders a formatted number with a subtle count-up animation. */
+function AnimatedNumber({
+  value,
+  format,
+  duration = 800,
+}: {
+  value: number;
+  format: (n: number) => string;
+  duration?: number;
+}) {
+  const animated = useCountUp(value, duration);
+  return <>{format(animated)}</>;
+}
+
 function StatCard({
   title,
   value,
@@ -353,7 +421,7 @@ function StatCard({
   trendUp = false,
 }: {
   title: string;
-  value: string;
+  value: React.ReactNode;
   icon: string;
   trend?: string | React.ReactNode;
   trendUp?: boolean;
