@@ -3,13 +3,16 @@
 
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { EmptyState } from "@/components/EmptyState";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import type { Batch } from "@/types";
 
 export default function BatchesPage() {
+  const router = useRouter();
   const {
     data: rawBatches,
     isLoading: loading,
@@ -53,26 +56,17 @@ export default function BatchesPage() {
       {loading ? (
         <LoadingSkeleton variant="table" lines={5} />
       ) : batches.length === 0 ? (
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center">
-          <div className="h-16 w-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+        <EmptyState
+          icon={
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
             </svg>
-          </div>
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No Batch Payments Yet</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            Create batch payments for payroll, vendor payments, grant distributions, and more.
-          </p>
-          <Link
-            href="/batches/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Create Batch
-          </Link>
-        </div>
+          }
+          title="No Batch Payments Yet"
+          description="Create batch payments for payroll, vendor payments, grant distributions, and more."
+          actionLabel="Create Batch"
+          onAction={() => router.push("/batches/new")}
+        />
       ) : (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="overflow-x-auto">
