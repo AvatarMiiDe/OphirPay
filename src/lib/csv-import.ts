@@ -11,7 +11,12 @@ export async function parseRecipientsCsv(file: File): Promise<{
   recipients: BatchRecipient[];
   errors: { row: number; message: string }[];
 }> {
-  const text = await file.text();
+  const raw = await file.text();
+  // Strip UTF-8 BOM (U+FEFF) characters that Excel and similar tools prepend
+  // to the first cell, and normalize Windows CRLF line endings. BOM is never
+  // a legitimate character in this CSV format, so removing every occurrence
+  // is safe and keeps header/data rows parseable.
+  const text = raw.replace(/\uFEFF/g, "").replace(/\r\n/g, "\n").trim();
   const lines = text.split("\n").filter((l) => l.trim());
   const errors: { row: number; message: string }[] = [];
   const recipients: BatchRecipient[] = [];
