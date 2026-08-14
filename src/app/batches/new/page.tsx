@@ -13,6 +13,7 @@ import {
   NETWORK_PASSPHRASE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
 
@@ -285,9 +286,12 @@ export default function NewBatchPage() {
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6 flex items-center justify-between">
               <div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">TX Hash</span>
-                <p className="text-sm font-mono text-gray-900 dark:text-white mt-0.5">
-                  {shortenAddress(result.txHash, 10)}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-sm font-mono text-gray-900 dark:text-white">
+                    {shortenAddress(result.txHash, 10)}
+                  </p>
+                  <CopyButton value={result.txHash} label="Hash" />
+                </div>
               </div>
               <a
                 href={getStellarExplorerUrl(result.txHash)}
