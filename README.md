@@ -35,8 +35,8 @@
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-live-black.svg?logo=vercel" alt="Live on Vercel" />
     </a>
-    <a href="./public/demo.mp4">
-      <img src="https://img.shields.io/badge/pitch%20video-3%20min-8A2BE2.svg?logo=video" alt="3-Minute Pitch Video" />
+    <a href="https://www.loom.com/share/0d59c50285c04224a4857720b3640018">
+      <img src="https://img.shields.io/badge/pitch%20video-3%20min-8A2BE2.svg?logo=video" alt="3-Minute Pitch Video (Loom)" />
     </a>
     <a href="https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
@@ -130,6 +130,8 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 </video>
 
 *11 scenes: Problem → Live Dashboard → Vercel Deployment → Soroban Contracts → Send Payment → Real-Time Events → GitHub README → CI Pipeline → Multisig Security → Open Source → Outro*
+
+**▶️ Watch on [Loom](https://www.loom.com/share/0d59c50285c04224a4857720b3640018)** · [Watch on Vercel](https://ophirpay.vercel.app/demo.mp4)
 
 </div>
 
@@ -605,9 +607,11 @@ Every push to `main` triggers **22 jobs** across six tracks:
 
 <div align="center">
 
-### 🎥 [Watch the Pitch Video (3 min)](./public/demo.mp4)
+### 🎥 [Watch the Pitch Video (3 min)](https://www.loom.com/share/0d59c50285c04224a4857720b3640018)
 
 *11 scenes: Problem → Live Dashboard → Vercel Deployment → Soroban Contracts → Send Payment → Real-Time Events → GitHub README → CI Pipeline → Multisig Security → Open Source → Outro*
+
+**▶️ [Watch on Loom](https://www.loom.com/share/0d59c50285c04224a4857720b3640018)** · [Download MP4](./public/demo.mp4)
 
 > Screenshots below are captured live from the production deployment on Vercel, with a connected wallet.
 
