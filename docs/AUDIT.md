@@ -215,6 +215,14 @@ delivered to webhook subscribers.
 
 ### MEDIUM-4 — Reentrancy guard does not cover token-moving functions
 
+> ✅ **Status: FIXED (2026-08-14).** `REENTRANCY_LOCK` now wraps every token-transfer path:
+> `create_escrow`, `release_escrow`, `claim_escrow`, `create_stream`, `claim_stream`,
+> `cancel_stream`, `create_proposal` deposit, `execute_proposal` refund, and `process_refund` —
+> in addition to the pre-existing `emergency_pause_all`/`emergency_unpause_all`/`emergency_withdraw`.
+> Each acquire is paired with a release on every path (including error returns), and the new
+> `test_reentrancy_lock_released_after_guarded_ops` regression test asserts the lock is always
+> released after guarded operations.
+
 **File:** `contracts/ophirpay/src/lib.rs`
 
 The README states the `REENTRANCY_LOCK` protects cross-contract calls, but only
@@ -298,7 +306,7 @@ and re-run the IP/hostname check against the final resolved address after follow
     keys, but there is no enforcement that keys are long/random. Prefer a slow KDF (bcrypt/scrypt/
     argon2) or enforce 32+ byte CSPRNG keys at creation.
 11. **Test-count drift (resolved)**: the README previously advertised "13 suites / 187 app tests /
-    251 total"; it now correctly reports 806 app tests across 33 suites, 66 contract tests, and 97
+    251 total"; it now correctly reports 806 app tests across 33 suites, 67 contract tests, and 97
     Playwright e2e cases.
 
 ---
@@ -334,7 +342,7 @@ and re-run the IP/hostname check against the final resolved address after follow
 - `saturating_*` arithmetic used in most counter/locked-balance paths.
 - `extend_ttl` called on every persistent write.
 - Pause circuit breaker present on most write paths (gap noted above for refunds).
-- 65 Rust contract unit tests (59 ophirpay + 7 emitter) + a large vitest app suite (806 cases), wired into CI.
+- 67 Rust contract unit tests (60 ophirpay + 7 emitter) + a large vitest app suite (806 cases), wired into CI.
 - Web layer verified as matching the README's claims: CSRF (double-submit, timing-safe),
   HMAC-signed sessions with proof-of-ownership, SHA-256-hashed API keys (indexed, fail-closed),
   DNS-rebinding re-validation on webhooks, and pluggable rate limiting.
@@ -353,7 +361,7 @@ and re-run the IP/hostname check against the final resolved address after follow
 | P1 | MEDIUM-2 bound all enumeration | ✅ Fixed (`get_payments_range` + `get_reason_code_analytics` capped at 100, most-recent-first) | Low |
 | P1 | MEDIUM-3 emitter allow-list | ✅ Fixed (deploy + `set_allowed_source` pending) | Low |
 | P1 | MEDIUM-6 webhook SSRF redirect bypass | ✅ Fixed | Low |
-| P2 | MEDIUM-4 reentrancy on token-moving fns | ⏳ Open (partially mitigated by HIGH-1 fix) | Medium |
+| P2 | MEDIUM-4 reentrancy on token-moving fns | ✅ Fixed (`REENTRANCY_LOCK` now wraps all token-transfer paths: escrow release/claim, stream claim/cancel, proposal deposit/refund, refund processing, emergency ops) | Medium |
 | P2 | MEDIUM-5 cross-contract pause result | ✅ Fixed | Low |
 | P2 | LOW validation/hygiene items | Partially fixed (LOW-9 HMAC, LOW-11 counts) | Low |
 

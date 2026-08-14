@@ -218,7 +218,7 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 - **Host test compilation:** Fixed. The `ed25519-dalek` 3.0 / `rand_chacha`
   0.3 trait incompatibility that broke `cargo test` on `soroban-env-host`
   22.1.3 is resolved in soroban-sdk 27 (env-host pins `ed25519-dalek = "2.0.0"`).
-  All 66 contract unit tests (59 ophirpay + 7 emitter) now run in CI via plain
+  All 67 contract unit tests (60 ophirpay + 7 emitter) now run in CI via plain
   `cargo test`.
 
 - **WASM size:** OphirPay contract is 92 KB (94,096 bytes) with `opt-level="z"`.
@@ -255,7 +255,7 @@ The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88
 
 Upgraded both contracts from v22 to **soroban-sdk 27.0.5** (Rust 1.91.0,
 `wasm32v1-none` target). This fixed the env-host dependency conflict that
-blocked `cargo test` — all **66 contract unit tests** (59 ophirpay + 7 emitter)
+blocked `cargo test` — all **67 contract unit tests** (60 ophirpay + 7 emitter)
 now run in CI. It also surfaced and fixed a **critical storage bug**: all record
 types previously shared the same plain `u64` persistent key space, so e.g. the
 first audit entry silently overwrote the first payment. Records are now

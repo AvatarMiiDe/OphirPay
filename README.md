@@ -18,7 +18,7 @@
       <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(20%20jobs)&logo=githubactions&logoColor=white" alt="CI — 20 jobs" />
     </a>
     <a href="#-testing--quality">
-      <img src="https://img.shields.io/badge/tests-969%20passed%20(806%20app%20%2B%2066%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="969 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-970%20passed%20(806%20app%20%2B%2067%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="970 Tests Passing" />
     </a>
     <a href="#-testing--quality">
       <img src="https://img.shields.io/badge/coverage-88.4%25%20lines-brightgreen.svg?logo=vitest" alt="88.4% Line Coverage" />
@@ -113,7 +113,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 969 tests (806 app + 66 contracts + 97 e2e)** | ✅ | ⚠️ |
+| **Full CI/CD + 970 tests (806 app + 67 contracts + 97 e2e)** | ✅ | ⚠️ |
 
 ---
 
@@ -478,11 +478,11 @@ Automatically builds WASM, uploads, deploys, initializes, and verifies both cont
 
 ## 🧪 Smart Contract Tests
 
-Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (66 tests total):
+Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (67 tests total):
 
 | Contract | Tests | Coverage |
 |---|---|---|
-| `OphirPayContract` | 59 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants, refund validation |
+| `OphirPayContract` | 60 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants, refund validation, reentrancy lock release |
 | `PaymentEventEmitter` | 7 tests | init, emit, get, count, pause/unpause, access control, allow-list |
 
 ```bash
@@ -696,7 +696,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline (20 jobs) + 806 app tests + 66 contract tests + 97 e2e | **Done** |
+| ✅ CI/CD pipeline (20 jobs) + 806 app tests + 67 contract tests + 97 e2e | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Rabet, Lobstr, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
@@ -819,7 +819,7 @@ OphirPay is engineered for predictable on-chain costs and fast reads:
 ### Audit-Readiness
 
 - **~300 typed contract error variants** — every failure path returns a machine-readable `PaymentError` (many variants reserved for unimplemented features), mirrored in the TypeScript error catalog and surfaced as clean HTTP/API errors
-- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (59 in `ophirpay`, 7 in `emitter`) plus 806 app vitest cases
+- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (60 in `ophirpay`, 7 in `emitter`) plus 806 app vitest cases
 - **Zero failing tests** — the full suite is green in CI (`lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e`, `secret-scan`)
 - **Threat-modeled web layer** — CSRF, SSRF, HMAC sessions, hashed API keys, rate limiting, and CSP are documented in the Security section above and enforced in code
 - **Manual security review completed** — a full review of both Soroban contracts and the web/API security layer is in [docs/AUDIT.md](docs/AUDIT.md) (2 High, 6 Medium findings); a third-party audit is still pending before mainnet
