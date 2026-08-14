@@ -56,6 +56,25 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Blocking theme script — applies the saved theme class before the
+            first paint to prevent a flash of the wrong theme (FOUC). Must stay
+            in sync with resolveTheme() in src/hooks/useTheme.tsx. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var stored = localStorage.getItem("ophirpay-theme");
+                  var dark = stored === "dark" ||
+                    ((stored === null || stored === "system") &&
+                      window.matchMedia("(prefers-color-scheme: dark)").matches);
+                  if (dark) document.documentElement.classList.add("dark");
+                  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         {/* JSON-LD structured data for SEO */}
         <script
           type="application/ld+json"
