@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import {
+  Asset,
   Contract,
   scValToNative,
   nativeToScVal,
@@ -274,14 +275,14 @@ export interface RecordOnChainResult {
 }
 
 /**
- * Record a completed XLM payment on-chain via `OphirPayContract.create_payment`.
+ * Record a completed XLM payment on-chain via `OphirPayContract.record_payment`.
  *
  * Best-effort by design: a failure here does NOT throw — the Horizon payment is
  * already settled, so the UI can show a non-blocking warning instead. The caller
  * provides a `signTransaction` function (e.g. Freighter) to sign the Soroban TX.
  *
  * Amount is expressed in stroops (1 XLM = 10,000,000 stroops) to match the
- * contract's u64 representation.
+ * contract's i128 representation.
  */
 export async function recordPaymentOnChain(params: {
   payer: string;
@@ -308,18 +309,20 @@ export async function recordPaymentOnChain(params: {
   } = params;
 
   try {
+    // Matches the contract's `record_payment(payer, payee, amount, asset,
+    // tx_hash, metadata)` signature — payer is the auth'd caller.
     const args: xdr.ScVal[] = [
-      nativeToScVal(payer, { type: "string" }), // caller
-      nativeToScVal(payer, { type: "string" }), // payer
-      nativeToScVal(payee, { type: "string" }), // payee
-      nativeToScVal(amountStroops, { type: "u64" }),
-      nativeToScVal(txHash, { type: "string" }),
-      nativeToScVal(metadata, { type: "string" }),
+      nativeToScVal(payer, { type: "address" }), // payer (require_auth)
+      nativeToScVal(payee, { type: "address" }), // payee
+      nativeToScVal(amountStroops, { type: "i128" }), // amount (stroops)
+      nativeToScVal(Asset.native().contractId(NETWORK_PASSPHRASE), { type: "address" }), // asset
+      nativeToScVal(txHash, { type: "string" }), // tx_hash
+      nativeToScVal(metadata, { type: "string" }), // metadata
     ];
 
     const txInfo = await invokeContractFunction(
       DEFAULT_CONTRACT_ID,
-      "create_payment",
+      "record_payment",
       payer,
       args
     );
