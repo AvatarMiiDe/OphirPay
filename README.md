@@ -18,10 +18,13 @@
       <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(20%20jobs)&logo=githubactions&logoColor=white" alt="CI — 20 jobs" />
     </a>
     <a href="#-testing--quality">
-      <img src="https://img.shields.io/badge/tests-961%20passed%20(800%20app%20%2B%2064%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="961 Tests Passing" />
+      <img src="https://img.shields.io/badge/tests-969%20passed%20(806%20app%20%2B%2066%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="969 Tests Passing" />
     </a>
     <a href="#-testing--quality">
       <img src="https://img.shields.io/badge/coverage-88.4%25%20lines-brightgreen.svg?logo=vitest" alt="88.4% Line Coverage" />
+    </a>
+    <a href="docs/AUDIT.md">
+      <img src="https://img.shields.io/badge/audit-HIGH%2FMEDIUM%20fixed-brightgreen.svg" alt="HIGH/MEDIUM findings fixed" />
     </a>
     <a href="e2e/">
       <img src="https://img.shields.io/badge/e2e-Playwright%2097%20cases-blue.svg?logo=playwright" alt="97 E2E Tests" />
@@ -110,7 +113,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
-| **Full CI/CD + 961 tests (800 app + 64 contracts + 97 e2e)** | ✅ | ⚠️ |
+| **Full CI/CD + 969 tests (806 app + 66 contracts + 97 e2e)** | ✅ | ⚠️ |
 
 ---
 
@@ -475,12 +478,12 @@ Automatically builds WASM, uploads, deploys, initializes, and verifies both cont
 
 ## 🧪 Smart Contract Tests
 
-Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (64 tests total):
+Both Soroban contracts include comprehensive `#[cfg(test)]` unit test modules (66 tests total):
 
 | Contract | Tests | Coverage |
 |---|---|---|
-| `OphirPayContract` | 58 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants |
-| `PaymentEventEmitter` | 6 tests | init, emit, get, count, pause/unpause, access control |
+| `OphirPayContract` | 59 tests | init, payments, escrows, streams, batches, multisig, RBAC, fee config, timelock, governance, refunds, pause, stats, invariants, refund validation |
+| `PaymentEventEmitter` | 7 tests | init, emit, get, count, pause/unpause, access control, allow-list |
 
 ```bash
 # Run contract tests
@@ -562,7 +565,7 @@ Every push to `main` triggers **20 jobs** across six tracks:
 |---|---|---|
 | Lint | `npx eslint . --max-warnings 20` | ESLint with zero-error tolerance |
 | TypeCheck | `tsc --noEmit` | Full project strict type-checking |
-| Unit Tests | `vitest run --reporter=verbose` | 800 app tests across 32 suites |
+| Unit Tests | `vitest run --reporter=verbose` | 806 app tests across 33 suites |
 | Coverage | `vitest run --coverage` | v8 coverage report + thresholds |
 | Build | `next build` | Production Next.js build verification |
 | Bundle Size | bundle-size check | Regression guard on JS payloads |
@@ -693,7 +696,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Cross-contract communication | **Done** |
 | ✅ SSE event streaming from chain | **Done** |
 | ✅ Mobile responsive UI | **Done** |
-| ✅ CI/CD pipeline (20 jobs) + 800 app tests + 64 contract tests + 97 e2e | **Done** |
+| ✅ CI/CD pipeline (20 jobs) + 806 app tests + 66 contract tests + 97 e2e | **Done** |
 | ✅ Multi-wallet support (Freighter, Albedo, xBull, Rabet, Lobstr, Ledger) | **Done** |
 | ✅ Stellar assets (USDC, custom tokens, trustline checks) | **Done** |
 | ✅ Payment request links (shareable invoices, QR codes) | **Done** |
@@ -816,7 +819,7 @@ OphirPay is engineered for predictable on-chain costs and fast reads:
 ### Audit-Readiness
 
 - **~300 typed contract error variants** — every failure path returns a machine-readable `PaymentError` (many variants reserved for unimplemented features), mirrored in the TypeScript error catalog and surfaced as clean HTTP/API errors
-- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (58 in `ophirpay`, 6 in `emitter`) plus 800 app vitest cases
+- **Invariant tests** — fund-safety (`LOCKED_BALANCE` cap), reentrancy, pause, timelock, and 1-vote-per-address are covered by Rust unit tests (59 in `ophirpay`, 7 in `emitter`) plus 806 app vitest cases
 - **Zero failing tests** — the full suite is green in CI (`lint`, `typecheck`, `unit-tests`, `contract-wasm`, `next-build`, `e2e`, `secret-scan`)
 - **Threat-modeled web layer** — CSRF, SSRF, HMAC sessions, hashed API keys, rate limiting, and CSP are documented in the Security section above and enforced in code
 - **Manual security review completed** — a full review of both Soroban contracts and the web/API security layer is in [docs/AUDIT.md](docs/AUDIT.md) (2 High, 6 Medium findings); a third-party audit is still pending before mainnet

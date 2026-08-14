@@ -1883,7 +1883,7 @@ impl OphirPayContract {
 
         // Check per-user spending limits
         let key = (SPEND_LIMIT_KEY, user.clone());
-        if let Some(mut limit) = env.storage().persistent().get::<_, SpendingLimit>(&key) {
+        if let Some(limit) = env.storage().persistent().get::<_, SpendingLimit>(&key) {
             if !limit.is_active {
                 return SpendCheckResult::Rejected;
             }
@@ -1892,30 +1892,28 @@ impl OphirPayContract {
             let day_seconds: u64 = 86400;
             let month_seconds: u64 = 30 * 86400;
 
-            // Reset daily counter if a day has passed
-            if now.saturating_sub(limit.last_reset_day) >= day_seconds {
-                limit.current_daily_spend = 0;
-                limit.last_reset_day = now;
-            }
-            // Reset monthly counter if 30 days have passed
-            if now.saturating_sub(limit.last_reset_month) >= month_seconds {
-                limit.current_monthly_spend = 0;
-                limit.last_reset_month = now;
-            }
+            // NOTE: this is a read-only check (MEDIUM-1 audit fix). It never
+            // mutates storage — the counters are updated by atomic_spend, which
+            // is the only authorized write path. Previously any address could
+            // call check_spending repeatedly to burn a user's allowance.
+            let daily_spend = if now.saturating_sub(limit.last_reset_day) >= day_seconds {
+                0
+            } else {
+                limit.current_daily_spend
+            };
+            let monthly_spend = if now.saturating_sub(limit.last_reset_month) >= month_seconds {
+                0
+            } else {
+                limit.current_monthly_spend
+            };
 
             // Check limits
-            if limit.current_daily_spend.saturating_add(amount) > limit.daily_limit {
+            if daily_spend.saturating_add(amount) > limit.daily_limit {
                 return SpendCheckResult::Rejected;
             }
-            if limit.current_monthly_spend.saturating_add(amount) > limit.monthly_limit {
+            if monthly_spend.saturating_add(amount) > limit.monthly_limit {
                 return SpendCheckResult::Rejected;
             }
-
-            // Update spending counters
-            limit.current_daily_spend = limit.current_daily_spend.saturating_add(amount);
-            limit.current_monthly_spend = limit.current_monthly_spend.saturating_add(amount);
-            env.storage().persistent().set(&key, &limit);
-            env.storage().persistent().extend_ttl(&key, 5000, 50000);
         }
 
         SpendCheckResult::Approved
@@ -2143,14 +2141,20 @@ impl OphirPayContract {
         env.storage().instance().set(&PAUSED, &true);
         env.storage().instance().extend_ttl(5000, 50000);
 
-        // Cross-contract call: pause the Emitter if linked
+        // Cross-contract call: pause the Emitter if linked. The result is
+        // propagated (MEDIUM-5 audit fix): if the emitter fails to pause — e.g.
+        // its owner differs from this contract's — the whole operation reverts
+        // instead of silently leaving the emitter running.
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let _: () = env.invoke_contract(&emitter, &pause_fn, args);
+            let result: Result<(), soroban_sdk::Error> =
+                env.invoke_contract(&emitter, &pause_fn, args);
+            release_reentrancy_lock(&env);
+            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
+        } else {
+            release_reentrancy_lock(&env);
         }
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -2173,11 +2177,17 @@ impl OphirPayContract {
         env.storage().instance().set(&PAUSED, &false);
         env.storage().instance().extend_ttl(5000, 50000);
 
-        // Cross-contract call: unpause the Emitter if linked
+        // Cross-contract call: unpause the Emitter if linked. Result propagated
+        // (MEDIUM-5 audit fix) so a failure reverts the atomic unpause.
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
+            let result: Result<(), soroban_sdk::Error> =
+                env.invoke_contract(&emitter, &unpause_fn, args);
+            release_reentrancy_lock(&env);
+            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
+        } else {
+            release_reentrancy_lock(&env);
         }
 
         release_reentrancy_lock(&env);
@@ -3253,6 +3263,22 @@ impl OphirPayContract {
             return Err(PaymentError::PaymentAlreadyCancelled);
         }
 
+        // ── Fund-safety validation (HIGH-1 audit fix) ──────────────────
+        // The requester must be the payer or payee of the payment, the refund
+        // amount must not exceed the recorded payment amount, and the asset
+        // must match the payment's asset. Without these checks an owner could
+        // request a refund of the entire contract balance and drain funds
+        // locked in escrows/streams, bypassing the LOCKED_BALANCE invariant.
+        if requester != payment.payer && requester != payment.payee {
+            return Err(PaymentError::Unauthorized);
+        }
+        if amount > payment.amount {
+            return Err(PaymentError::InvalidAmount);
+        }
+        if asset != payment.asset {
+            return Err(PaymentError::AssetNotSupported);
+        }
+
         let mut count: u64 = env.storage().instance().get(&REFUND_CNT).unwrap_or(0);
         count = count.saturating_add(1);
 
@@ -3298,6 +3324,7 @@ impl OphirPayContract {
     pub fn approve_refund(env: Env, caller: Address, refund_id: u64) -> Result<(), PaymentError> {
         caller.require_auth();
         require_owner(&env, &caller)?;
+        require_not_paused(&env)?;
 
         let mut refund: Refund = env
             .storage()
@@ -3333,6 +3360,7 @@ impl OphirPayContract {
     pub fn reject_refund(env: Env, caller: Address, refund_id: u64) -> Result<(), PaymentError> {
         caller.require_auth();
         require_owner(&env, &caller)?;
+        require_not_paused(&env)?;
 
         let mut refund: Refund = env
             .storage()
@@ -3365,7 +3393,11 @@ impl OphirPayContract {
     }
 
     /// Process an approved refund — transfers tokens back to requester.
-    pub fn process_refund(env: Env, refund_id: u64) -> Result<(), PaymentError> {
+    pub fn process_refund(env: Env, caller: Address, refund_id: u64) -> Result<(), PaymentError> {
+        caller.require_auth();
+        require_owner(&env, &caller)?;
+        require_not_paused(&env)?;
+
         let mut refund: Refund = env
             .storage()
             .persistent()
@@ -4742,11 +4774,12 @@ mod tests {
         let payee = Address::generate(&env);
 
         let _ = client.init(&owner);
+        let asset = Address::generate(&env);
         let pid = client.record_payment(
             &payer,
             &payee,
             &1000i128,
-            &Address::generate(&env),
+            &asset,
             &String::from_str(&env, "tx_refund_test"),
             &String::from_str(&env, "test"),
         );
@@ -4755,7 +4788,7 @@ mod tests {
             &payer,
             &pid,
             &1000i128,
-            &Address::generate(&env),
+            &asset,
             &String::from_str(&env, "Defective product"),
             &RefundReasonCode::ProductDefect,
         );
@@ -4808,11 +4841,67 @@ mod tests {
         let contract_addr = contract_id.clone();
         sac_client.transfer(&owner, &contract_addr, &500i128);
 
-        // Process refund
-        client.process_refund(&rid);
+        // Process refund (owner-authorized)
+        client.process_refund(&owner, &rid);
 
         let refund = client.get_refund(&rid);
         assert!(matches!(refund.status, RefundStatus::Processed));
+    }
+
+    #[test]
+    fn test_refund_rejects_unauthorized_requester() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let stranger = Address::generate(&env);
+        let asset = Address::generate(&env);
+
+        let _ = client.init(&owner);
+        let pid = client.record_payment(
+            &payer,
+            &payee,
+            &1000i128,
+            &asset,
+            &String::from_str(&env, "tx_unauth_refund"),
+            &String::from_str(&env, "test"),
+        );
+
+        // A stranger (neither payer nor payee) must not be able to request a refund
+        let result = client.try_request_refund(
+            &stranger,
+            &pid,
+            &1000i128,
+            &asset,
+            &String::from_str(&env, "hi"),
+            &RefundReasonCode::CustomerRequest,
+        );
+        assert!(result.is_err());
+
+        // Over-refund (amount > payment.amount) must be rejected
+        let result = client.try_request_refund(
+            &payer,
+            &pid,
+            &1001i128,
+            &asset,
+            &String::from_str(&env, "hi"),
+            &RefundReasonCode::CustomerRequest,
+        );
+        assert!(result.is_err());
+
+        // Asset mismatch must be rejected
+        let result = client.try_request_refund(
+            &payer,
+            &pid,
+            &1000i128,
+            &Address::generate(&env),
+            &String::from_str(&env, "hi"),
+            &RefundReasonCode::CustomerRequest,
+        );
+        assert!(result.is_err());
     }
 
     #[test]
@@ -4839,11 +4928,12 @@ mod tests {
         let payee = Address::generate(&env);
 
         let _ = client.init(&owner);
+        let asset = Address::generate(&env);
         let pid = client.record_payment(
             &payer,
             &payee,
             &100i128,
-            &Address::generate(&env),
+            &asset,
             &String::from_str(&env, "tx_analytics"),
             &String::from_str(&env, "test"),
         );
@@ -4852,7 +4942,7 @@ mod tests {
             &payer,
             &pid,
             &100i128,
-            &Address::generate(&env),
+            &asset,
             &String::from_str(&env, "r1"),
             &RefundReasonCode::DuplicateCharge,
         );
@@ -5279,8 +5369,8 @@ mod tests {
         let refund2 = client.get_refund(&1);
         assert_eq!(refund2.status, RefundStatus::Approved);
 
-        // Process refund
-        client.process_refund(&1);
+        // Process refund (owner-authorized)
+        client.process_refund(&owner, &1);
         let refund3 = client.get_refund(&1);
         assert_eq!(refund3.status, RefundStatus::Processed);
         assert!(refund3.resolved_at > 0);

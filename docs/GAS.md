@@ -120,6 +120,23 @@ Soroban instance storage returns `None` for unset keys. Our counters default to 
 
 All measurements from Stellar Testnet, contract `CAW7OOR...`, fees via Horizon API `fee_charged`.
 
+### Re-benchmarked on the current deployed contracts (2026-08-14)
+
+After the fresh deployment of the **300-variant** WASM (`CCQGGUJRR...`, version 2), write operations
+were re-measured live on testnet via Horizon `fee_charged`:
+
+| Operation | Stroops | XLM | Successful |
+|---|---|---|---|
+| `record_payment` (payer, payee, amount, asset, tx_hash, metadata) | 103,967 | 0.104 | ✅ |
+| `grant_role` (Admin) | 70,100 | 0.070 | ✅ |
+| `set_fee_config` (6-field struct + version archive) | 127,115 | 0.127 | ✅ |
+| `propose_timelocked_action` | 96,018 | 0.096 | ✅ |
+
+All read-only operations (`get_stats`, `get_fee_config`, `get_payment_count`) cost **0 stroops** —
+simulated, no transaction required. The 2026-08-07 figures below remain valid as reference
+measurements from the earlier (199-variant) deployment; the current build is within the same
+cost band (avg ~90–130K stroops per write).
+
 ### Write Operations
 
 | Operation | Stroops | XLM | TX Hash | Notes |
@@ -201,7 +218,7 @@ correct security/gas tradeoff per the Stellar Drips Wave Bot review.
 - **Host test compilation:** Fixed. The `ed25519-dalek` 3.0 / `rand_chacha`
   0.3 trait incompatibility that broke `cargo test` on `soroban-env-host`
   22.1.3 is resolved in soroban-sdk 27 (env-host pins `ed25519-dalek = "2.0.0"`).
-  All 64 contract unit tests (58 ophirpay + 6 emitter) now run in CI via plain
+  All 66 contract unit tests (59 ophirpay + 7 emitter) now run in CI via plain
   `cargo test`.
 
 - **WASM size:** OphirPay contract is 92 KB (94,096 bytes) with `opt-level="z"`.
@@ -238,7 +255,7 @@ The OphirPay contract was ported from soroban-sdk pre-v22 to v22.0.11 (Rust 1.88
 
 Upgraded both contracts from v22 to **soroban-sdk 27.0.5** (Rust 1.91.0,
 `wasm32v1-none` target). This fixed the env-host dependency conflict that
-blocked `cargo test` — all **64 contract unit tests** (58 ophirpay + 6 emitter)
+blocked `cargo test` — all **66 contract unit tests** (59 ophirpay + 7 emitter)
 now run in CI. It also surfaced and fixed a **critical storage bug**: all record
 types previously shared the same plain `u64` persistent key space, so e.g. the
 first audit entry silently overwrote the first payment. Records are now

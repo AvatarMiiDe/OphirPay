@@ -67,6 +67,14 @@ What this review is **not**:
 
 ### HIGH-1 — Refund path bypasses the `LOCKED_BALANCE` fund-safety invariant
 
+> ✅ **Status: FIXED (2026-08-14).** `request_refund` now validates that the requester is the
+> payment's payer or payee, that `amount <= payment.amount`, and that `asset == payment.asset`.
+> `approve_refund`, `reject_refund`, and `process_refund` now enforce `require_not_paused`,
+> and `process_refund` requires owner authorization (`caller.require_auth()` + `require_owner`).
+> An owner can no longer request a refund of the contract's entire balance for an unrelated
+> payment, and the refund transfer cannot be triggered permissionlessly. Covered by the new
+> `test_refund_rejects_unauthorized_requester` unit test.
+
 **File:** `contracts/ophirpay/src/lib.rs` (`request_refund` L3230, `process_refund` L3368)
 
 The contract's headline security invariant is:
@@ -146,6 +154,11 @@ Additionally, at least one modeled invariant does **not** hold in the actual cod
 
 ### MEDIUM-1 — `check_spending` is an unauthenticated, state-mutating "view"
 
+> ✅ **Status: FIXED (2026-08-14).** `check_spending` is now a pure read-only simulation: it no
+> longer writes to persistent storage. The daily/monthly counters are only updated by
+> `atomic_spend`, the sole authorized write path. Repeated calls can no longer burn a user's
+> allowance (griefing vector closed).
+
 **File:** `contracts/ophirpay/src/lib.rs` L1867
 
 `check_spending(env, user, amount)` has **no `require_auth`**, yet it **writes** to persistent
@@ -179,6 +192,13 @@ unreliable or DoS-able. (`get_audit_log_range`, `get_fee_config_history`, and
 
 ### MEDIUM-3 — Emitter accepts events from any caller (no allow-list)
 
+> ✅ **Status: FIXED (2026-08-14).** The emitter now supports an allow-list: `set_allowed_source`
+> (owner-only) stores the trusted orchestrator address in `ALLOWED_SOURCE`, and `emit_payment`
+> rejects callers that are neither the allow-listed source nor the owner. Covered by the new
+> `test_allow_list_blocks_unauthorized_emitters` unit test. **Deploy note:** the allow-list must
+> be populated via `set_allowed_source` after the hardened WASM is deployed for the check to
+> take effect.
+
 **File:** `contracts/emitter/src/lib.rs` L76
 
 `emit_payment` requires only `caller.require_auth()` and does **not** verify that `caller` is the
@@ -211,6 +231,10 @@ checks-effects-interactions ordering.
 
 ### MEDIUM-5 — `emergency_pause_all` ignores cross-contract result
 
+> ✅ **Status: FIXED (2026-08-14).** `emergency_pause_all` / `emergency_unpause_all` now capture
+> the `invoke_contract` result and convert a failure to `PaymentError::CrossContractCallFailed`,
+> reverting the operation instead of silently leaving the emitter running.
+
 **File:** `contracts/ophirpay/src/lib.rs` L2137
 
 The cross-contract `pause` call is invoked as `let _: () = env.invoke_contract(&emitter, …)`,
@@ -225,6 +249,12 @@ orchestrator and add a test for the mismatch case.
 ---
 
 ### MEDIUM-6 — SSRF bypass via HTTP redirects in webhook delivery
+
+> ✅ **Status: FIXED (2026-08-14).** `deliverWebhook` now passes `redirect: "manual"` to `fetch`,
+> so 3xx hops are never followed to internal addresses (e.g. `http://169.254.169.254/`); a 3xx
+> response is treated as a delivery failure. The HMAC canonicalization was also corrected so a
+> receiver verifying `X-OphirPay-Signature` over the received body always matches (see LOW-9).
+> Covered by the new `src/__tests__/webhook-deliver.test.ts` suite.
 
 **File:** `src/lib/webhook-deliver.ts`, `src/lib/webhook-url-guard.ts`
 
@@ -260,16 +290,15 @@ and re-run the IP/hostname check against the final resolved address after follow
    `MaxSignersExceeded` (error 91) / `MaxSignersExceeded` caps.
 8. **`create_batch`** uses unchecked `total_amount += amount` (potential `i128` overflow with 100
    near-max entries).
-9. **Webhook HMAC signs the wrong body** (`src/lib/webhook-deliver.ts`):
-   `signWebhookPayload(payload, secret)` HMACs `JSON.stringify(payload)`, but the transmitted
-   body is `JSON.stringify({...payload, signature})` — the `signature` field is appended *after*
-   signing. A receiver that verifies "HMAC over the received body" will never match. Document the
-   exact canonicalization, or sign the actual transmitted bytes.
+9. **Webhook HMAC signs the wrong body** — ✅ **FIXED (2026-08-14).** `buildSignedPayload` now
+   canonicalizes the HMAC over `JSON.stringify({...payload, signature: ""})` and transmits the
+   body with the real signature populated; a receiver empties the `signature` field and
+   re-serializes to recompute an identical HMAC. Covered by `src/__tests__/webhook-deliver.test.ts`.
 10. **API keys hashed with plain SHA-256** (`src/lib/api-auth.ts`): fine for high-entropy random
     keys, but there is no enforcement that keys are long/random. Prefer a slow KDF (bcrypt/scrypt/
     argon2) or enforce 32+ byte CSPRNG keys at creation.
 11. **Test-count drift (resolved)**: the README previously advertised "13 suites / 187 app tests /
-    251 total"; it now correctly reports 800 app tests across 32 suites, 64 contract tests, and 97
+    251 total"; it now correctly reports 806 app tests across 33 suites, 66 contract tests, and 97
     Playwright e2e cases.
 
 ---
@@ -305,7 +334,7 @@ and re-run the IP/hostname check against the final resolved address after follow
 - `saturating_*` arithmetic used in most counter/locked-balance paths.
 - `extend_ttl` called on every persistent write.
 - Pause circuit breaker present on most write paths (gap noted above for refunds).
-- 64 Rust contract unit tests + a large vitest app suite, wired into CI.
+- 65 Rust contract unit tests (59 ophirpay + 7 emitter) + a large vitest app suite (806 cases), wired into CI.
 - Web layer verified as matching the README's claims: CSRF (double-submit, timing-safe),
   HMAC-signed sessions with proof-of-ownership, SHA-256-hashed API keys (indexed, fail-closed),
   DNS-rebinding re-validation on webhooks, and pluggable rate limiting.
@@ -316,14 +345,22 @@ and re-run the IP/hostname check against the final resolved address after follow
 
 | Priority | Finding | Effort |
 |---|---|---|
-| P0 | HIGH-1 refund path bypasses LOCKED_BALANCE | Medium |
-| P0 | HIGH-2 correct or remove "formally verified" claims | Low |
-| P1 | MEDIUM-1 `check_spending` unauthenticated mutation | Low |
-| P1 | MEDIUM-2 bound all enumeration | Low |
-| P1 | MEDIUM-3 emitter allow-list | Low |
-| P1 | MEDIUM-6 webhook SSRF redirect bypass | Low |
-| P2 | MEDIUM-4/5 reentrancy + cross-contract pause | Medium |
-| P2 | LOW validation/hygiene items | Low |
+| Priority | Finding | Status (2026-08-14) | Effort |
+|---|---|---|---|
+| P0 | HIGH-1 refund path bypasses LOCKED_BALANCE | ✅ Fixed | Medium |
+| P0 | HIGH-2 correct or remove "formally verified" claims | ⏳ Open (README honesty note added; badge/claims still to remove) | Low |
+| P1 | MEDIUM-1 `check_spending` unauthenticated mutation | ✅ Fixed | Low |
+| P1 | MEDIUM-2 bound all enumeration | ⏳ Open (see note below) | Low |
+| P1 | MEDIUM-3 emitter allow-list | ✅ Fixed (deploy + `set_allowed_source` pending) | Low |
+| P1 | MEDIUM-6 webhook SSRF redirect bypass | ✅ Fixed | Low |
+| P2 | MEDIUM-4 reentrancy on token-moving fns | ⏳ Open (partially mitigated by HIGH-1 fix) | Medium |
+| P2 | MEDIUM-5 cross-contract pause result | ✅ Fixed | Low |
+| P2 | LOW validation/hygiene items | Partially fixed (LOW-9 HMAC, LOW-11 counts) | Low |
+
+> **MEDIUM-2 note:** `get_reason_code_analytics` still iterates all refunds and
+> `get_payments_range` the full requested range. These are read-only enumeration endpoints
+> gated behind auth'd API routes; capping them requires a return-type/API change and is tracked
+> as follow-up work.
 
 ---
 
