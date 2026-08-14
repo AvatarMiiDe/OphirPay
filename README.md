@@ -21,7 +21,7 @@
       <img src="https://img.shields.io/badge/tests-970%20passed%20(806%20app%20%2B%2067%20contracts%20%2B%2097%20e2e)-brightgreen.svg" alt="970 Tests Passing" />
     </a>
     <a href="#-testing--quality">
-      <img src="https://img.shields.io/badge/coverage-89.1%25%20lines-brightgreen.svg?logo=vitest" alt="89.1% Line Coverage" />
+      <img src="https://img.shields.io/badge/coverage-87.6%25%20overall-brightgreen.svg?logo=vitest" alt="87.6% Overall Coverage" />
     </a>
     <a href="docs/AUDIT.md">
       <img src="https://img.shields.io/badge/audit-HIGH%2FMEDIUM%20fixed-brightgreen.svg" alt="HIGH/MEDIUM findings fixed" />
@@ -501,7 +501,7 @@ cd contracts/emitter && cargo test
 # All app tests (806 cases across 33 suites)
 npm test
 
-# Coverage report (87.0% statements / 82.3% branches / 92.1% functions / 89.1% lines)
+# Coverage report (87.6% overall — 87.0% statements / 82.3% branches / 92.1% functions / 89.1% lines)
 npm run coverage
 
 # E2E tests (97 cases across 7 Playwright specs)
