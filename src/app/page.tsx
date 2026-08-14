@@ -328,12 +328,12 @@ export default function TreasuryDashboard() {
             icon="📦"
           />
           <QuickActionButton
-            href="/requests/new"
+            href="/requests"
             label="Payment Request"
             icon="📄"
           />
           <QuickActionButton
-            href="/recurring/new"
+            href="/recurring"
             label="Recurring Pay"
             icon="🔄"
           />
