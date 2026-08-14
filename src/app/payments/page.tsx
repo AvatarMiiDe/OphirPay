@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
 import {
   fetchOnChainPayments,
@@ -14,6 +15,7 @@ import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { Pagination } from "@/components/ui/Pagination";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApiQuery } from "@/hooks/useApiQuery";
 
@@ -24,7 +26,32 @@ interface OnChainData {
   total: number;
 }
 
+const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
+const DEFAULT_PAGE_SIZE = 25;
+
 export default function PaymentsPage() {
+  // `useSearchParams` requires a Suspense boundary during static prerendering.
+  return (
+    <Suspense fallback={<PaymentsFallback />}>
+      <PaymentsClient />
+    </Suspense>
+  );
+}
+
+function PaymentsFallback() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <Breadcrumb items={[{ label: "Payments" }]} />
+      <LoadingSkeleton variant="table" lines={5} />
+    </div>
+  );
+}
+
+function PaymentsClient() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
 
@@ -59,6 +86,42 @@ export default function PaymentsPage() {
         String(p.id).includes(q)
     );
   }, [payments, debouncedSearch]);
+
+  // Client-side pagination — page and page size are persisted in the URL
+  // search params so filtered/paginated views are shareable.
+  const pageParam = parseInt(searchParams.get("page") ?? "", 10);
+  const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
+
+  const pageSizeParam = parseInt(searchParams.get("pageSize") ?? "", 10);
+  const pageSize = (ALLOWED_PAGE_SIZES as readonly number[]).includes(
+    pageSizeParam
+  )
+    ? pageSizeParam
+    : DEFAULT_PAGE_SIZE;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
+
+  const updateQuery = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null) params.delete(key);
+      else params.set(key, value);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const goToPage = (target: number) =>
+    updateQuery({ page: target <= 1 ? null : String(target) });
+
+  const changePageSize = (size: number) =>
+    updateQuery({
+      pageSize: size === DEFAULT_PAGE_SIZE ? null : String(size),
+      page: null,
+    });
 
   const handleExport = () => {
     exportToCsv(filtered, [
@@ -198,7 +261,7 @@ export default function PaymentsPage() {
               )}
 
               {!loading &&
-                filtered.map((payment) => (
+                paginated.map((payment) => (
                   <tr
                     key={payment.id}
                     className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
@@ -246,12 +309,40 @@ export default function PaymentsPage() {
           </table>
         </div>
 
-        {!loading && total > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-800">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Showing <span className="font-medium">{filtered.length}</span> of{" "}
-              <span className="font-medium">{total}</span> on-chain records
-            </p>
+        {!loading && !error && filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Showing{" "}
+                <span className="font-medium">
+                  {startIndex + 1}–
+                  {Math.min(startIndex + pageSize, filtered.length)}
+                </span>{" "}
+                of <span className="font-medium">{filtered.length}</span> on-chain
+                records
+              </p>
+              <select
+                aria-label="Page size"
+                value={pageSize}
+                onChange={(e) => changePageSize(Number(e.target.value))}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-ophir-500"
+              >
+                {ALLOWED_PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size} / page
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Pagination
+              page={currentPage}
+              totalPages={totalPages}
+              hasNext={currentPage < totalPages}
+              hasPrev={currentPage > 1}
+              onNext={() => goToPage(currentPage + 1)}
+              onPrev={() => goToPage(currentPage - 1)}
+              onPage={goToPage}
+            />
           </div>
         )}
       </div>
