@@ -121,6 +121,18 @@ describe("Modal", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("pushes a history entry so the back button can close it", () => {
+    render(<Modal open onClose={() => {}}>Content</Modal>);
+    expect(window.history.state?.ophirPayModal).toBe(true);
+  });
+
+  it("closes when the browser back button is pressed", () => {
+    const onClose = vi.fn();
+    render(<Modal open onClose={onClose}>Content</Modal>);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(onClose).toHaveBeenCalled();
+  });
 });
 
 describe("Toast system", () => {
