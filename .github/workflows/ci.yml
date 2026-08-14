@@ -485,7 +485,9 @@ jobs:
             const urls = ['/', '/send', '/payments', '/analytics'];
             let totalViolations = 0;
             for (const url of urls) {
-              await page.goto('http://localhost:3000' + url, { waitUntil: 'networkidle' });
+              // 'networkidle' never settles on pages with live connections
+              // (RPC simulations, SSE) — 'load' means the DOM is ready for axe.
+              await page.goto('http://localhost:3000' + url, { waitUntil: 'load' });
               const results = await new AxeBuilder({ page }).analyze();
               if (results.violations.length > 0) {
                 console.log('❌ ' + url + ': ' + results.violations.length + ' violations');
@@ -536,9 +538,11 @@ jobs:
       - name: Install typos-cli (pinned v1.24.6)
         run: |
           TYPOS_VER=1.24.6
-          # Extract to /tmp — the tarball also ships a doc/ dir + LICENSE files
-          # that would otherwise land in the workspace and get spell-checked.
-          cd /tmp
+          # Extract into a fresh dir — the tarball ships a doc/ dir + LICENSE
+          # files that must not land in the workspace (they'd get spell-checked),
+          # and its sticky-bit root entry can't be applied to /tmp itself.
+          mkdir -p /tmp/typos-install
+          cd /tmp/typos-install
           curl -sL "https://github.com/crate-ci/typos/releases/download/v${TYPOS_VER}/typos-v${TYPOS_VER}-x86_64-unknown-linux-musl.tar.gz" | tar xz
           sudo mv typos /usr/local/bin/
       - name: Run spell check
