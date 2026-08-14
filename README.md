@@ -165,10 +165,10 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 │  ┌────────────────────────┴─────────────────────────────┐  │
 │  │                 Soroban Smart Contracts                │  │
 │  │                                                       │  │
-│  │  ┌──────────────────┐    cross-contract   ┌─────────┐ │  │
-│  │  │ OphirPayContract │ ───────────────────→ │ Emitter │ │  │
-│  │  │  · record_payment│    invoke_contract   │ Contract│ │  │
-│  │  │  · propose_payment│                     │· events │ │  │
+│  │  ┌──────────────────┐    native events   ┌─────────┐ │  │
+│  │  │ OphirPayContract │    + cross-contract │ Emitter │ │  │
+│  │  │  · record_payment│    pause/unpause    │ Contract│ │  │
+│  │  │  · propose_payment│    orchestration    │· events │ │  │
 │  │  │  · grant_role    │                      └────┬────┘ │  │
 │  │  │  · set_fee_config│                           │      │  │
 │  │  │  · 60+ functions │                           │      │  │
@@ -336,7 +336,7 @@ Visit **`/events`** in the app to see the live feed with connection status indic
 
 ## 🧪 Smart Contracts
 
-OphirPay deploys **two Soroban contracts** that communicate via cross-contract invocation — a pattern that separates payment logic from event emission for cleaner architecture and independent queryability.
+OphirPay deploys **two Soroban contracts**. The main `OphirPayContract` handles all payment logic and publishes native on-chain events, while the `PaymentEventEmitter` stores payment-event records that the app's SSE stream queries — keeping payment logic and event emission separate for cleaner architecture and independent queryability. The contracts are also wired for cross-contract orchestration: `emergency_pause_all` / `emergency_unpause_all` atomically propagate the circuit breaker to the emitter.
 
 ### 🔗 Inter-Contract Flow
 
@@ -345,11 +345,16 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
   │
   ├─ 1. Increments payment counter
   ├─ 2. Stores Payment struct in persistent storage
-  └─ 3. env.invoke_contract(emitter, "emit_payment", args)
-        │
-        └─ PaymentEventEmitter.emit_payment(emitter, payer, payee, amount, tx_hash)
-              │
-              └─ Stores PaymentEvent { id, emitter, payer, payee, amount, tx_hash }
+  └─ 3. Publishes native Soroban event
+        env.events().publish(("payment", payer, payee), amount)
+
+Browser ←── SSE stream (GET /api/events) ──polls──→ PaymentEventEmitter
+        │                                             │
+        └─ payment:created event                       └─ get_event_count() / get_event(id)
+
+Emergency orchestration (cross-contract):
+OphirPayContract.emergency_pause_all() / emergency_unpause_all()
+  └─ env.invoke_contract(emitter, "pause"/"unpause")  →  PaymentEventEmitter
 ```
 
 ### 📦 Main Contract — `OphirPayContract`
@@ -365,7 +370,7 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 | Function | Access | Description |
 |---|---|---|
 | `init(owner)` | Admin | Initialize contract with owner address |
-| `record_payment(payer, payee, amount, asset, tx_hash, metadata)` | Public | Store payment + cross-contract emit event |
+| `record_payment(payer, payee, amount, asset, tx_hash, metadata)` | Public | Store payment + publish native Soroban event |
 | `cancel_payment(id)` | Public | Cancel a recorded payment |
 | `propose_payment(...)` | Multisig | Propose a multisig payment request |
 | `approve_payment(id)` | Multisig | Approve a multisig payment request |
@@ -403,13 +408,13 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 |---|---|
 | **Contract ID** | `CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN` |
 | **WASM Hash** | Deployed: `6ff35169...` · Allow-list `6d02394b...` proposed (24h timelock) |
-| **Purpose** | Receives cross-contract payment events |
+| **Purpose** | Stores payment-event records (queried by the SSE stream) + receives cross-contract pause/unpause |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN) |
 
 | Function | Access | Description |
 |---|---|---|
 | `init(owner)` | Admin | Initialize emitter |
-| `emit_payment(emitter, payer, payee, amount, tx_hash)` | Cross-contract | Store PaymentEvent |
+| `emit_payment(emitter, payer, payee, amount, tx_hash)` | Public | Store a PaymentEvent record |
 | `get_event(event_id)` | Read | Retrieve event by ID |
 | `get_event_count()` | Read | Total events emitted |
 | `get_owner()` | Read | Query emitter owner |
