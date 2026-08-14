@@ -264,6 +264,8 @@ jobs:
       DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_e2e
       DIRECT_DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_e2e
       AUTH_SECRET: ci-e2e-auth-secret-00000000000000000000
+      NEXT_PUBLIC_CONTRACT_ID: CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA
+      NEXT_PUBLIC_EMITTER_CONTRACT_ID: CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -444,6 +446,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: next-build
+    # The axe-core script boots the production server, which fails fast on
+    # missing env (src/lib/env.ts), so provide the minimal required values.
+    # The scanned pages are client-rendered, so no DB is needed at render time.
+    env:
+      DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_a11y
+      DIRECT_DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_a11y
+      AUTH_SECRET: ci-a11y-auth-secret-00000000000000000000
+      NEXT_PUBLIC_CONTRACT_ID: CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA
+      NEXT_PUBLIC_EMITTER_CONTRACT_ID: CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -525,6 +536,9 @@ jobs:
       - name: Install typos-cli (pinned v1.24.6)
         run: |
           TYPOS_VER=1.24.6
+          # Extract to /tmp — the tarball also ships a doc/ dir + LICENSE files
+          # that would otherwise land in the workspace and get spell-checked.
+          cd /tmp
           curl -sL "https://github.com/crate-ci/typos/releases/download/v${TYPOS_VER}/typos-v${TYPOS_VER}-x86_64-unknown-linux-musl.tar.gz" | tar xz
           sudo mv typos /usr/local/bin/
       - name: Run spell check

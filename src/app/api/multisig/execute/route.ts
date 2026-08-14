@@ -12,13 +12,15 @@ import { executeApprovedPayment } from "@/lib/contract-advanced";
  */
 export async function POST(request: Request) {
   try {
-    const csrfError = verifyCsrf(request);
-    if (csrfError) return csrfError;
-
     const auth = await getAuthContext(request);
     if (!auth) {
-      return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
     }
+
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
 
     const parsed = await validateBody(request, executeMultisigSchema);
     if (!parsed.success) return parsed.response;

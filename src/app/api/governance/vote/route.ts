@@ -19,9 +19,6 @@ function invalidateProposalCache(proposalId: number) {
  */
 export async function POST(request: Request) {
   try {
-    const csrfError = verifyCsrf(request);
-    if (csrfError) return csrfError;
-
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
@@ -29,15 +26,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const parsed = await validateBody(request, voteOnProposalSchema);
     if (!parsed.success) return parsed.response;
     const { voter, proposalId, support } = parsed.data;
 
-    const result = await voteOnProposal(
-      voter,
-      proposalId,
-      support,
-    );
+    const result = await voteOnProposal(voter, proposalId, support);
 
     if (!result.success) {
       return Response.json(
