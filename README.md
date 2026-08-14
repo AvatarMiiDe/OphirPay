@@ -38,7 +38,7 @@
     <a href="./public/demo.mp4">
       <img src="https://img.shields.io/badge/demo-2.5%20min-8A2BE2.svg?logo=video" alt="2.5-Minute Demo" />
     </a>
-    <a href="https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA">
+    <a href="https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
     </a>
     <a href="LICENSE">
@@ -254,8 +254,8 @@ NEXT_PUBLIC_STELLAR_HORIZON_URL="https://horizon-testnet.stellar.org"
 STELLAR_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 
 # Soroban Contracts (deployed on testnet — verified live)
-NEXT_PUBLIC_CONTRACT_ID="CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA"
-NEXT_PUBLIC_EMITTER_CONTRACT_ID="CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX"
+NEXT_PUBLIC_CONTRACT_ID="CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET"
+NEXT_PUBLIC_EMITTER_CONTRACT_ID="CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN"
 
 # App
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -354,11 +354,11 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 
 | Detail | Value |
 |---|---|
-| **Contract ID** | `CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA` |
+| **Contract ID** | `CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET` |
 | **Network** | Stellar Testnet (verified live via Soroban RPC) |
 | **WASM Hash** | `2114b304...` (matches current `main` build) |
 | **State** | Initialized, actively recording payments on-chain |
-| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CAW7OORNGPRBRQJIXRXZOXEPZZO3Z5FKSCLBULGLBTVVPZYYVTK2UKIA) |
+| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -399,10 +399,10 @@ OphirPayContract.record_payment(payer, payee, amount, asset, tx_hash, metadata)
 
 | Detail | Value |
 |---|---|
-| **Contract ID** | `CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX` |
+| **Contract ID** | `CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN` |
 | **WASM Hash** | `6ff35169...` (matches current `main` build) |
 | **Purpose** | Receives cross-contract payment events |
-| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCMXLNRPBTHVTEH7UEBXQVZ4YJZB5NN7LXJBAL465A6YFXJPJGV2CYPX) |
+| **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN) |
 
 | Function | Access | Description |
 |---|---|---|

@@ -35,7 +35,7 @@ Certora, Trail of Bits, OtterSec) is commissioned.
 
 ---
 
-## 2. Methodology & ScopeThis review is a **line-by-line manual security review** of the two Soroban contracts (≈5,400 lines
+## 2. Methodology & ScopeThis review is a **line-by-line manual security review** of the two Soroban contracts (≈5,600 lines
 total) and the web/API authentication/SSRF/rate-limit layer, plus an assessment of the
 formal-verification harnesses and the security claims in `README.md`, `docs/VERIFICATION.md`,
 `ROADMAP.md`, `docs/SPEC.md`, and `SECURITY.md`.
@@ -67,7 +67,7 @@ What this review is **not**:
 
 ### HIGH-1 — Refund path bypasses the `LOCKED_BALANCE` fund-safety invariant
 
-**File:** `contracts/ophirpay/src/lib.rs` (`request_refund` L2771, `process_refund` L2887)
+**File:** `contracts/ophirpay/src/lib.rs` (`request_refund` L3230, `process_refund` L3368)
 
 The contract's headline security invariant is:
 
@@ -77,11 +77,11 @@ The contract's headline security invariant is:
 The refund lifecycle provides a second, **uncapped** withdrawal path that is not subject to this
 invariant:
 
-1. `request_refund` (L2771) requires only `requester.require_auth()`. It does **not** verify that
+1. `request_refund` (L3230) requires only `requester.require_auth()`. It does **not** verify that
    the requester is the payer or payee of `payment_id`, that `amount ≤ payment.amount`, that
    `asset == payment.asset`, or that the contract actually holds `amount` of `asset`.
 2. `approve_refund` (owner-only) moves the refund to `Approved`.
-3. `process_refund` (L2887) then calls `token::Client::transfer(contract → requester, amount)`
+3. `process_refund` (L3368) then calls `token::Client::transfer(contract → requester, amount)`
    with **no `require_auth`, no pause check, and no `add_locked` accounting**.
 
 Consequence: the owner can trivially drain the entire token balance of the contract:
@@ -132,7 +132,7 @@ badge reads "verified-Kani". The reality:
    proofs passing"). The proof file header says "8 critical invariants"; the README says 10.
 
 Additionally, at least one modeled invariant does **not** hold in the actual code: invariant 8
-(spending-limit expiry) is modeled correctly, but the real `check_spending` (L1578) never checks
+(spending-limit expiry) is modeled correctly, but the real `check_spending` (L1867) never checks
 `expires_at` — only `atomic_spend` does.
 
 **Recommendation:**
@@ -146,7 +146,7 @@ Additionally, at least one modeled invariant does **not** hold in the actual cod
 
 ### MEDIUM-1 — `check_spending` is an unauthenticated, state-mutating "view"
 
-**File:** `contracts/ophirpay/src/lib.rs` L1578
+**File:** `contracts/ophirpay/src/lib.rs` L1867
 
 `check_spending(env, user, amount)` has **no `require_auth`**, yet it **writes** to persistent
 storage: it resets and then increments `current_daily_spend` / `current_monthly_spend` for `user`.
@@ -165,8 +165,8 @@ and a `require_not_paused` guard.
 Several readers iterate without any cap, contradicting the README's "Bounded N+1 enumeration"
 claim:
 
-- `get_reason_code_analytics` (L2935) iterates `1..=total` over **all** refunds.
-- `get_payments_range` (L2150) iterates the full `start_id..=end_id` range.
+- `get_reason_code_analytics` (L3423) iterates `1..=total` over **all** refunds.
+- `get_payments_range` (L2494) iterates the full `start_id..=end_id` range.
 - `get_payments_by_batch` and `get_subscriber_hooks` also iterate their full inputs.
 
 On Soroban, large inputs can exceed the per-call instruction budget, making these endpoints
@@ -179,7 +179,7 @@ unreliable or DoS-able. (`get_audit_log_range`, `get_fee_config_history`, and
 
 ### MEDIUM-3 — Emitter accepts events from any caller (no allow-list)
 
-**File:** `contracts/emitter/src/lib.rs` L71
+**File:** `contracts/emitter/src/lib.rs` L76
 
 `emit_payment` requires only `caller.require_auth()` and does **not** verify that `caller` is the
 linked OphirPay contract (there is no allow-list at all). Any account can emit fabricated
@@ -199,8 +199,8 @@ delivered to webhook subscribers.
 
 The README states the `REENTRANCY_LOCK` protects cross-contract calls, but only
 `emergency_pause_all`, `emergency_unpause_all`, and `emergency_withdraw` acquire it. The
-escrow/stream/governance/refund functions (`create_escrow` L2194, `release_escrow` L2250,
-`create_stream` L2402, `claim_stream` L2461, `execute_proposal`, `process_refund`) all perform
+escrow/stream/governance/refund functions (`create_escrow` L2549, `release_escrow` L2615,
+`create_stream` L2797, `claim_stream` L2871, `execute_proposal`, `process_refund`) all perform
 `token::Client` transfers (cross-contract calls) **without** the lock. With a custom (malicious)
 `asset` contract, these paths are not protected against re-entrancy.
 
@@ -211,10 +211,10 @@ checks-effects-interactions ordering.
 
 ### MEDIUM-5 — `emergency_pause_all` ignores cross-contract result
 
-**File:** `contracts/ophirpay/src/lib.rs` L1840
+**File:** `contracts/ophirpay/src/lib.rs` L2137
 
 The cross-contract `pause` call is invoked as `let _: () = env.invoke_contract(&emitter, …)`,
-discarding the result. The emitter's `pause` (L253) requires `caller == EMITTER_OWNER`; if the
+discarding the result. The emitter's `pause` (L256) requires `caller == EMITTER_OWNER`; if the
 emitter's owner differs from the OphirPay owner, the call reverts and `emergency_pause_all` fails
 entirely — meaning the documented "atomic pause_all" is fragile and can silently break the
 emergency circuit breaker.
@@ -241,20 +241,21 @@ and re-run the IP/hostname check against the final resolved address after follow
 
 ### LOW — Validation and hygiene
 
-1. **`compute_vested` returns `0` on multiplication overflow** (`lib.rs` L750): a silent
+1. **`compute_vested` returns `0` on multiplication overflow** (`lib.rs` L884): a silent
    under-vest instead of capping at `total_amount`. `claim_stream` also uses non-saturating
    `vested - claimed_amount`.
 2. **`approve_refund` / `reject_refund` / `process_refund` lack `require_not_paused`** — refunds
    can settle during an emergency pause.
 3. **`request_refund` does not tie `asset`/`amount` to the payment** (see HIGH-1).
-4. **`propose_upgrade` uses plain `+ 86400`** (L1921, emitter L150) instead of `saturating_add`,
+4. **`propose_upgrade` uses plain `+ 86400`** (L2257, emitter L144) instead of `saturating_add`,
    inconsistent with the rest of the codebase.
 5. **Error-code reuse/typos:** `unregister_hook` returns `AuditEntryNotFound`; `accept_ownership`
    returns `UpgradeNotProposed`; `cancel_payment` has stray whitespace in its signature.
-6. **Error-code catalog is inflated:** the `PaymentError` enum defines ~199 variants (through
-   `SystemOverloaded = 199`) for many features that are **not implemented** (staking, bridge,
-   insurance, KYC, routing, gas, oracle, dispute resolution). The README's "94 typed error codes"
-   is inaccurate.
+6. **Error-code catalog is inflated:** the `PaymentError` enum defines 300 variants (through
+   `SystemFatalError = 300`) for many features that are **not implemented** (staking, bridge,
+   insurance, KYC, routing, gas, oracle, dispute resolution). The large reserved catalog exists
+   to keep the TS error catalog and the contract enum in lockstep, but the unused variants add
+   code size and a false sense of coverage.
 7. **`set_multisig_config`** does not deduplicate signers or enforce the documented
    `MaxSignersExceeded` (error 91) / `MaxSignersExceeded` caps.
 8. **`create_batch`** uses unchecked `total_amount += amount` (potential `i128` overflow with 100
@@ -267,8 +268,9 @@ and re-run the IP/hostname check against the final resolved address after follow
 10. **API keys hashed with plain SHA-256** (`src/lib/api-auth.ts`): fine for high-entropy random
     keys, but there is no enforcement that keys are long/random. Prefer a slow KDF (bcrypt/scrypt/
     argon2) or enforce 32+ byte CSPRNG keys at creation.
-11. **Test-count drift**: the repo has 32 `__tests__` files and ~800 `test()`/`it()` call sites, but
-    the README still advertises "13 suites / 187 app tests / 251 total". Documentation is stale.
+11. **Test-count drift (resolved)**: the README previously advertised "13 suites / 187 app tests /
+    251 total"; it now correctly reports 800 app tests across 32 suites, 64 contract tests, and 97
+    Playwright e2e cases.
 
 ---
 
@@ -277,7 +279,7 @@ and re-run the IP/hostname check against the final resolved address after follow
 - **Admin functions are not timelocked on-chain.** `set_fee_config`, `set_multisig_config`,
   `grant_role`, `configure_governance`, `configure_escalation`, `set_spending_limit`,
   `set_fee_collector`, and `set_emitter` are immediate owner-only actions. The
-  `propose_timelocked_action` / `execute_timelocked_action` mechanism (L1159/L1202) stores a
+  `propose_timelocked_action` / `execute_timelocked_action` mechanism (L1360/L1413) stores a
   string and flips an `executed` flag but **never dispatches** to any state-changing function —
   it is disconnected from the functions the README claims it protects. (Two-step ownership
   transfer and WASM upgrade *are* correctly timelocked.)

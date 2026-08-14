@@ -258,7 +258,7 @@ Compiled with Rust 1.91.0, soroban-sdk 27.0.5, `--release`, `wasm32v1-none`, `op
 | `ophirpay_contract.wasm` | **94,096 bytes (91.9 KB)** | 36.1 KB (mainnet limit: 128 KB) |
 | `ophirpay_emitter.wasm` | **7,338 bytes (7.2 KB)** | 121 KB (mainnet limit: 128 KB) |
 
-The OphirPay contract at 92 KB is reasonable for its scope (~5,000 lines, 50+ functions, 18 struct types, 300 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
+The OphirPay contract at 92 KB is reasonable for its scope (~5,600 lines, 90+ functions, 21 struct types, 300 error variants). The Emitter at 7 KB shows what a minimal Soroban contract looks like.
 
 ---
 
