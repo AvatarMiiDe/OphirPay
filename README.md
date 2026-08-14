@@ -36,7 +36,7 @@
       <img src="https://img.shields.io/badge/vercel-live-black.svg?logo=vercel" alt="Live on Vercel" />
     </a>
     <a href="./public/demo.mp4">
-      <img src="https://img.shields.io/badge/demo-2.5%20min-8A2BE2.svg?logo=video" alt="2.5-Minute Demo" />
+      <img src="https://img.shields.io/badge/pitch%20video-3%20min-8A2BE2.svg?logo=video" alt="3-Minute Pitch Video" />
     </a>
     <a href="https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
@@ -122,14 +122,14 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 
 *Deployed on Vercel — automatic builds from `main` on every push. PostgreSQL (Neon), Soroban testnet contracts, and a live wallet flow are all wired in.*
 
-### 🎥 Demo Video (2.5 min)
+### 🎥 Pitch Video (3 min)
 
 <video src="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/demo.mp4" controls width="720" poster="https://raw.githubusercontent.com/OphirPay/OphirPay/main/public/ophirpay-banner.svg" style="max-width:100%;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.15)">
   Your browser does not support embedded video.
   <a href="https://ophirpay.vercel.app/demo.mp4">Watch on Vercel →</a>
 </video>
 
-*15 slides: Dashboard → Send → Payments → Escrows → Batches → Recurring → Multisig → Governance → Contracts → RBAC → Fee Config → Timelock → Events → Analytics → Mobile*
+*11 scenes: Problem → Live Dashboard → Vercel Deployment → Soroban Contracts → Send Payment → Real-Time Events → GitHub README → CI Pipeline → Multisig Security → Open Source → Outro*
 
 </div>
 
@@ -605,9 +605,9 @@ Every push to `main` triggers **22 jobs** across six tracks:
 
 <div align="center">
 
-### 🎥 [Watch the Demo Video (2.5 min)](./public/demo.mp4)
+### 🎥 [Watch the Pitch Video (3 min)](./public/demo.mp4)
 
-*15 slides: Dashboard → Send → Payments → Escrows → Batches → Recurring → Multisig → Governance → Contracts → RBAC → Fee Config → Timelock → Events → Analytics → Mobile*
+*11 scenes: Problem → Live Dashboard → Vercel Deployment → Soroban Contracts → Send Payment → Real-Time Events → GitHub README → CI Pipeline → Multisig Security → Open Source → Outro*
 
 > Screenshots below are captured live from the production deployment on Vercel, with a connected wallet.
 
@@ -719,7 +719,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org):
 | ✅ Gas optimization (92% storage savings, avg 90K stroops) | **Done** |
 | ✅ Testnet deployment (both contracts live, verified on-chain) | **Done** |
 | ✅ Frontend/contract interface alignment (`record_payment` + Horizon verification) | **Done** |
-| ✅ Demo video v2.0 — 15 slides, 2.5 min, live Vercel capture | **Done** |
+| ✅ Pitch video — 3 min, AI voiceover, live Vercel + GitHub captures | **Done** |
 | 🔜 Mainnet deployment | Planned |
 
 ---
