@@ -8,7 +8,7 @@ import {
   TransactionBuilder,
   xdr,
 } from "@stellar/stellar-sdk";
-import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
+import { getHorizonServer, getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 
 // ── Contract Configuration ─────────────────────────────────────
 
@@ -231,57 +231,93 @@ export async function submitContractInvocation(signedXdr: string): Promise<{
 
   try {
     const tx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
-    const sendResponse = await server.sendTransaction(tx);
-    const txHash = sendResponse.hash;
+    // The tx hash is deterministic from the signed envelope — compute it
+    // up-front so we can verify via Horizon even if the RPC result can't be
+    // deserialized by the SDK (see "Bad union switch" handling below).
+    const txHash = tx.hash().toString("hex");
 
+    let sendHash: string | undefined;
+    try {
+      const sendResponse = await server.sendTransaction(tx);
+      sendHash = sendResponse.hash;
+    } catch (err) {
+      // SDK v13 cannot deserialize protocol-27 RPC responses ("Bad union
+      // switch"). This is a parsing limitation, not a tx failure — the
+      // response contains a valid result. Fall through to Horizon to confirm.
+      if (!(err instanceof Error) || !err.message.includes("Bad union switch")) {
+        throw err;
+      }
+    }
+
+    // Try the Soroban RPC result first — preserves the contract return value
+    // (e.g. proposal/request ids) for callers that consume it.
     let result: Awaited<ReturnType<typeof server.getTransaction>> | undefined;
-    let attempts = 0;
+    let parseError = false;
     try {
       result = await server.getTransaction(txHash);
     } catch (err) {
-      if (err instanceof Error && err.message.includes("Bad union switch")) {
-        // Accepted but result meta isn't parseable by SDK v13 — poll via
-        // Horizon below to confirm, since the tx was already sent (PENDING).
-        return { txHash, status: "SUCCESS" };
-      }
-      throw err;
+      parseError = err instanceof Error && err.message.includes("Bad union switch");
+      if (!parseError) throw err;
     }
-    while (result && result.status === "NOT_FOUND" && attempts < 30) {
-      await new Promise((r) => setTimeout(r, 1000));
+
+    if (result) {
+      let attempts = 0;
+      while (result.status === "NOT_FOUND" && attempts < 30) {
+        await new Promise((r) => setTimeout(r, 1000));
+        try {
+          result = await server.getTransaction(txHash);
+        } catch (err) {
+          parseError = err instanceof Error && err.message.includes("Bad union switch");
+          if (!parseError) throw err;
+          break;
+        }
+        attempts++;
+      }
+    }
+
+    if (result && result.status !== "NOT_FOUND" && !parseError) {
+      let returnValue: unknown;
+      if (result.status === "SUCCESS" && result.resultMetaXdr) {
+        try {
+          const meta = result.resultMetaXdr as xdr.TransactionMeta;
+          const sorobanMeta = meta.v3()?.sorobanMeta();
+          if (sorobanMeta) {
+            returnValue = scValToNative(sorobanMeta.returnValue());
+          }
+        } catch {
+          // Non-Soroban meta or parsing failure — ignore.
+        }
+      }
+      return { txHash, status: result.status, returnValue };
+    }
+
+    // The RPC result wasn't parseable ("Bad union switch") — confirm the
+    // outcome via Horizon REST, which parses protocol-27 cleanly. The tx was
+    // already accepted by sendTransaction (PENDING), so this is confirmation
+    // of a tx that did go through — mirroring scripts/deploy-testnet.mjs.
+    const horizon = getHorizonServer();
+    let status = "PENDING";
+    for (let i = 0; i < 30; i++) {
       try {
-        result = await server.getTransaction(txHash);
+        const htx = await horizon.transactions().transaction(txHash).call();
+        status = htx.successful ? "SUCCESS" : "FAILED";
+        break;
       } catch (err) {
-        // SDK v13 cannot deserialize protocol-27 result formats
-        // ("Bad union switch"). The tx was accepted (PENDING); if enough
-        // time has passed, treat it as confirmed — this mirrors the
-        // workaround documented in scripts/deploy-testnet.mjs.
-        if (attempts >= 8 && err instanceof Error && err.message.includes("Bad union switch")) {
-          return { txHash, status: "SUCCESS" };
+        // NotFoundError (HTTP 404) = not ingested yet — keep polling.
+        // Anything else is unexpected; surface it as PENDING.
+        const isNotFound =
+          err instanceof Error &&
+          (err.message.includes("Not Found") ||
+            (err as { response?: { status?: number } }).response?.status === 404);
+        if (!isNotFound) {
+          status = "PENDING";
+          break;
         }
-        throw err;
       }
-      attempts++;
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
-    // Extract the contract's return value from the transaction result meta so
-    // callers can capture on-chain ids (e.g. the proposal/request id returned
-    // by create_proposal / propose_payment). Best-effort: if the meta can't be
-    // parsed, returnValue stays undefined and callers fall back gracefully.
-    let returnValue: unknown;
-    if (result.status === "SUCCESS" && result.resultMetaXdr) {
-      try {
-        // SDK v13 parses resultMetaXdr into an xdr.TransactionMeta already.
-        const meta = result.resultMetaXdr as xdr.TransactionMeta;
-        const sorobanMeta = meta.v3()?.sorobanMeta();
-        if (sorobanMeta) {
-          returnValue = scValToNative(sorobanMeta.returnValue());
-        }
-      } catch {
-        // Non-Soroban meta or parsing failure — ignore, returnValue stays undefined.
-      }
-    }
-
-    return { txHash, status: result.status, returnValue };
+    return { txHash, status };
   } catch (err) {
     throw classifyContractError(err);
   }
