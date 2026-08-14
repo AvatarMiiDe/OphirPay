@@ -40,6 +40,39 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Keep the latest `onClose` in a ref so the popstate listener below always
+  // invokes the current handler without re-subscribing on every render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Close the modal when the user presses the browser back button instead of
+  // navigating away from the page. Opening the modal pushes a history entry;
+  // pressing back pops it and fires `popstate`, which closes the modal.
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePopState = () => onCloseRef.current();
+
+    window.addEventListener("popstate", handlePopState);
+    history.pushState({ ophirPayModal: true }, "");
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // If the modal was closed by a means other than the back button (Esc,
+      // backdrop, or close button), remove the history entry we pushed so the
+      // page's history stays intact.
+      if (history.state?.ophirPayModal) {
+        try {
+          history.back();
+        } catch {
+          // jsdom and some environments don't implement history.back().
+        }
+      }
+    };
+  }, [open]);
+
   // ESC to close + focus trap + body scroll lock + focus restore
   useEffect(() => {
     if (!open) return;
