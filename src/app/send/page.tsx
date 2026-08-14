@@ -18,6 +18,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
@@ -293,16 +294,19 @@ export default function SendPage() {
                 {shortenAddress(result.destination, 6)}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500 dark:text-gray-400">TX Hash</span>
-              <a
-                href={getStellarExplorerUrl(result.txHash)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-ophir-600 dark:text-ophir-400 hover:underline"
-              >
-                {shortenAddress(result.txHash, 8)}
-              </a>
+              <span className="flex items-center gap-2">
+                <a
+                  href={getStellarExplorerUrl(result.txHash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-mono text-ophir-600 dark:text-ophir-400 hover:underline"
+                >
+                  {shortenAddress(result.txHash, 8)}
+                </a>
+                <CopyButton value={result.txHash} label="Hash" />
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-gray-500 dark:text-gray-400">On-chain record</span>

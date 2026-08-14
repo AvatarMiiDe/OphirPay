@@ -13,6 +13,7 @@ import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApiQuery } from "@/hooks/useApiQuery";
 
@@ -224,14 +225,17 @@ export default function PaymentsPage() {
                     </td>
                     <td className="py-3 px-4">
                       {payment.txHash ? (
-                        <a
-                          href={getStellarExplorerUrl(payment.txHash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
-                        >
-                          {shortenAddress(payment.txHash)}
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={getStellarExplorerUrl(payment.txHash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+                          >
+                            {shortenAddress(payment.txHash)}
+                          </a>
+                          <CopyButton value={payment.txHash} label="Hash" />
+                        </div>
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}
