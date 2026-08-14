@@ -24,16 +24,13 @@
       <img src="https://img.shields.io/badge/coverage-87.6%25%20overall-brightgreen.svg?logo=vitest" alt="87.6% Overall Coverage" />
     </a>
     <a href="docs/AUDIT.md">
-      <img src="https://img.shields.io/badge/audit-HIGH%2FMEDIUM%20fixed-brightgreen.svg" alt="HIGH/MEDIUM findings fixed" />
+      <img src="https://img.shields.io/badge/audit-manual%20review%2C%202H%2F6M%20fixed-orange.svg" alt="Manual review — 2 High / 6 Medium fixed in code, 3rd-party audit pending" />
     </a>
     <a href="e2e/">
       <img src="https://img.shields.io/badge/e2e-Playwright%2097%20cases-blue.svg?logo=playwright" alt="97 E2E Tests" />
     </a>
     <a href="docs/GAS.md">
       <img src="https://img.shields.io/badge/gas-optimized-brightgreen.svg?logo=stellar" alt="Gas Optimized" />
-    </a>
-    <a href="docs/AUDIT.md">
-      <img src="https://img.shields.io/badge/audit-manual%20review-orange.svg" alt="Manual security review completed" />
     </a>
     <a href="https://ophirpay.vercel.app">
       <img src="https://img.shields.io/badge/vercel-live-black.svg?logo=vercel" alt="Live on Vercel" />
