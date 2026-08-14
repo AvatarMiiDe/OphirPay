@@ -6,8 +6,11 @@ import type { NextConfig } from "next";
 // cannot express that nonce, so it must NOT live here.
 
 const nextConfig: NextConfig = {
-  // Standalone output — required by the Docker image (copies .next/standalone)
-  output: "standalone",
+  // Standalone output — required by the Docker image (copies .next/standalone).
+  // Disabled on Vercel: Next 16.3's adapter-based Vercel builds crash with
+  // ENOENT .next/next-server.js.nft.json when standalone is set (vercel/next.js
+  // #96646 / #96657), and Vercel doesn't use the standalone folder anyway.
+  output: process.env.VERCEL ? undefined : "standalone",
 
   // Note: instrumentation (src/instrumentation.ts) is always enabled in Next.js 16
   // — the legacy `instrumentationHook` option was removed from the config type.
