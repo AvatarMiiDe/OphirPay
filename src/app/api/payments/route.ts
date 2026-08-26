@@ -25,18 +25,27 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const parsed = paginationSchema.safeParse({
-      page: searchParams.get("page"),
-      limit: searchParams.get("limit"),
-      status: searchParams.get("status"),
-      search: searchParams.get("search"),
+      // searchParams.get() returns null for absent params, which Zod's
+      // .optional() rejects and z.coerce.number() turns into 0 (failing
+      // .positive()). Normalize to undefined so the defaults apply — without
+      // this every bare list request 400s.
+      page: searchParams.get("page") ?? undefined,
+      limit: searchParams.get("limit") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+      search: searchParams.get("search") ?? undefined,
     });
 
     if (!parsed.success) return validationError(parsed.error);
 
     const { page, limit, status, search } = parsed.data;
 
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted`
+    // is the explicit admin/debug opt-in to see them — it never crosses user
+    // boundaries, the result is still scoped to the authenticated user.
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+
     // Always scope to the authenticated user — never expose other users' data
-    const where: Record<string, unknown> = { userId: auth.userId };
+    const where: Record<string, unknown> = { userId: auth.userId, ...(includeDeleted ? {} : { deletedAt: null }) };
     if (status) where.status = status;
     if (search) {
       where.OR = [
