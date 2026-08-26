@@ -703,3 +703,40 @@ jobs:
             contracts/ophirpay/target/wasm32v1-none/release/*.wasm
             contracts/emitter/target/wasm32v1-none/release/*.wasm
           retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
+  # 21. ACCESSIBILITY — Axe-Core Playwright Scans (WCAG 2.1 AA)
+  # ══════════════════════════════════════════════════════════════
+  accessibility-scans:
+    name: "♿ Frontend — Accessibility (Axe-Core)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+      - name: Build Next.js App
+        run: npm run build
+        env:
+          DATABASE_URL: "file:./dev.db"
+          NEXTAUTH_SECRET: "ci-secret-for-tests-only-32-chars-long"
+          NEXTAUTH_URL: "http://localhost:3000"
+      - name: Run Axe Accessibility Tests
+        run: npx playwright test e2e/accessibility.spec.ts
+        env:
+          CI: true
+          DATABASE_URL: "file:./dev.db"
+          NEXTAUTH_SECRET: "ci-secret-for-tests-only-32-chars-long"
+          NEXTAUTH_URL: "http://localhost:3000"
+      - name: Upload Accessibility Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: playwright-report/
+          retention-days: 7
+
