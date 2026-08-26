@@ -269,6 +269,32 @@ curl -X DELETE "$BASE/api/payments/cm0py0000000000000000002" -H "X-API-Key: $KEY
 }
 ```
 
+### Export payments to CSV — `GET /api/payments/export`
+
+Auth: **required**. Applies the same `status` / `search` filters as the list
+endpoint to the **full** record set (not just the current page) and returns a
+dated CSV attachment with all key fields plus memo and transaction hash. Rows
+are capped at 10,000; when the cap is hit the `X-Export-Truncated: true`
+header is set so truncation is never silent.
+
+```bash
+curl -G "$BASE/api/payments/export" \
+  -H "X-API-Key: $KEY" \
+  --data-urlencode "status=COMPLETED" \
+  --data-urlencode "search=invoice" \
+  -o ophirpay-payments-2026-08-26.csv
+```
+
+```text
+Payment ID,Amount,Asset Code,Asset Issuer,Description,Memo,Status,Transaction Hash,Source Account,Destination Account,Created At
+cm0py0000000000000000001,100.2500000,XLM,,Invoice #42,invoice-42,COMPLETED,a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90,GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U,,2026-08-24T09:12:00.000Z
+cm0py0000000000000000003,25.5000000,XLM,,Freelance payout,payout-jul,COMPLETED,b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9012,GDHJ3K2LQ7F5XQZPX6YWNMYKXWQXVZKBJZQFYX3F6KRLV4WDXHJMB2UY,,2026-08-26T10:15:30.000Z
+```
+
+> Response header when the result set exceeds the cap:
+> `X-Export-Truncated: true` — download and page through the filters instead
+> if you need the full history.
+
 ---
 
 ## Batches
@@ -1899,6 +1925,7 @@ ophirpay_webhooks_failed_total 2
 | --- | --- | --- | --- |
 | `/api/payments` | GET, POST | ✅ | Payments |
 | `/api/payments/{id}` | GET, PATCH, DELETE | ✅ | Payments |
+| `/api/payments/export` | GET | ✅ | Payments |
 | `/api/batches` | GET, POST | ✅ | Batches |
 | `/api/batches/{id}` | GET | ✅ | Batches |
 | `/api/recurring` | GET, POST | ✅ | Recurring payments |
