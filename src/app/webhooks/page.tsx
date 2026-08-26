@@ -3,6 +3,7 @@
 
 
 import { useState } from "react";
+import Link from "next/link";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -20,18 +21,6 @@ interface WebhookData {
   isActive: boolean;
   hasSecret: boolean;
   createdAt: string;
-}
-
-interface WebhookDeliveryData {
-  id: string;
-  eventId: string;
-  eventType: string;
-  eventTimestamp: string;
-  status: string;
-  responseCode: number | null;
-  isReplay: boolean;
-  replayBatchId: string | null;
-  deliveredAt: string;
 }
 
 interface ReplayResult {
@@ -53,7 +42,6 @@ export default function WebhooksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replaying, setReplaying] = useState<string | null>(null);
 
   const [formUrl, setFormUrl] = useState("");
@@ -81,16 +69,6 @@ export default function WebhooksPage() {
     (body) => `/api/webhooks/${body.webhookId}/replay`,
     { invalidateKeys: [["webhook-deliveries"]] }
   );
-
-  const {
-    data: rawDeliveries,
-    isLoading: deliveriesLoading,
-  } = useApiQuery<WebhookDeliveryData[]>(
-    ["webhook-deliveries", expandedId ?? ""],
-    expandedId ? `/api/webhooks/${expandedId}/deliveries?limit=20` : "",
-    { enabled: !!expandedId }
-  );
-  const deliveries = Array.isArray(rawDeliveries) ? rawDeliveries : [];
 
   const toggleEvent = (event: WebhookEventType) => {
     setFormEvents((prev) =>
@@ -133,7 +111,6 @@ export default function WebhooksPage() {
     try {
       await deleteMutation.mutateAsync({ id });
       toast.success("Webhook deleted");
-      if (expandedId === id) setExpandedId(null);
     } catch (err) {
       const apiErr = err as ApiError;
       toast.error(apiErr.message || "Failed to delete webhook");
@@ -150,7 +127,6 @@ export default function WebhooksPage() {
         "Replay complete",
         `${result.succeeded} succeeded, ${result.failed} failed (${result.selected} events)`
       );
-      setExpandedId(webhookId);
     } catch (err) {
       const apiErr = err as ApiError;
       toast.error(apiErr.message || "Failed to replay events");
@@ -275,12 +251,12 @@ export default function WebhooksPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => setExpandedId(expandedId === wh.id ? null : wh.id)}
+                      <Link
+                        href={`/webhooks/${wh.id}`}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"
                       >
-                        {expandedId === wh.id ? "Hide" : "Deliveries"}
-                      </button>
+                        Dashboard
+                      </Link>
                       <button
                         onClick={() => handleReplay(wh.id)}
                         disabled={replaying === wh.id || !wh.isActive}
@@ -297,58 +273,6 @@ export default function WebhooksPage() {
                       </button>
                     </div>
                   </div>
-                  {expandedId === wh.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-                      <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                        Recent Deliveries
-                      </h4>
-                      {deliveriesLoading ? (
-                        <p className="text-xs text-gray-400">Loading deliveries...</p>
-                      ) : deliveries.length === 0 ? (
-                        <p className="text-xs text-gray-400">No deliveries recorded yet.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {deliveries.map((d) => (
-                            <div
-                              key={d.id}
-                              className="flex items-center justify-between gap-3 text-xs bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2"
-                            >
-                              <div className="min-w-0">
-                                <span className="font-mono text-gray-700 dark:text-gray-300">
-                                  {d.eventType}
-                                </span>
-                                {d.isReplay && (
-                                  <Badge variant="info" className="ml-2">
-                                    replay
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0 text-gray-400">
-                                <span
-                                  className={
-                                    d.status === "SUCCESS"
-                                      ? "text-green-600 dark:text-green-400"
-                                      : "text-red-600 dark:text-red-400"
-                                  }
-                                >
-                                  {d.status}
-                                  {d.responseCode != null ? ` (${d.responseCode})` : ""}
-                                </span>
-                                <span>
-                                  {new Date(d.deliveredAt).toLocaleString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}

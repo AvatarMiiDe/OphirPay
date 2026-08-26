@@ -624,6 +624,9 @@ paths:
     get:
       tags: [Webhooks]
       summary: List delivery history for a webhook
+      description: |
+        Returns delivery records with status, latency (ms), attempts,
+        response code, and expandable failure details.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       parameters:
         - name: id
@@ -636,6 +639,45 @@ paths:
       responses:
         "200":
           description: Delivery history (original + replay attempts)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/webhooks/{id}/deliveries/{deliveryId}/redeliver:
+    post:
+      tags: [Webhooks]
+      summary: Redeliver a webhook payload from a prior delivery
+      description: Re-sends the stored event payload and records a new delivery row.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: deliveryId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Redelivery result with status, latency, and attempts
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/webhooks/{id}:
+    get:
+      tags: [Webhooks]
+      summary: Get a single webhook (secret redacted)
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Webhook details
         "401":
           $ref: "#/components/responses/Unauthorized"
 

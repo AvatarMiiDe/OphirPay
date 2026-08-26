@@ -261,6 +261,9 @@ model WebhookDelivery {
   eventId       String
   status        DeliveryStatus @default(FAILED)
   responseCode  Int?
+  latencyMs     Int?
+  attempts      Int            @default(1)
+  errorMessage  String?
   isReplay      Boolean        @default(false)
   replayBatchId String?
   deliveredAt   DateTime       @default(now())

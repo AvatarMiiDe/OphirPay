@@ -56,27 +56,34 @@ export async function storeWebhookEvent(
   return row.id;
 }
 
-/** Record a delivery attempt (original or replay) for dashboard visibility. */
+/** Record a delivery attempt (original, replay, or redeliver) for dashboard visibility. */
 export async function recordWebhookDelivery(
   webhookId: string,
   eventId: string,
   status: DeliveryStatus,
   options?: {
     responseCode?: number;
+    latencyMs?: number;
+    attempts?: number;
+    errorMessage?: string;
     isReplay?: boolean;
     replayBatchId?: string;
   },
-): Promise<void> {
-  await prisma.webhookDelivery.create({
+): Promise<string> {
+  const row = await prisma.webhookDelivery.create({
     data: {
       webhookId,
       eventId,
       status,
       responseCode: options?.responseCode,
+      latencyMs: options?.latencyMs,
+      attempts: options?.attempts ?? 1,
+      errorMessage: options?.errorMessage,
       isReplay: options?.isReplay ?? false,
       replayBatchId: options?.replayBatchId,
     },
   });
+  return row.id;
 }
 
 /** Resolve and clamp replay window + limit to safe bounds. */

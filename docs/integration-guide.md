@@ -181,7 +181,24 @@ const { data } = await res.json();
 ```
 
 Each replay attempt is recorded as a delivery. View history at
-`GET /api/webhooks/<webhook-id>/deliveries` or in the Webhooks dashboard.
+`GET /api/webhooks/<webhook-id>/deliveries` or in the Webhooks dashboard
+(`/webhooks/<webhook-id>`).
+
+### Delivery Dashboard
+
+Integrators can inspect delivery status, latency, attempts, and response
+codes at `/webhooks/<webhook-id>`. Failed deliveries expose expandable
+failure details. Use the redeliver action to re-send a stored payload:
+
+```typescript
+await fetch("/api/webhooks/<webhook-id>/deliveries/<delivery-id>/redeliver", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer <api-key>",
+    "x-csrf-token": "<csrf-token>",
+  },
+});
+```
 
 ## Available Contract Functions
 
