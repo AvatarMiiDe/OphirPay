@@ -110,6 +110,16 @@ export const createWebhookSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+export const webhookReplaySchema = z.object({
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const webhookDeliveriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
 // ── API Key Schemas ───────────────────────────────────────────
 
 export const createApiKeySchema = z.object({

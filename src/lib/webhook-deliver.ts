@@ -44,22 +44,24 @@ export function buildSignedPayload(
 
 /**
  * Deliver a webhook event to a registered endpoint with retries and signing.
- * Returns true if delivery was successful (2xx response).
+ * Returns delivery outcome including HTTP status when available.
  */
 export async function deliverWebhook(
   url: string,
   secret: string,
   payload: WebhookPayload,
   maxRetries = 3
-): Promise<boolean> {
+): Promise<{ success: boolean; statusCode?: number }> {
   const { body, signature } = buildSignedPayload(payload, secret);
 
   // Re-validate the destination at delivery time to mitigate DNS rebinding.
   if (!(await isSafeWebhookUrlAtDelivery(url))) {
     logger.error("Webhook delivery blocked — URL resolved to a private/internal address", { url });
     incMetric("webhooks_failed_total");
-    return false;
+    return { success: false };
   }
+
+  let lastStatusCode: number | undefined;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -82,13 +84,14 @@ export async function deliverWebhook(
       });
 
       clearTimeout(timeout);
+      lastStatusCode = response.status;
 
       // Treat any redirect (3xx) as a failure — we never follow it, so the
       // destination cannot be swapped for an internal address mid-delivery.
       if (response.ok) {
         logger.info("Webhook delivered", { url, event: payload.event, attempt });
         incMetric("webhooks_delivered_total");
-        return true;
+        return { success: true, statusCode: response.status };
       }
 
       logger.warn("Webhook delivery failed", { url, status: response.status, attempt });
@@ -104,5 +107,5 @@ export async function deliverWebhook(
 
   logger.error("Webhook delivery exhausted retries", { url, event: payload.event });
   incMetric("webhooks_failed_total");
-  return false;
+  return { success: false, statusCode: lastStatusCode };
 }

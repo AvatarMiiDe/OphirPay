@@ -74,7 +74,7 @@ export async function PATCH(
         assetCode: payment.assetCode,
         status: payment.status,
         signedAt: new Date().toISOString(),
-      });
+      }, auth.userId);
     } else if (body.status === "SUBMITTED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
         paymentId: payment.id,
@@ -82,7 +82,7 @@ export async function PATCH(
         assetCode: payment.assetCode,
         transactionHash: payment.transactionHash,
         submittedAt: new Date().toISOString(),
-      });
+      }, auth.userId);
     } else if (body.status === "CONFIRMED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
         paymentId: payment.id,
@@ -90,7 +90,7 @@ export async function PATCH(
         assetCode: payment.assetCode,
         transactionHash: payment.transactionHash,
         confirmedAt: new Date().toISOString(),
-      });
+      }, auth.userId);
     } else if (body.status === "COMPLETED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
         paymentId: payment.id,
@@ -98,7 +98,7 @@ export async function PATCH(
         assetCode: payment.assetCode,
         transactionHash: payment.transactionHash,
         completedAt: payment.completedAt?.toISOString() ?? new Date().toISOString(),
-      });
+      }, auth.userId);
     } else if (body.status === "FAILED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_FAILED, {
         paymentId: payment.id,
@@ -106,7 +106,7 @@ export async function PATCH(
         assetCode: payment.assetCode,
         errorMessage: payment.errorMessage,
         failedAt: new Date().toISOString(),
-      });
+      }, auth.userId);
     }
 
     return successResponse(payment);

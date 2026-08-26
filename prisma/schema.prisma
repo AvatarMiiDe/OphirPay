@@ -50,6 +50,7 @@ model User {
   apiKeys         ApiKey[]
   refunds         Refund[]
   notificationHooks NotificationHook[]
+  webhookEvents     WebhookEvent[]
 }
 
 // ── Stellar Accounts ──────────────────────────────────────────
@@ -233,9 +234,48 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id])
+  user        User              @relation(fields: [userId], references: [id])
+  deliveries  WebhookDelivery[]
 
   @@index([userId])
+}
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  event     String
+  timestamp DateTime
+  data      String   // JSON payload data
+  createdAt DateTime @default(now())
+
+  user       User              @relation(fields: [userId], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([userId, event, createdAt])
+}
+
+model WebhookDelivery {
+  id            String         @id @default(cuid())
+  webhookId     String
+  eventId       String
+  status        DeliveryStatus @default(FAILED)
+  responseCode  Int?
+  isReplay      Boolean        @default(false)
+  replayBatchId String?
+  deliveredAt   DateTime       @default(now())
+  createdAt     DateTime       @default(now())
+
+  webhook Webhook     @relation(fields: [webhookId], references: [id])
+  event   WebhookEvent @relation(fields: [eventId], references: [id])
+
+  @@index([webhookId, deliveredAt])
+  @@index([replayBatchId])
+}
+
+enum DeliveryStatus {
+  SUCCESS
+  FAILED
 }
 
 // ── Refunds ───────────────────────────────────────────────────
