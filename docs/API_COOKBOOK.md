@@ -53,7 +53,7 @@ curl -X POST -H "Authorization: Bearer $KEY" \
     "id": "abc123",
     "name": "Example Name",
     "prefix": "string",
-    "key": "example_signature_value"
+    "key": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
   }
 }
 ```
@@ -157,13 +157,13 @@ curl -X POST -H "Authorization: Bearer $KEY" \
   "description": "Example description",
   "recipients": [
     {
-      "address": "GCIPHER2626EXAMPLEWALLETADDRESS",
+      "address": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
       "amount": 100.0,
       "assetCode": "USDC",
       "memo": "Example description"
     }
   ],
-  "sourceAccountId": "GCIPHER2626EXAMPLEWALLETADDRESS"
+  "sourceAccountId": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
 }' \
   https://api.ophirpay.com/api/batches
 ```
@@ -633,7 +633,7 @@ curl -X POST -H "Authorization: Bearer $KEY" \
   "assetCode": "USDC",
   "assetIssuer": "USDC",
   "description": "Example description",
-  "recipientAddress": "GCIPHER2626EXAMPLEWALLETADDRESS"
+  "recipientAddress": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
 }' \
   https://api.ophirpay.com/api/requests
 ```
@@ -695,8 +695,8 @@ curl -X POST -H "Authorization: Bearer $KEY" \
   "assetIssuer": "USDC",
   "description": "Example description",
   "memo": "Example description",
-  "sourceAccountId": "GCIPHER2626EXAMPLEWALLETADDRESS",
-  "destAddress": "GCIPHER2626EXAMPLEWALLETADDRESS"
+  "sourceAccountId": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
+  "destAddress": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
 }' \
   https://api.ophirpay.com/api/payments
 ```
@@ -713,7 +713,7 @@ curl -X POST -H "Authorization: Bearer $KEY" \
   "memo": null,
   "status": "completed",
   "transactionHash": null,
-  "sourceAccountId": "GCIPHER2626EXAMPLEWALLETADDRESS",
+  "sourceAccountId": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
   "userId": "abc123",
   "batchId": null,
   "createdAt": "2026-08-26T15:30:00Z",
@@ -741,7 +741,7 @@ curl -H "Authorization: Bearer $KEY" \
   "memo": null,
   "status": "completed",
   "transactionHash": null,
-  "sourceAccountId": "GCIPHER2626EXAMPLEWALLETADDRESS",
+  "sourceAccountId": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
   "userId": "abc123",
   "batchId": null,
   "createdAt": "2026-08-26T15:30:00Z",
@@ -838,9 +838,9 @@ curl -X POST -H "Authorization: Bearer $KEY" \
   "frequency": "DAILY",
   "amount": 100.0,
   "assetCode": "USDC",
-  "destAddress": "GCIPHER2626EXAMPLEWALLETADDRESS",
+  "destAddress": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
   "description": "Example description",
-  "sourceAccountId": "GCIPHER2626EXAMPLEWALLETADDRESS"
+  "sourceAccountId": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
 }' \
   https://api.ophirpay.com/api/recurring
 ```
@@ -922,48 +922,59 @@ curl -X PATCH -H "Authorization: Bearer $KEY" \
 
 ### Issue a signed session cookie for a connected wallet
 
+> **Note:** The session flow requires 3 steps:
+> 1. Get a CSRF token from `/api/csrf`
+> 2. Get a challenge from `/api/auth/challenge` and sign it with your wallet
+> 3. Submit the signed challenge to `/api/auth/session`
+
+**Step 1: Get CSRF token**
+
 ```bash
-curl -X POST -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-  "publicKey": "example_signature_value",
-  "signature": "example_signature_value"
-}' \
-  https://api.ophirpay.com/api/auth/session
+curl -c cookies.txt https://api.ophirpay.com/api/csrf
+```
+
+**Step 2: Get wallet challenge**
+
+```bash
+curl -H "Authorization: Bearer "   "https://api.ophirpay.com/api/auth/challenge?address=GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
 ```
 
 **Example response:**
 
 ```json
-{}
+{
+  "challenge": "Please sign this message to prove ownership: abc123def456...",
+  "expiresAt": "2026-08-26T16:00:00Z"
+}
+```
+
+**Step 3: Submit signed challenge**
+
+```bash
+curl -X POST -H "Authorization: Bearer "   -H "Content-Type: application/json"   -H "X-CSRF-Token: "   -b cookies.txt   -d '{
+    "publicKey": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
+    "signature": "wallet_signed_challenge_signature_here"
+  }'   https://api.ophirpay.com/api/auth/session
+```
+
+**Example response:**
+
+```json
+{
+  "sessionToken": "sess_abc123def456",
+  "walletAddress": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
+  "expiresAt": "2026-08-27T23:10:00Z"
+}
 ```
 
 ### Revoke the session cookie
 
 ```bash
-curl -X DELETE -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
-  https://api.ophirpay.com/api/auth/session
+curl -X DELETE -H "Authorization: Bearer "   -b cookies.txt   https://api.ophirpay.com/api/auth/session
 ```
 
-**Example response:**
+**Response:** `204 No Content`
 
-```json
-{}
-```
-
-### Mint a CSRF token for this session
-
-```bash
-curl -H "Authorization: Bearer $KEY" \
-  "https://api.ophirpay.com/api/csrf"
-```
-
-**Example response:**
-
-```json
-{}
-```
 
 ## Stats
 
