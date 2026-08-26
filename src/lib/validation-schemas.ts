@@ -131,7 +131,9 @@ export const createPaymentRequestSchema = z.object({
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  /** Opaque keyset cursor from a previous response's meta.nextCursor. */
+  cursor: z.string().min(1).optional(),
   status: z.string().optional(),
   search: z.string().optional(),
 });
