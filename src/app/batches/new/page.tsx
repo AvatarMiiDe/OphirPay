@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -16,6 +16,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
+import { estimateTransactionFee } from "@/lib/fee-estimator";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -55,6 +56,22 @@ export default function NewBatchPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [feeEstimate, setFeeEstimate] = useState<{
+    baseFee: string;
+    estimatedFee: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    estimateTransactionFee(recipients.length).then((fee) => {
+      if (active) {
+        setFeeEstimate({ baseFee: fee.baseFee, estimatedFee: fee.estimatedFee });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [recipients.length]);
 
   // ── Recipient management ──────────────────────────────────
 
@@ -501,6 +518,19 @@ export default function NewBatchPage() {
             {formatAmount(totalAmount, "XLM")}
           </span>
         </div>
+
+        {feeEstimate && (
+          <div
+            className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-700 dark:text-blue-300"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="font-medium">Estimated network fee</p>
+            <p className="mt-1">
+              ~{feeEstimate.estimatedFee} stroops ({feeEstimate.baseFee} × {recipients.length} operation{recipients.length === 1 ? "" : "s"}). The actual fee is shown after submission.
+            </p>
+          </div>
+        )}
 
         {/* Validation error */}
         {validationError && (
