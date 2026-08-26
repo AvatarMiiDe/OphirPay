@@ -5,10 +5,12 @@ import { incMetric } from "@/lib/metrics-counters";
 import { isSafeWebhookUrlAtDelivery } from "@/lib/webhook-url-guard";
 import crypto from "crypto";
 
-interface WebhookPayload {
+export interface WebhookPayload {
   event: string;
   timestamp: string;
   data: Record<string, unknown>;
+  /** Present and true only for integrator test events — never real payments. */
+  test?: boolean;
 }
 
 /**

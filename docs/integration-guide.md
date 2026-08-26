@@ -140,6 +140,12 @@ const ok = signature.length === expected.length &&
 Always compare with a constant-time comparison (`timingSafeEqual`) and
 reject requests missing a valid signature.
 
+> **Tip — verify without a real payment.** You don't need a live payment to
+> test your endpoint. In the dashboard, open a webhook and click **Send test
+> event**. OphirPay fires a sample `payment.completed` payload (with a valid
+> HMAC signature) that is clearly marked `"test": true` on both the envelope
+> and the `data` object. No real payment or database record is created.
+
 ## Available Contract Functions
 
 ### Payments

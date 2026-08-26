@@ -3,6 +3,7 @@
 
 
 import { useState } from "react";
+import Link from "next/link";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -219,15 +220,21 @@ export default function WebhooksPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDelete(wh.id)}
-                        disabled={deleting === wh.id}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50"
-                      >
-                        {deleting === wh.id ? "Deleting..." : "Delete"}
-                      </button>
-                    </div>
+                     <div className="flex items-center gap-2 shrink-0">
+                       <Link
+                         href={`/webhooks/${wh.id}`}
+                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"
+                       >
+                         View
+                       </Link>
+                       <button
+                         onClick={() => handleDelete(wh.id)}
+                         disabled={deleting === wh.id}
+                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50"
+                       >
+                         {deleting === wh.id ? "Deleting..." : "Delete"}
+                       </button>
+                     </div>
                   </div>
                 </div>
               );
