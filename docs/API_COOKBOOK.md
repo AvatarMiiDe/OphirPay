@@ -920,60 +920,58 @@ curl -X PATCH -H "Authorization: Bearer $KEY" \
 
 ## Session
 
-### Issue a signed session cookie for a connected wallet
+### Wallet session flow (3 steps)
 
-> **Note:** The session flow requires 3 steps:
-> 1. Get a CSRF token from `/api/csrf`
-> 2. Get a challenge from `/api/auth/challenge` and sign it with your wallet
-> 3. Submit the signed challenge to `/api/auth/session`
+> The session flow uses a double-submit cookie CSRF pattern and a challenge-response
+> proof-of-ownership scheme. All three steps must be followed in order.
 
-**Step 1: Get CSRF token**
+**Step 1: Get a CSRF token**
 
-```bash
-curl -c cookies.txt https://api.ophirpay.com/api/csrf
-```
+Mints a CSRF token, sets the  HttpOnly cookie, and returns the token in the body.
 
-**Step 2: Get wallet challenge**
 
-```bash
-curl -H "Authorization: Bearer "   "https://api.ophirpay.com/api/auth/challenge?address=GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
-```
 
 **Example response:**
 
-```json
-{
-  "challenge": "Please sign this message to prove ownership: abc123def456...",
-  "expiresAt": "2026-08-26T16:00:00Z"
-}
-```
 
-**Step 3: Submit signed challenge**
 
-```bash
-curl -X POST -H "Authorization: Bearer "   -H "Content-Type: application/json"   -H "X-CSRF-Token: "   -b cookies.txt   -d '{
-    "publicKey": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
-    "signature": "wallet_signed_challenge_signature_here"
-  }'   https://api.ophirpay.com/api/auth/session
-```
+Save the token value — it must be sent as the  header on all mutation requests.
+
+**Step 2: Get a wallet challenge**
+
+Mints a short-lived, server-signed challenge token. The query parameter is  (not ).
+
+
 
 **Example response:**
 
-```json
-{
-  "sessionToken": "sess_abc123def456",
-  "walletAddress": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
-  "expiresAt": "2026-08-27T23:10:00Z"
-}
-```
+
+
+Save the  value — it expires in 300 seconds (5 minutes).
+
+**Step 3: Submit signed challenge to open a session**
+
+The POST body must include ,  (from Step 2), and  (the wallet's signature of the  from Step 2). The CSRF token from Step 1 must be sent as .
+
+
+
+**Example response:**
+
+
+
+The response also sets a  header with an HttpOnly, SameSite=Lax, signed session cookie.
+
+> **Note:** An existing session can be renewed without re-signing the challenge, as long as the same  is used.
 
 ### Revoke the session cookie
 
-```bash
-curl -X DELETE -H "Authorization: Bearer "   -b cookies.txt   https://api.ophirpay.com/api/auth/session
-```
 
-**Response:** `204 No Content`
+
+**Example response:**
+
+
+
+The response sets a logout cookie that clears the session.
 
 
 ## Stats
