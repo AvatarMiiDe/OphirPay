@@ -562,6 +562,26 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Webhooks]
+      summary: Rotate a webhook signing secret
+      description: >
+        Generates a new HMAC-SHA256 signing secret and revokes the previous
+        one immediately — the next delivery is signed with the new secret.
+        The new secret is returned exactly once.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Secret rotated (new secret returned once)
+        "400":
+          description: Missing webhook ID or webhook not found
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     delete:
       tags: [Webhooks]
       summary: Delete a webhook

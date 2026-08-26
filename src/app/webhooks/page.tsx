@@ -34,6 +34,12 @@ export default function WebhooksPage() {
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Webhook secret rotation
+  const [rotateTarget, setRotateTarget] = useState<WebhookData | null>(null);
+  const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
+
   const [formUrl, setFormUrl] = useState("");
   const [formEvents, setFormEvents] = useState<WebhookEventType[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -53,6 +59,14 @@ export default function WebhooksPage() {
   const deleteMutation = useApiMutation<{ id: string }, { deleted: boolean }>(
     (body) => `/api/webhooks?id=${body.id}`,
     { method: "DELETE", invalidateKeys: [["webhooks"]] }
+  );
+
+  const rotateMutation = useApiMutation<
+    { id: string },
+    { id: string; secret: string }
+  >(
+    (body) => `/api/webhooks?id=${body.id}`,
+    { method: "PATCH", invalidateKeys: [["webhooks"]] }
   );
 
   const toggleEvent = (event: WebhookEventType) => {
@@ -89,6 +103,34 @@ export default function WebhooksPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const startRotate = (wh: WebhookData) => {
+    setRotateTarget(wh);
+    setRotatedSecret(null);
+    setRotateError(null);
+  };
+
+  const confirmRotate = async () => {
+    if (!rotateTarget) return;
+    setRotating(true);
+    setRotateError(null);
+    try {
+      const data = await rotateMutation.mutateAsync({ id: rotateTarget.id });
+      setRotatedSecret(data?.secret ?? null);
+      toast.success("Webhook secret rotated", "The old secret is now revoked.");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setRotateError(apiErr.message || "Failed to rotate secret");
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const closeRotate = () => {
+    setRotateTarget(null);
+    setRotatedSecret(null);
+    setRotateError(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -220,6 +262,12 @@ export default function WebhooksPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => startRotate(wh)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 border border-amber-200 dark:border-amber-800 transition-colors"
+                      >
+                        Rotate Secret
+                      </button>
                       <button
                         onClick={() => handleDelete(wh.id)}
                         disabled={deleting === wh.id}
@@ -396,6 +444,102 @@ export default function WebhooksPage() {
             {formError && (
               <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
                 <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Rotate Secret Modal — confirm warning, then show the new secret once */}
+      <Modal
+        open={rotateTarget !== null}
+        onClose={closeRotate}
+        title={rotatedSecret ? "Secret Rotated" : "Rotate Webhook Secret?"}
+        description={
+          rotatedSecret
+            ? "Save your new signing secret — it won't be shown again."
+            : "This will invalidate the current signing secret."
+        }
+        size="md"
+        footer={
+          rotatedSecret ? (
+            <button
+              onClick={closeRotate}
+              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+            >
+              Done
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={closeRotate}
+                disabled={rotating}
+                className="px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRotate}
+                disabled={rotating}
+                className="px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {rotating ? "Rotating..." : "Confirm Rotation"}
+              </button>
+            </>
+          )
+        }
+      >
+        {rotatedSecret ? (
+          <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
+              <p className="text-sm text-green-800 dark:text-green-300 mb-2 font-medium">
+                Your new webhook signing secret
+              </p>
+              <p className="text-xs text-green-700 dark:text-green-400 mb-3">
+                Save this secret now — it won&apos;t be shown again. The previous
+                secret was revoked immediately.
+              </p>
+              <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 rounded-lg p-3">
+                <code className="text-xs font-mono text-green-900 dark:text-green-200 break-all flex-1">
+                  {rotatedSecret}
+                </code>
+                <CopyButton value={rotatedSecret} label="Secret" />
+              </div>
+            </div>
+            {rotateTarget && (
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Endpoint
+                </p>
+                <p className="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">
+                  {rotateTarget.url}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+              <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">
+                ⚠️ Integrator impact
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Rotating revokes the current HMAC secret{" "}
+                <strong>immediately</strong>. Any integrator still verifying
+                signatures with the old secret will stop receiving valid
+                webhooks until they update their endpoint configuration with
+                the new secret.
+              </p>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              You&apos;ll see the new secret exactly once after rotating — make
+              sure you can save it.
+            </p>
+            {rotateError && (
+              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {rotateError}
+                </p>
               </div>
             )}
           </div>
