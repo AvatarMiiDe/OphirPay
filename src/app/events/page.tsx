@@ -3,8 +3,11 @@
 
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { EmptyState } from "@/components/EmptyState";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 import {
   fetchOnChainPayments,
@@ -26,6 +29,7 @@ interface SseEvent {
 }
 
 export default function EventsPage() {
+  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);
   const [viewMode, setViewMode] = useState<"live" | "onchain">("live");
@@ -60,6 +64,7 @@ export default function EventsPage() {
   // Load on-chain data (only when the On-Chain tab is active)
   const {
     data: onChainData,
+    isLoading: onChainLoading,
   } = useApiQuery<{ payments: OnChainPayment[] }>(
     ["events", "onchain"],
     undefined, // REST not used — reads via Soroban simulation below
@@ -122,6 +127,31 @@ export default function EventsPage() {
       </div>
 
       {viewMode === "live" ? (
+        liveEvents.length === 0 ? (
+          /* Live SSE Feed — empty */
+          <EmptyState
+            icon={
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-8 h-8 text-gray-400"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"
+                />
+              </svg>
+            }
+            title="No Live Events Yet"
+            description="Listening for payment events on the Stellar blockchain. Send a payment to see it stream here in real-time."
+            actionLabel="Send a Payment"
+            onAction={() => router.push("/send")}
+          />
+        ) : (
         /* Live SSE Feed */
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
@@ -140,19 +170,6 @@ export default function EventsPage() {
               setAutoScroll(nearBottom);
             }}
           >
-            {liveEvents.length === 0 && (
-              <div className="text-center py-16">
-                <div className="h-12 w-12 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-                  <span className="text-2xl">📡</span>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Listening for payment events...
-                </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Send a payment to see it appear here in real-time
-                </p>
-              </div>
-            )}
             {liveEvents.map((evt, i) => (
               <div
                 key={`${evt.paymentId}-${i}`}
@@ -194,6 +211,34 @@ export default function EventsPage() {
             ))}
           </div>
         </div>
+        )
+      ) : onChainLoading ? (
+        /* On-Chain Records — loading */
+        <LoadingSkeleton variant="table" lines={5} />
+      ) : onChainPayments.length === 0 ? (
+        /* On-Chain Records — empty */
+        <EmptyState
+          icon={
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-8 h-8 text-gray-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          }
+          title="No On-Chain Records"
+          description="Payment records stored on-chain by the OphirPay Soroban contract will appear here once you send your first payment."
+          actionLabel="Send a Payment"
+          onAction={() => router.push("/send")}
+        />
       ) : (
         /* On-Chain Records */
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -209,13 +254,6 @@ export default function EventsPage() {
                 </tr>
               </thead>
               <tbody>
-                {onChainPayments.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No on-chain records yet</p>
-                    </td>
-                  </tr>
-                )}
                 {onChainPayments.map((p) => (
                   <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
                     <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">#{p.id}</td>
