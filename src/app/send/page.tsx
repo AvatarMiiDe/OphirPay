@@ -10,6 +10,8 @@ import {
   buildPaymentTx,
   submitSignedTx,
   getStellarExplorerUrl,
+  validateMemo,
+  getMemoErrorMessage,
   NETWORK_PASSPHRASE,
   STELLAR_NETWORK,
   XLM_STROOPS,
@@ -107,8 +109,9 @@ export default function SendPage() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    if (memo.length > 28) {
-      setValidationError("Memo must be 28 characters or fewer.");
+    const memoResult = validateMemo(memo);
+    if (!memoResult.valid) {
+      setValidationError(memoResult.error!);
       return false;
     }
     return true;
@@ -194,8 +197,11 @@ export default function SendPage() {
       toast.success("Payment sent!", `${formatAmount(parseFloat(amount), "XLM")} to ${shortenAddress(destination.trim(), 6)}`);
     } catch (err) {
       setStep("done");
-      const message =
+      const rawMessage =
         err instanceof Error ? err.message : "Transaction failed. Please try again.";
+      // Map memo-related Horizon/contract errors to friendly messages
+      const memoError = getMemoErrorMessage(rawMessage);
+      const message = memoError ?? rawMessage;
       setResult({ type: "error", message });
       toast.error("Transaction failed", message);
     }
@@ -545,6 +551,19 @@ export default function SendPage() {
             transaction. Some exchanges and services require a memo or
             destination tag to credit payments — include it if the recipient
             asked for one.
+            {memo && (
+              <span className="block mt-1">
+                {(() => {
+                  const byteLen = new TextEncoder().encode(memo.trim()).byteLength;
+                  const isNearLimit = byteLen > 20;
+                  return (
+                    <span className={isNearLimit ? "text-amber-500 dark:text-amber-400" : ""}>
+                      {byteLen}/28 bytes
+                    </span>
+                  );
+                })()}
+              </span>
+            )}
           </p>
         </div>
 
