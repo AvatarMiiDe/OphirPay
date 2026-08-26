@@ -52,9 +52,19 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setWallet((prev) => ({ ...prev, balanceLoading: true }));
     try {
       const balance = await fetchXlmBalance(publicKey);
-      setWallet((prev) => ({ ...prev, balance, balanceLoading: false }));
+      // Ignore stale responses: a balance fetch that resolves after a
+      // disconnect (or an account switch) must not repopulate the cache.
+      setWallet((prev) =>
+        prev.connected && prev.publicKey === publicKey
+          ? { ...prev, balance, balanceLoading: false }
+          : prev,
+      );
     } catch {
-      setWallet((prev) => ({ ...prev, balanceLoading: false }));
+      setWallet((prev) =>
+        prev.connected && prev.publicKey === publicKey
+          ? { ...prev, balanceLoading: false }
+          : prev,
+      );
     }
   }, []);
 
