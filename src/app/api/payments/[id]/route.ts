@@ -67,7 +67,31 @@ export async function PATCH(
 
     logger.info("Payment updated", { id, status: payment.status });
 
-    if (body.status === "COMPLETED") {
+    if (body.status === "SIGNED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SIGNED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        status: payment.status,
+        signedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "SUBMITTED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        submittedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "CONFIRMED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        confirmedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "COMPLETED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
         paymentId: payment.id,
         amount: payment.amount,
