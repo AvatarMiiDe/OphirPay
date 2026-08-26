@@ -1,7 +1,7 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
@@ -110,6 +110,10 @@ function SendPageClient() {
   // records a DB Recurrence schedule (issue #172).
   const [mode, setMode] = useState<"one-time" | "recurring">("one-time");
   const [frequency, setFrequency] = useState<Frequency>("DAILY");
+
+  // A ref closes the double-click window before React has rendered the
+  // disabled state. It is released on validation, cancellation, and failure.
+  const sendInFlightRef = useRef(false);
 
   // Path payment estimate state
   const [pathEstimate, setPathEstimate] = useState<PathPaymentEstimate | null>(null);
@@ -329,8 +333,17 @@ function SendPageClient() {
   // ── Send Flow ────────────────────────────────────────────
 
   const handleSend = async () => {
-    if (!wallet.publicKey) return;
-    if (!validate()) return;
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+
+    if (!wallet.publicKey) {
+      sendInFlightRef.current = false;
+      return;
+    }
+    if (!validate()) {
+      sendInFlightRef.current = false;
+      return;
+    }
 
     setResult(null);
 
@@ -365,6 +378,7 @@ function SendPageClient() {
         setResult({ type: "error", message });
         toast.error("Failed to schedule payment", message);
       }
+      sendInFlightRef.current = false;
       return;
     }
 
@@ -496,7 +510,6 @@ function SendPageClient() {
 
       // Refresh balance after successful transaction
       fetchBalance();
-
       if (isCrossAsset && pathEstimate) {
         toast.success(
           "Path Payment Sent!",
@@ -508,7 +521,9 @@ function SendPageClient() {
           `${formatAmount(parseFloat(amount), selectedAsset.code)} to ${shortenAddress(destination.trim(), 6)}`
         );
       }
+      sendInFlightRef.current = false;
     } catch (err) {
+      sendInFlightRef.current = false;
       setStep("done");
       const message = parseSubmissionError(err);
       setResult({ type: "error", message });
@@ -517,6 +532,7 @@ function SendPageClient() {
   };
 
   const reset = () => {
+    sendInFlightRef.current = false;
     setStep("idle");
     setResult(null);
     setAmount("");
