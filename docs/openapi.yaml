@@ -186,6 +186,42 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/payments/export:
+    get:
+      tags: [Payments]
+      summary: Export payments as CSV
+      description: |
+        Server-side CSV export of the CURRENT filter results — every row
+        matching `status` / `search` (same filters as GET /api/payments), not
+        just the page loaded in the browser. Includes all key fields plus memo
+        and transaction hash. Rows are capped at 10,000; when the cap is hit
+        the `X-Export-Truncated: true` response header is set. The filename
+        embeds the export date (e.g. ophirpay-payments-2026-08-26.csv).
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, SIGNED, SUBMITTED, CONFIRMED, PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED]
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search in description, memo, or transaction hash
+      responses:
+        "200":
+          description: CSV attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+          headers:
+            X-Export-Truncated:
+              schema: { type: boolean }
+              description: True when the result set was capped at 10,000 rows
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
     get:
