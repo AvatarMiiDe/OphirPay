@@ -927,52 +927,93 @@ curl -X PATCH -H "Authorization: Bearer $KEY" \
 
 **Step 1: Get a CSRF token**
 
-Mints a CSRF token, sets the  HttpOnly cookie, and returns the token in the body.
+Mints a CSRF token, sets the `__Host-csrf` HttpOnly cookie, and returns the token in the body.
 
-
+```bash
+curl -c cookies.txt https://api.ophirpay.com/api/csrf
+```
 
 **Example response:**
 
+```json
+{
+  "token": "csrf_a1b2c3d4e5f6..."
+}
+```
 
-
-Save the token value — it must be sent as the  header on all mutation requests.
+Save the token value — it must be sent as the `x-csrf-token` header on all mutation requests.
 
 **Step 2: Get a wallet challenge**
 
-Mints a short-lived, server-signed challenge token. The query parameter is  (not ).
+Mints a short-lived, server-signed challenge token. The query parameter is `publicKey` (not `address`).
 
-
+```bash
+curl -H "Authorization: Bearer $KEY" \
+  "https://api.ophirpay.com/api/auth/challenge?publicKey=GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY"
+```
 
 **Example response:**
 
+```json
+{
+  "challenge": "chal_x9y8z7w6v5u4...",
+  "message": "Sign this message to prove ownership: chal_x9y8z7w6v5u4...",
+  "expiresIn": 300
+}
+```
 
-
-Save the  value — it expires in 300 seconds (5 minutes).
+Save the `challenge` value — it expires in 300 seconds (5 minutes).
 
 **Step 3: Submit signed challenge to open a session**
 
-The POST body must include ,  (from Step 2), and  (the wallet's signature of the  from Step 2). The CSRF token from Step 1 must be sent as .
+The POST body must include `publicKey`, `challenge` (from Step 2), and `signature` (the wallet's signature of the `message` from Step 2). The CSRF token from Step 1 must be sent as `x-csrf-token`.
 
-
+```bash
+curl -X POST -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "x-csrf-token: $CSRF_TOKEN" \
+  -b cookies.txt \
+  -d '{
+    "publicKey": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
+    "challenge": "chal_x9y8z7w6v5u4...",
+    "signature": "wallet_signed_signature_here",
+    "network": "TESTNET"
+  }' \
+  https://api.ophirpay.com/api/auth/session
+```
 
 **Example response:**
 
+```json
+{
+  "authenticated": true,
+  "publicKey": "GA4AF6SGSYIS3JRQ6IR2XWLQGPYG52WEO53QRTEN5HD5ERF4256TNGJY",
+  "network": "TESTNET"
+}
+```
 
+The response also sets a `Set-Cookie` header with an HttpOnly, SameSite=Lax, signed session cookie.
 
-The response also sets a  header with an HttpOnly, SameSite=Lax, signed session cookie.
-
-> **Note:** An existing session can be renewed without re-signing the challenge, as long as the same  is used.
+> **Note:** An existing session can be renewed without re-signing the challenge, as long as the same `publicKey` is used.
 
 ### Revoke the session cookie
 
-
+```bash
+curl -X DELETE -H "Authorization: Bearer $KEY" \
+  -H "x-csrf-token: $CSRF_TOKEN" \
+  -b cookies.txt \
+  https://api.ophirpay.com/api/auth/session
+```
 
 **Example response:**
 
-
+```json
+{
+  "authenticated": false
+}
+```
 
 The response sets a logout cookie that clears the session.
-
 
 ## Stats
 
@@ -1093,8 +1134,14 @@ curl -X POST -H "Authorization: Bearer $KEY" \
 ### Delete a webhook
 
 ```bash
+# First get a CSRF token if you don't have one
+curl -c cookies.txt https://api.ophirpay.com/api/csrf
+
+# Then delete the webhook with CSRF protection
 curl -X DELETE -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
+  -H "x-csrf-token: $CSRF_TOKEN" \
+  -b cookies.txt \
   https://api.ophirpay.com/api/webhooks?id=example
 ```
 
