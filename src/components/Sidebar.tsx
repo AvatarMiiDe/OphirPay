@@ -120,6 +120,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Navigation can happen through router transitions, keyboard shortcuts, or
+  // browser history. Keep the drawer closed after every route change.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   // Keyboard navigation: Ctrl+1..9 for nav items
   const handleKeyDown = (e: KeyboardEvent) => {
     const num = parseInt(e.key);
