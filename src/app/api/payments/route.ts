@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { createPaymentSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
@@ -84,6 +85,9 @@ export async function POST(request: Request) {
         assetIssuer: parsed.data.assetIssuer,
         description: parsed.data.description,
         memo: parsed.data.memo,
+        // Server-generated idempotency key — every attempt (original or
+        // retried) carries its own key, so attempts are never confused.
+        idempotencyKey: crypto.randomUUID(),
         status: "CREATED",
         // The authenticated user owns the record; sourceAccountId is a
         // Stellar account reference, NOT the User FK (previously this
