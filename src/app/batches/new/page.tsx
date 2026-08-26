@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -16,6 +17,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
+import { parseRecipientsCsv } from "@/lib/csv-import";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -55,6 +57,29 @@ export default function NewBatchPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [csvErrors, setCsvErrors] = useState<{ row: number; message: string }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const importCsv = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setCsvErrors([{ row: 0, message: "Please choose a .csv file." }]);
+      return;
+    }
+    const parsed = await parseRecipientsCsv(file);
+    setCsvErrors(parsed.errors);
+    setRecipients(parsed.recipients.map((r) => ({
+      id: nextId++, address: r.address, amount: String(r.amount), memo: r.memo ?? "",
+    })));
+    setValidationError(null);
+  };
+
+  const handleCsvDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) void importCsv(file);
+  };
 
   // ── Recipient management ──────────────────────────────────
 
@@ -477,6 +502,38 @@ export default function NewBatchPage() {
             Add Recipient
           </button>
         </div>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleCsvDrop}
+          className={`rounded-lg border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${isDragging ? "border-ophir-500 bg-ophir-50 dark:bg-ophir-950/20" : "border-gray-300 dark:border-gray-700 hover:border-ophir-400"}`}
+        >
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drop a CSV file here or click to browse</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">address, amount, assetCode, memo</p>
+          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importCsv(file); e.currentTarget.value = ""; }} />
+        </div>
+
+        {csvErrors.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20 p-3" role="alert">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">CSV needs attention</p>
+            <ul className="mt-1 list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
+              {csvErrors.map((error, index) => <li key={`${error.row}-${index}`}>{error.row ? `Row ${error.row}: ` : ""}{error.message}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {recipients.some((r) => r.address || r.amount) && (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="w-full text-sm"><caption className="sr-only">CSV recipient preview</caption><thead><tr className="bg-gray-50 dark:bg-gray-800 text-left"><th className="px-3 py-2">Recipient</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Memo</th></tr></thead><tbody>
+              {recipients.map((r) => <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800"><td className="px-3 py-2 font-mono text-xs">{r.address || "—"}</td><td className="px-3 py-2">{r.amount || "—"}</td><td className="px-3 py-2">{r.memo || "—"}</td></tr>)}
+            </tbody></table>
+          </div>
+        )}
 
         <div className="space-y-3">
           {recipients.map((r, i) => (
