@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
@@ -125,6 +126,67 @@ describe("Modal", () => {
     render(<Modal open onClose={onClose}>Content</Modal>);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("restores focus to the trigger element when closed via Escape", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open modal
+          </button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Dialog">
+            Content
+          </Modal>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: /open modal/i });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    // Focus moves into the dialog (the inner tabindex=-1 container)
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").querySelector('[tabindex="-1"]')).toHaveFocus()
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("restores focus to the trigger element when closed via the close button", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open modal
+          </button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Dialog">
+            Content
+          </Modal>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: /open modal/i });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").querySelector('[tabindex="-1"]')).toHaveFocus()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /close dialog/i }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
   });
 
   it("pushes a history entry so the back button can close it", () => {
