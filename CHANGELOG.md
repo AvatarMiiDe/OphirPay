@@ -2,6 +2,24 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Webhook signature verification docs + reference implementations**: new
+  `docs/webhook-verification.md` documents the exact HMAC canonical form
+  (empty the `signature` field, keep the key, re-serialize in key order),
+  replay protection (timestamp freshness window + idempotent processing),
+  and runnable Node.js / Python reference implementations under
+  `examples/webhook-verification/`. The examples are exercised against a
+  sample payload in `src/__tests__/webhook-verification-examples.test.ts`.
+
+### Fixed
+- **`docs/integration-guide.md` webhook verification snippet**: previously
+  stripped the `signature` field before recomputing the HMAC, which does not
+  match `buildSignedPayload`'s canonical form (the field must be emptied to
+  `""`, not removed). The guide now shows the correct canonicalization and
+  links the new verification doc.
+
 ## [Unreleased] — 2026-08-12 (submission hardening pass)
 
 ### Fixed

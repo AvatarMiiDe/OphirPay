@@ -120,25 +120,32 @@ X-OphirPay-Event: payment_recorded
 }
 ```
 
-The signature is HMAC-SHA256 (hex) over the payload **without** the
-`signature` field, using the secret returned when you registered the
+The signature is HMAC-SHA256 (hex) over the payload with the `signature`
+field **emptied** (set to `""`, the key is kept) and re-serialized with
+stable key order — using the secret returned when you registered the
 webhook. The same value is mirrored in the `X-OphirPay-Signature` header for
-convenience. Verify by recomputing:
+convenience. Verify by recomputing over the exact canonical form:
 
 ```typescript
 import { createHmac, timingSafeEqual } from "crypto";
 
 const received = await request.json();
-const { signature, ...payload } = received; // strip signature before signing
+// Canonicalize: empty the signature field (keep the key, set it to "") and
+// re-serialize with the received key order — matches buildSignedPayload.
+const canonical = JSON.stringify({ ...received, signature: "" });
 const expected = createHmac("sha256", yourSecret)
-  .update(JSON.stringify(payload))
+  .update(canonical)
   .digest("hex");
-const ok = signature.length === expected.length &&
-  timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+const provided = request.headers.get("x-ophirpay-signature") ?? "";
+const ok = provided.length === expected.length &&
+  timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 ```
 
-Always compare with a constant-time comparison (`timingSafeEqual`) and
-reject requests missing a valid signature.
+Always compare with a constant-time comparison (`timingSafeEqual`), verify
+against the **header** value, and reject requests missing a valid signature.
+See [Webhook Signature Verification](webhook-verification.md) for the exact
+canonical form, replay protection, and runnable Node/Python reference
+implementations.
 
 ## Available Contract Functions
 
