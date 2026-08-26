@@ -2,6 +2,11 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Expanded health check**: `/api/health` now reports per-check status for the DB ping, Stellar RPC and Horizon reachability, Redis (when configured), and configured contract-ID presence/format. Overall `status` is `ok`, `degraded` (200) when only optional checks fail, or `down` (503) when the database is unreachable.
+
 ## [Unreleased] — 2026-08-12 (submission hardening pass)
 
 ### Fixed
