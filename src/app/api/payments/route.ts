@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
+import { buildPaymentWhere } from "@/lib/payment-filters";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
@@ -25,26 +26,24 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const parsed = paginationSchema.safeParse({
-      page: searchParams.get("page"),
-      limit: searchParams.get("limit"),
-      status: searchParams.get("status"),
-      search: searchParams.get("search"),
+      // searchParams.get() returns null for absent params, which Zod's
+      // .optional() rejects and z.coerce.number() turns into 0 (failing
+      // .positive()) — normalize all of them to undefined so the defaults
+      // apply. Without this, bare list requests (no filters) would 400.
+      page: searchParams.get("page") ?? undefined,
+      limit: searchParams.get("limit") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+      search: searchParams.get("search") ?? undefined,
     });
 
     if (!parsed.success) return validationError(parsed.error);
 
     const { page, limit, status, search } = parsed.data;
 
-    // Always scope to the authenticated user — never expose other users' data
-    const where: Record<string, unknown> = { userId: auth.userId };
-    if (status) where.status = status;
-    if (search) {
-      where.OR = [
-        { description: { contains: search } },
-        { memo: { contains: search } },
-        { transactionHash: { contains: search } },
-      ];
-    }
+    // Always scope to the authenticated user — never expose other users' data.
+    // The where clause is shared with GET /api/payments/export so the export
+    // always reflects the exact same filter results as the list.
+    const where = buildPaymentWhere(auth.userId, { status, search });
 
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({
