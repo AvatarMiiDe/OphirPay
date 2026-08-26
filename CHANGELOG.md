@@ -2,6 +2,11 @@
 
 All notable changes to OphirPay will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Build batches from the address book**: the new-batch page now has a multi-select address book picker — search saved contacts, tick several at once, set a default amount per recipient, and append them as rows. Selections merge with manually added rows without duplicating addresses already in the list.
+
 ## [Unreleased] — 2026-08-12 (submission hardening pass)
 
 ### Fixed
