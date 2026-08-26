@@ -41,6 +41,9 @@
     <a href="https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
     </a>
+    <a href="docs/deployment-mainnet.md">
+      <img src="https://img.shields.io/badge/mainnet-pending%20deployment-lightgrey.svg" alt="Mainnet deployment pending" />
+    </a>
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
     </a>
@@ -366,6 +369,7 @@ OphirPayContract.emergency_pause_all() / emergency_unpause_all()
 | **WASM Hash** | Deployed: `2114b304...` · Hardened `31d9aa78...` proposed (24h timelock, security fixes) |
 | **State** | Initialized, actively recording payments on-chain |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET) |
+| **Mainnet ID** | *Pending deployment* — see [docs/deployment-mainnet.md](docs/deployment-mainnet.md) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -410,6 +414,7 @@ OphirPayContract.emergency_pause_all() / emergency_unpause_all()
 | **WASM Hash** | Deployed: `6ff35169...` · Allow-list `6d02394b...` proposed (24h timelock) |
 | **Purpose** | Stores payment-event records (queried by the SSE stream) + receives cross-contract pause/unpause |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN) |
+| **Mainnet ID** | *Pending deployment* — see [docs/deployment-mainnet.md](docs/deployment-mainnet.md) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -478,6 +483,17 @@ stellar contract invoke --id <OPHIRPAY_ID> --source-account <SECRET_KEY> \
 ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
 ```
 Automatically builds WASM, uploads, deploys, initializes, and verifies both contracts.
+
+For Stellar Mainnet, set `NETWORK_MODE=PUBLIC` (see [docs/deployment-mainnet.md](docs/deployment-mainnet.md)):
+
+```bash
+NETWORK_MODE=PUBLIC ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
+```
+
+> ⚠ **WARNING:** `NETWORK_MODE=PUBLIC` targets the live Stellar Mainnet. There is no friendbot — the deployer account must be funded with real XLM. Always run a dry-run first:
+> ```bash
+> NETWORK_MODE=PUBLIC DRY_RUN=true ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
+> ```
 </details>
 
 ---
