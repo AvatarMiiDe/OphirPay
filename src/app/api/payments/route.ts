@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { createPaymentSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
-  validationError,
+  notFoundError,
   unauthorizedError,
   handleApiError,
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
-import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
-import { incMetric } from "@/lib/metrics-counters";
+import { getAuthContext } from "@/lib/auth-session";
+import { validateIdParam } from "@/lib/validate-params";
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -23,48 +25,25 @@ export async function GET(request: Request) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const parsed = paginationSchema.safeParse({
-      page: searchParams.get("page"),
-      limit: searchParams.get("limit"),
-      status: searchParams.get("status"),
-      search: searchParams.get("search"),
+    const parsed = await validateIdParam(params);
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
+
+    // Only the owning user may read the payment (no IDOR across users)
+    const payment = await prisma.payment.findFirst({
+      where: { id, userId: auth.userId },
     });
-
-    if (!parsed.success) return validationError(parsed.error);
-
-    const { page, limit, status, search } = parsed.data;
-
-    // Always scope to the authenticated user — never expose other users' data
-    const where: Record<string, unknown> = { userId: auth.userId };
-    if (status) where.status = status;
-    if (search) {
-      where.OR = [
-        { description: { contains: search } },
-        { memo: { contains: search } },
-        { transactionHash: { contains: search } },
-      ];
-    }
-
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.payment.count({ where }),
-    ]);
-
-    logger.request("GET", `/api/payments?page=${page}&limit=${limit}`, 200, 0);
-
-    return successResponse(payments, { page, limit, total });
+    if (!payment) return notFoundError("Payment");
+    return successResponse(payment);
   } catch (err) {
-    return handleApiError(err, "GET /api/payments");
+    return handleApiError(err, `GET /api/payments/[id]`);
   }
 }
 
-export async function POST(request: Request) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -73,44 +52,100 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const parsed = createPaymentSchema.safeParse(body);
-    if (!parsed.success) return validationError(parsed.error);
+    const parsed = await validateIdParam(params);
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
 
-    const payment = await prisma.payment.create({
+    const body = await request.json() as { status?: string; description?: string; memo?: string };
+
+    // updateMany scopes the write to the authenticated user's records
+    const updated = await prisma.payment.updateMany({
+      where: { id, userId: auth.userId },
       data: {
-        amount: parsed.data.amount,
-        assetCode: parsed.data.assetCode,
-        assetIssuer: parsed.data.assetIssuer,
-        description: parsed.data.description,
-        memo: parsed.data.memo,
-        status: "CREATED",
-        // The authenticated user owns the record; sourceAccountId is a
-        // Stellar account reference, NOT the User FK (previously this
-        // wrote a Stellar address into userId, breaking the relation).
-        userId: auth.userId,
-        sourceAccountId: parsed.data.sourceAccountId,
+        ...(body.status && { status: body.status as never }),
+        ...(body.description !== undefined && { description: body.description }),
+        ...(body.memo !== undefined && { memo: body.memo }),
       },
     });
+    if (updated.count === 0) return notFoundError("Payment");
 
-    logger.info("Payment created", { id: payment.id, amount: payment.amount });
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) return notFoundError("Payment");
 
-    dispatchWebhookEventAsync(
-      WEBHOOK_EVENTS.PAYMENT_CREATED,
-      {
+    logger.info("Payment updated", { id, status: payment.status });
+
+    if (body.status === "SIGNED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SIGNED, {
         paymentId: payment.id,
         amount: payment.amount,
         assetCode: payment.assetCode,
         status: payment.status,
-        createdAt: payment.createdAt.toISOString(),
-      },
-      auth.userId
-    );
+        signedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "SUBMITTED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        submittedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "CONFIRMED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        confirmedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "COMPLETED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        completedAt: payment.completedAt?.toISOString() ?? new Date().toISOString(),
+      });
+    } else if (body.status === "FAILED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_FAILED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        errorMessage: payment.errorMessage,
+        failedAt: new Date().toISOString(),
+      });
+    }
 
-    incMetric("payments_created_total");
-
-    return successResponse(payment, undefined, 201);
+    return successResponse(payment);
   } catch (err) {
-    return handleApiError(err, "POST /api/payments");
+    return handleApiError(err, `PATCH /api/payments/[id]`);
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
+    const parsed = await validateIdParam(params);
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
+
+    // deleteMany scopes the delete to the authenticated user's records
+    const deleted = await prisma.payment.deleteMany({
+      where: { id, userId: auth.userId },
+    });
+    if (deleted.count === 0) return notFoundError("Payment");
+    logger.info("Payment deleted", { id });
+    return successResponse({ deleted: true });
+  } catch (err) {
+    return handleApiError(err, `DELETE /api/payments/[id]`);
   }
 }

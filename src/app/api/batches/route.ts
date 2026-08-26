@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 
-import prisma from "@/lib/prisma";
-import { createBatchSchema } from "@/lib/validation-schemas";
-import {
-  successResponse,
-  validationError,
-  unauthorizedError,
-  handleApiError,
-} from "@/lib/api-response";
+import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
-import { incMetric } from "@/lib/metrics-counters";
+import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { validateIdParam } from "@/lib/validate-params";
+import { nativeToScVal } from "@stellar/stellar-sdk";
 
-// ── GET /api/batches — List batches with pagination ──────────
-
-export async function GET(request: Request) {
+/**
+ * GET /api/batches/[id] — single batch lookup
+ * Reads from OphirPayContract on-chain. Supports ?payments=true for included payment IDs.
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -22,89 +22,41 @@ export async function GET(request: Request) {
       );
     }
 
+    const parsed = await validateIdParam(params, "numeric");
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
+    const batchId = Number(id);
+
+    const result = await simulateContractCall(
+      DEFAULT_CONTRACT_ID,
+      "get_batch",
+      CHAIN_READ_SOURCE,
+      [nativeToScVal(batchId, { type: "u64" })]
+    );
+
+    if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
+      return notFoundError(`Batch ${id} not found`);
+    }
+
+    const batch = result.returnValue as Record<string, unknown>;
+
+    // Optionally include batch payments
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
-    const status = searchParams.get("status");
-    const search = searchParams.get("search");
-
-    const where: Record<string, unknown> = { userId: auth.userId };
-    if (status) where.status = status;
-    if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
-      ];
-    }
-
-    const [batches, total] = await Promise.all([
-      prisma.batch.findMany({
-        where,
-        include: { payments: true },
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.batch.count({ where }),
-    ]);
-
-    return successResponse(batches, {
-      page,
-      limit,
-      total,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    return handleApiError(err, "GET /api/batches");
-  }
-}
-
-// ── POST /api/batches — Create a new batch ──────────────────
-
-export async function POST(request: Request) {
-  try {
-    const auth = await getAuthContext(request);
-    if (!auth) {
-      return unauthorizedError(
-        "Authentication required. Connect your wallet or provide an API key."
+    if (searchParams.get("payments") === "true") {
+      const paymentsResult = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_payments_by_batch",
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(batchId, { type: "u64" })]
       );
+      return successResponse({
+        ...batch,
+        payments: paymentsResult.status === "SIMULATION_FAILED" ? [] : paymentsResult.returnValue,
+      });
     }
 
-    const body = await request.json();
-
-    const parsed = createBatchSchema.safeParse(body);
-    if (!parsed.success) {
-      return validationError(parsed.error);
-    }
-
-    const { name, description, recipients: payments } = parsed.data;
-    const { userId } = auth;
-
-    const batch = await prisma.batch.create({
-      data: { name, description, userId },
-    });
-
-    // Create child payments — status is CREATED (not COMPLETED)
-    await prisma.payment.createMany({
-      data: payments.map((p) => ({
-        amount: p.amount,
-        assetCode: p.assetCode || "XLM",
-        memo: p.memo || "",
-        status: "CREATED",
-        userId,
-        batchId: batch.id,
-      })),
-    });
-
-    const result = await prisma.batch.findUnique({
-      where: { id: batch.id },
-      include: { payments: true },
-    });
-
-    incMetric("batches_processed_total");
-
-    return successResponse(result, { timestamp: new Date().toISOString() }, 201);
+    return successResponse(batch);
   } catch (err) {
-    return handleApiError(err, "POST /api/batches");
+    return handleApiError(err, "GET /api/batches/[id]");
   }
 }
