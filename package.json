@@ -51,7 +51,9 @@
     "typecheck": "tsc --noEmit",
     "ci": "npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm run build",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
