@@ -109,6 +109,8 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
+>
+> 📄 **Batch payments CSV import** — see [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) for the exact CSV format, validation rules, and error messages.
 
 | **Full CI/CD + 970 tests (806 app + 67 contracts + 97 e2e)** | ✅ | ⚠️ |
 

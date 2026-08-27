@@ -464,12 +464,21 @@ export default function NewBatchPage() {
 
       {/* Recipients form */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Recipients
           </h2>
-          <button
-            onClick={addRecipient}
+          <div className="flex items-center gap-3">
+            <a
+              href="https://github.com/OphirPay/OphirPay/blob/main/docs/CSV_FORMAT.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-ophir-600 dark:hover:text-ophir-400 underline-offset-2 hover:underline transition-colors"
+            >
+              CSV format reference ↗
+            </a>
+            <button
+              onClick={addRecipient}
             disabled={isSubmitting || recipients.length >= 50}
             className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
           >
@@ -485,6 +494,7 @@ export default function NewBatchPage() {
             </svg>
             Add Recipient
           </button>
+          </div>
         </div>
 
         <div className="space-y-3">
