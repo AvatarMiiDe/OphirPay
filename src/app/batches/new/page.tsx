@@ -16,6 +16,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
+import { parseRecipientsCsv, downloadCsvTemplate } from "@/lib/csv-import";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ export default function NewBatchPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [csvReport, setCsvReport] = useState<{ valid: number; errors: { row: number; message: string }[] } | null>(null);
 
   // ── Recipient management ──────────────────────────────────
 
@@ -79,6 +81,26 @@ export default function NewBatchPage() {
     setRecipients(
       recipients.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     );
+  };
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const { recipients: imported, errors } = await parseRecipientsCsv(file);
+    setCsvReport({
+      valid: imported.length,
+      errors,
+    });
+    if (imported.length > 0) {
+      setRecipients(
+        imported.map((r, idx) => ({
+          id: nextId++,
+          address: r.address,
+          amount: String(r.amount),
+          memo: r.memo ?? "",
+        }))
+      );
+    }
   };
 
   // ── Validation ───────────────────────────────────────────
@@ -474,6 +496,39 @@ export default function NewBatchPage() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
+            Download template
+          </button>
+          <label className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+            Upload CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleCsvUpload}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {csvReport && (
+          <div className="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
+            <p className="text-sm font-medium mb-2">
+              Validation report: {csvReport.valid} valid, {csvReport.errors.length} error{csvReport.errors.length !== 1 ? "s" : ""}
+            </p>
+            {csvReport.errors.length > 0 && (
+              <ul className="text-sm text-red-600 dark:text-red-400 space-y-1">
+                {csvReport.errors.map((err, idx) => (
+                  <li key={idx}>Row {err.row}: {err.message}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-between mb-4">
+          <button
+            type="button"
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
             Add Recipient
           </button>
         </div>
