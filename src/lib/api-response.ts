@@ -16,6 +16,13 @@ interface ApiSuccess<T> {
     limit?: number;
     total?: number;
     timestamp?: string;
+    // Keyset (cursor) pagination metadata
+    nextCursor?: string | null;
+    hasMore?: boolean;
+    // Offset pagination navigation metadata
+    totalPages?: number;
+    hasNext?: boolean;
+    hasPrev?: boolean;
   };
 }
 

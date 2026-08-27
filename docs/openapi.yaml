@@ -84,13 +84,42 @@ paths:
     get:
       tags: [Payments]
       summary: List payments
+      description: |
+        Lists the authenticated user's payments, newest first
+        (`createdAt DESC, id DESC`).
+
+        Two pagination modes:
+
+        - **Keyset (default)** — pass `limit` and, for subsequent pages, the
+          opaque `cursor` returned in `meta.nextCursor`. Rows are fetched with
+          `take = limit + 1` to compute `hasMore`, so deep pages cost O(limit)
+          and ordering is stable under concurrent inserts. Set
+          `includeTotal=true` to also get `meta.total` (an expensive COUNT —
+          opt in only when you need it).
+        - **Offset (legacy)** — pass `page` + `limit` to get `meta` with
+          `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
+
+        `cursor` and `page` are mutually exclusive (400 if both provided).
       parameters:
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: >
+            Opaque keyset cursor from `meta.nextCursor` of the previous page.
+            Do not construct it yourself — invalid cursors return 400.
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+          description: Legacy offset page number (mutually exclusive with `cursor`).
+        - name: includeTotal
+          in: query
+          schema: { type: boolean, default: false }
+          description: >
+            Keyset mode only — include `meta.total` (COUNT over the filtered
+            result set). Off by default because it is O(matching rows).
         - name: status
           in: query
           schema:
@@ -102,11 +131,15 @@ paths:
           description: Search in description, memo, or transaction hash
       responses:
         "200":
-          description: Paginated payment list
+          description: Paginated payment list (keyset or offset mode)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedPayments"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Payments]
       summary: Create a payment
@@ -1216,10 +1249,19 @@ components:
             $ref: "#/components/schemas/PaymentResponse"
         meta:
           type: object
+          description: |
+            Keyset mode (default): `limit`, `nextCursor`, `hasMore` (+ `total`
+            when `includeTotal=true`). Offset mode (when `page` is passed):
+            `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
           properties:
             page: { type: integer }
             limit: { type: integer }
             total: { type: integer }
+            totalPages: { type: integer }
+            hasNext: { type: boolean }
+            hasPrev: { type: boolean }
+            nextCursor: { type: [string, "null"] }
+            hasMore: { type: boolean }
 
     CreatePaymentRequestSchema:
       type: object
