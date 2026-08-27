@@ -18,3 +18,6 @@ export { useIsMounted, useMountedRef } from "./useIsMounted";
 export { usePrevious } from "./usePrevious";
 export { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 export { useFormSubmit, useFormReset } from "@/lib/form-helpers";
+export { useXlmPrice } from "./usePrice";
+export { useCurrencyDisplay } from "./useCurrencyDisplay";
+export type { DisplayCurrency } from "./useCurrencyDisplay";
