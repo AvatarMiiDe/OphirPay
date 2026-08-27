@@ -127,6 +127,17 @@ describe("PaymentDetailPage", () => {
     ).toHaveAttribute("href", "/payments");
   });
 
+  it("treats unsafe u64 ids (beyond MAX_SAFE_INTEGER) as not found", async () => {
+    // u64 ids lose precision above Number.MAX_SAFE_INTEGER — never look up a
+    // lossy-converted id that could resolve to the wrong record.
+    paramId = "9007199254740993";
+    fetchOnChainPaymentMock.mockResolvedValue(null);
+    renderPage();
+
+    expect(await screen.findByText("Payment not found")).toBeInTheDocument();
+    expect(fetchOnChainPaymentMock).not.toHaveBeenCalled();
+  });
+
   it("renders an error state with retry when the read fails", async () => {
     fetchOnChainPaymentMock.mockRejectedValue(new Error("RPC unreachable"));
     renderPage();

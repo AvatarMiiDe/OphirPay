@@ -54,9 +54,11 @@ describe("derivePaymentLifecycle", () => {
     expect(steps[steps.length - 1].reached).toBe(true);
   });
 
-  it("FAILED: pipeline reached and terminal step is failed", () => {
+  it("FAILED: only creation is reached, terminal step is failed (no fabricated stages)", () => {
     const steps = derivePaymentLifecycle({ status: "FAILED" });
-    expect(steps.map((s) => s.reached)).toEqual([true, true, true, true]);
+    // The failure stage is not tracked — the timeline must not claim the
+    // payment was signed or submitted.
+    expect(steps.map((s) => s.reached)).toEqual([true, false, false, true]);
     const terminal = steps[steps.length - 1];
     expect(terminal.state).toBe("FAILED");
     expect(terminal.label).toBe("Failed");

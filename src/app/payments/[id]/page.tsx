@@ -89,7 +89,10 @@ export default function PaymentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
   const numericId = /^\d+$/.test(id) ? Number(id) : NaN;
-  const isNumeric = Number.isFinite(numericId);
+  // On-chain IDs are u64 — beyond Number.MAX_SAFE_INTEGER the Number
+  // conversion loses precision and could look up the wrong record. Reject
+  // unsafe values as not-found rather than silently mis-resolving the id.
+  const isNumeric = Number.isFinite(numericId) && Number.isSafeInteger(numericId);
 
   // Primary source: the on-chain Soroban payment record (public read).
   const onChainQuery = useApiQuery<OnChainPayment | null>(

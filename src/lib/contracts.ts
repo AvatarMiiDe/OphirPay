@@ -526,19 +526,32 @@ export async function fetchOnChainPayment(
     .build();
 
   const sim = await server.simulateTransaction(tx);
-  if ("error" in sim && sim.error) return null;
+
+  // A failed simulation (RPC/network/host error) is a genuine read failure —
+  // surface it as an error so the detail page can offer retry instead of
+  // reporting an existing payment as "not found".
+  if ("error" in sim && sim.error) {
+    throw classifyContractError(new Error(String(sim.error)));
+  }
+
   if ("result" in sim && sim.result) {
-    const raw = scValToNative(sim.result.retval);
-    if (!raw || typeof raw !== "object") return null;
-    return {
-      id: Number(raw.id),
-      payer: String(raw.payer ?? ""),
-      payee: String(raw.payee ?? ""),
-      amountStroops: Number(raw.amount ?? 0),
-      txHash: String(raw.tx_hash ?? ""),
-      timestamp: raw.timestamp ? Number(raw.timestamp) : undefined,
-      metadata: raw.metadata ? String(raw.metadata) : undefined,
-    };
+    try {
+      const raw = scValToNative(sim.result.retval);
+      if (raw && typeof raw === "object" && "id" in raw) {
+        return {
+          id: Number(raw.id),
+          payer: String(raw.payer ?? ""),
+          payee: String(raw.payee ?? ""),
+          amountStroops: Number(raw.amount ?? 0),
+          txHash: String(raw.tx_hash ?? ""),
+          timestamp: raw.timestamp ? Number(raw.timestamp) : undefined,
+          metadata: raw.metadata ? String(raw.metadata) : undefined,
+        };
+      }
+    } catch {
+      // Unparseable retval (e.g. the error union for a missing record) — the
+      // payment does not exist; treated as not-found below.
+    }
   }
   return null;
 }

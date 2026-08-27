@@ -100,8 +100,9 @@ export const LIFECYCLE_LABELS: Record<
  *
  * Position rules:
  * - `FAILED` / `CANCELLED` statuses or the `CANCELLED` metadata marker
- *   terminate the timeline at a FAILED step. Cancelled payments stop before
- *   signing; failed payments progressed through the pipeline.
+ *   terminate the timeline at a FAILED step. The failure stage is not
+ *   tracked, so neither a failed nor a cancelled payment claims to have
+ *   reached signing/submission — only creation is marked as reached.
  * - `CONFIRMED` / `COMPLETED`, or a transaction hash, mean the payment
  *   reached the confirmed terminal step.
  * - `SUBMITTED` / `PENDING` / `PROCESSING` sit at the submitted step;
@@ -147,8 +148,9 @@ export function derivePaymentLifecycle(
     const stepPosition = i + 1;
     const { label, description } = LIFECYCLE_LABELS[state];
 
-    if (isCancelled && state !== "CREATED") {
-      // Cancelled payments stop before signing — later steps are pending.
+    if ((isCancelled || isFailed) && state !== "CREATED") {
+      // The failure stage isn't tracked, so failed/cancelled payments never
+      // claim to have been signed or submitted — later steps stay pending.
       steps.push({
         state,
         label,
