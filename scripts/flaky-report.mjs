@@ -144,6 +144,7 @@ async function main() {
     report = JSON.parse(readFileSync(reportPath, "utf8"));
   } catch {
     console.log(`No Playwright JSON report at ${reportPath} — nothing to check.`);
+    await clearStaleComment();
     return;
   }
 
