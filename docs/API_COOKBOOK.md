@@ -965,6 +965,30 @@ curl -X DELETE "$BASE/api/keys?id=cm0ak0000000000000000002" -H "X-API-Key: $KEY"
 
 ## Session & CSRF
 
+### Mint a wallet challenge — `GET /api/auth/challenge`
+
+No API key needed. Returns a short-lived, server-signed challenge plus the
+exact message the wallet must sign. `POST /api/auth/session` only issues a
+session cookie when the signature over this message verifies against the
+public key.
+
+```bash
+curl -G "$BASE/api/auth/challenge" \
+  --data-urlencode "publicKey=GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "challenge": "ch_9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "message": "OphirPay login — sign this message to authenticate as GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U",
+    "expiresIn": 300
+  },
+  "meta": { "timestamp": "2026-08-26T11:15:00.123Z" }
+}
+```
+
 ### Issue a session — `POST /api/auth/session`
 
 No API key needed — called by the UI after a wallet connect. Sets an HttpOnly,
@@ -1973,6 +1997,7 @@ ophirpay_webhooks_failed_total 2
 | `/api/webhooks` | GET, POST, DELETE | ✅ | Webhooks |
 | `/api/keys` | GET, POST, DELETE | ✅ | API keys |
 | `/api/auth/session` | POST, DELETE | ❌ | Session & CSRF |
+| `/api/auth/challenge` | GET | ❌ | Session & CSRF |
 | `/api/csrf` | GET | ❌ | Session & CSRF |
 | `/api/multisig` | GET, POST | ✅ | Multisig |
 | `/api/multisig/propose` | POST | ✅ | Multisig |

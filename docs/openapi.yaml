@@ -244,6 +244,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/payments/export:
+    get:
+      tags: [Payments]
+      summary: Export payments as CSV
+      description: |
+        Server-side CSV export of the CURRENT filter results — every row
+        matching `status` / `search` (the same filters as GET /api/payments),
+        not just the page loaded in the browser. Returns a dated CSV
+        attachment that includes all key fields plus memo and transaction hash.
+        The response includes an `X-Export-Truncated` header set to `true`
+        when the result set exceeds the export row cap.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments with this status
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments matching this search term
+      responses:
+        "200":
+          description: CSV attachment with the matching payment rows
+          headers:
+            X-Export-Truncated:
+              description: true when the result set was truncated to the export cap
+              schema:
+                type: string
+                enum: ["true", "false"]
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
     get:
