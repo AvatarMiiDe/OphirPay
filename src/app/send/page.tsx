@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
 import Link from "next/link";
 
@@ -462,19 +463,27 @@ export default function SendPage() {
 
       {/* Form */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-        {/* Destination */}
+        {/* Destination — address book autocomplete */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Destination Address
           </label>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={destination}
-            onChange={(e) => setDestination(e.target.value)}
+            onChange={setDestination}
             disabled={isSubmitting}
             placeholder="G..."
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            Start typing to autocomplete from your{" "}
+            <Link
+              href="/address-book"
+              className="text-ophir-600 dark:text-ophir-400 hover:underline"
+            >
+              address book
+            </Link>
+            .
+          </p>
         </div>
 
         {/* Asset Selector */}

@@ -5,7 +5,7 @@
  * Stores frequently used Stellar addresses with labels for quick access.
  */
 
-interface AddressEntry {
+export interface AddressEntry {
   publicKey: string;
   label: string;
   memo?: string;
