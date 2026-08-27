@@ -134,7 +134,7 @@ describe("GET /api/payments — cursor pagination over 10,050 rows", () => {
       const url = cursor
         ? `http://localhost/api/payments?limit=${limit}&cursor=${encodeURIComponent(cursor)}`
         : `http://localhost/api/payments?limit=${limit}`;
-      const res = await getPayments(new Request(url));
+      const res: Response = await getPayments(new Request(url));
       expect(res.status).toBe(200);
       const json = await res.json();
 
@@ -231,7 +231,7 @@ describe("GET /api/batches — cursor pagination", () => {
       const url = cursor
         ? `http://localhost/api/batches?limit=50&cursor=${encodeURIComponent(cursor)}`
         : "http://localhost/api/batches?limit=50";
-      const res = await getBatches(new Request(url));
+      const res: Response = await getBatches(new Request(url));
       expect(res.status).toBe(200);
       const json = await res.json();
       pageSizes.push(json.data.length);

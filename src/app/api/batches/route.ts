@@ -9,6 +9,7 @@ import {
   unauthorizedError,
   handleApiError,
 } from "@/lib/api-response";
+import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
 import { incMetric } from "@/lib/metrics-counters";
 import {

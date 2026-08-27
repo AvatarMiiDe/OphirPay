@@ -10,6 +10,7 @@ import {
   handleApiError,
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
