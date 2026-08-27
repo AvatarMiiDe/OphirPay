@@ -2155,10 +2155,12 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &pause_fn, args);
+            let result = env.try_invoke_contract::<()>(&emitter, &pause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
+            match result {
+                Ok(Ok(())) => {}
+                _ => return Err(PaymentError::CrossContractCallFailed),
+            }
         } else {
             release_reentrancy_lock(&env);
         }
@@ -2189,15 +2191,15 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &unpause_fn, args);
+            let result = env.try_invoke_contract::<()>(&emitter, &unpause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
+            match result {
+                Ok(Ok(())) => {}
+                _ => return Err(PaymentError::CrossContractCallFailed),
+            }
         } else {
             release_reentrancy_lock(&env);
         }
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
