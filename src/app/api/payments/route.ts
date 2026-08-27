@@ -54,7 +54,10 @@ export const GET = withRequestLogging(async function GET(request: Request) {
     const includeDeleted = searchParams.get("includeDeleted") === "true";
 
     // Always scope to the authenticated user — never expose other users' data
-    const baseWhere: Record<string, unknown> = { userId: auth.userId };
+    const baseWhere: Record<string, unknown> = {
+      userId: auth.userId,
+      ...(includeDeleted ? {} : { deletedAt: null }),
+    };
     if (status) baseWhere.status = status;
     if (search) {
       baseWhere.OR = [
