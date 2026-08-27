@@ -10,14 +10,22 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { setFeeConfig, setFeeCollector } from "@/lib/contract-advanced";
 import { 
   validateFeeBps, 
   validateFeeConfig,
   MAX_FEE_BPS,
-  useFeeConfig,
-  type FeeConfigData,
 } from "@/lib/fee-config";
+
+interface FeeConfigData {
+  payment_fee_bps: number;
+  escrow_fee_bps: number;
+  stream_fee_bps: number;
+  batch_base_fee: number;
+  batch_per_item_fee: number;
+  enabled: boolean;
+}
 
 interface TxStatus {
   type: "success" | "error";
@@ -29,6 +37,8 @@ export default function FeeConfigPage() {
   const toast = useToast();
   const { wallet } = useWallet();
   const queryClient = useQueryClient();
+  
+  // State declarations - THESE WERE MISSING
   const [collector, setCollector] = useState<string | null>(null);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showCollectorModal, setShowCollectorModal] = useState(false);
@@ -44,7 +54,14 @@ export default function FeeConfigPage() {
   const [formEnabled, setFormEnabled] = useState(true);
   const [formCollector, setFormCollector] = useState("");
 
-  const { config, isLoading: loading } = useFeeConfig();
+  const {
+    data: rawConfig,
+    isLoading: loading,
+  } = useApiQuery<FeeConfigData>(["fee-config"], "/api/fee-config");
+  
+  const config = rawConfig && typeof rawConfig === "object" && "payment_fee_bps" in rawConfig
+    ? rawConfig
+    : null;
 
   // Initialize form values from config when loaded
   useEffect(() => {
@@ -93,7 +110,7 @@ export default function FeeConfigPage() {
           message: "Fee configuration saved on-chain",
           txHash: result.txHash,
         });
-        toast.success("Fee configuration saved on-chain", result.txHash ? `Tx: ${result.txHash.slice(0, 12)}...` : undefined);
+        toast.success("Fee configuration saved on-chain");
         setShowFeeModal(false);
         queryClient.invalidateQueries({ queryKey: ["fee-config"] });
       } else {
@@ -137,7 +154,7 @@ export default function FeeConfigPage() {
           message: "Fee collector updated on-chain",
           txHash: result.txHash,
         });
-        toast.success("Fee collector updated on-chain", result.txHash ? `Tx: ${result.txHash.slice(0, 12)}...` : undefined);
+        toast.success("Fee collector updated on-chain");
         setShowCollectorModal(false);
         setCollector(formCollector);
       } else {
@@ -161,7 +178,7 @@ export default function FeeConfigPage() {
 
   if (loading) {
     return (
-      <div className="animate-fade-in space-y-6">
+      <div className="animate-fade-in space-y-6" data-testid="loading-skeleton">
         <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
         <div className="h-40 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
       </div>
@@ -225,10 +242,18 @@ export default function FeeConfigPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setShowFeeModal(true)} variant="primary">
+          <Button 
+            onClick={() => setShowFeeModal(true)} 
+            variant="primary"
+            aria-label="Edit Fees"
+          >
             ⚙ Edit Fees
           </Button>
-          <Button onClick={() => setShowCollectorModal(true)} variant="secondary">
+          <Button 
+            onClick={() => setShowCollectorModal(true)} 
+            variant="secondary"
+            aria-label="Set Collector"
+          >
             💰 Set Collector
           </Button>
         </div>

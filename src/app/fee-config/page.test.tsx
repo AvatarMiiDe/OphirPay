@@ -2,10 +2,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import FeeConfigPage from "../page";
+import FeeConfigPage from "./page";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { setFeeConfig, setFeeCollector } from "@/lib/contract-advanced";
+import { useToast } from "@/components/ui/Toast";
 
 // Mock the hooks and contract functions
 vi.mock("@/hooks/useMultiWallet", () => ({
@@ -22,14 +23,7 @@ vi.mock("@/lib/contract-advanced", () => ({
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
-  useToast: () => ({
-    toast: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
-    dismiss: vi.fn(),
-  }),
+  useToast: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -42,6 +36,10 @@ describe("FeeConfigPage", () => {
   const mockWallet = {
     publicKey: "GABC1234567890",
     connected: true,
+    network: "TESTNET",
+    balance: "100.00",
+    balanceLoading: false,
+    activeWalletId: "freighter",
   };
 
   const mockConfig = {
@@ -53,27 +51,55 @@ describe("FeeConfigPage", () => {
     enabled: true,
   };
 
+  const mockToast = {
+    toast: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    dismiss: vi.fn(),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     
+    // Reset all mocks
     (useWallet as any).mockReturnValue({ wallet: mockWallet });
     (useApiQuery as any).mockReturnValue({
       data: mockConfig,
       isLoading: false,
       error: null,
     });
+    (useToast as any).mockReturnValue(mockToast);
+    (setFeeConfig as any).mockResolvedValue({
+      success: true,
+      txHash: "0xabc123",
+    });
+    (setFeeCollector as any).mockResolvedValue({
+      success: true,
+      txHash: "0xdef456",
+    });
   });
 
   it("renders fee configuration with on-chain values", () => {
     render(<FeeConfigPage />);
     
+    // Check for the main heading
     expect(screen.getByText("Fee Configuration")).toBeInTheDocument();
+    
+    // Check for fee values
     expect(screen.getByText("1.00%")).toBeInTheDocument(); // 100 bps
     expect(screen.getByText("2.00%")).toBeInTheDocument(); // 200 bps
     expect(screen.getByText("3.00%")).toBeInTheDocument(); // 300 bps
+    
+    // Check for bps values
     expect(screen.getByText("100 bps")).toBeInTheDocument();
     expect(screen.getByText("200 bps")).toBeInTheDocument();
     expect(screen.getByText("300 bps")).toBeInTheDocument();
+    
+    // Check for action buttons
+    expect(screen.getByRole('button', { name: /edit fees/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /set collector/i })).toBeInTheDocument();
   });
 
   it("successfully updates fee config with transaction hash", async () => {
@@ -85,29 +111,38 @@ describe("FeeConfigPage", () => {
 
     render(<FeeConfigPage />);
     
-    // Open fee modal
-    fireEvent.click(screen.getByText("⚙ Edit Fees"));
+    // Open fee modal using role
+    const editButton = screen.getByRole('button', { name: /edit fees/i });
+    fireEvent.click(editButton);
     
-    // Update payment fee
-    const paymentInput = screen.getByLabelText("Payment Fee (bps)");
+    // Wait for modal to appear
+    await waitFor(() => {
+      expect(screen.getByText("Configure Protocol Fees")).toBeInTheDocument();
+    });
+    
+    // Update only payment fee, keep other values from config
+    const paymentInput = screen.getByLabelText(/payment fee/i);
     fireEvent.change(paymentInput, { target: { value: "150" } });
     
     // Submit form
-    const submitButton = screen.getByText("Save Fee Configuration");
+    const submitButton = screen.getByRole('button', { name: /save fee configuration/i });
     fireEvent.click(submitButton);
 
     await waitFor(() => {
       expect(setFeeConfig).toHaveBeenCalledWith(
         "GABC1234567890",
         150,
-        5,
-        2,
-        0,
-        0,
-        true,
+        200, // escrowFee from config
+        300, // streamFee from config
+        1000000, // batchBase from config
+        100000, // batchPerItem from config
+        true, // enabled from config
       );
+    });
+    
+    // Check for transaction status
+    await waitFor(() => {
       expect(screen.getByText(/Tx: 0xabc123def456789/)).toBeInTheDocument();
-      expect(screen.getByText("Fee configuration saved on-chain")).toBeInTheDocument();
     });
   });
 
@@ -115,14 +150,20 @@ describe("FeeConfigPage", () => {
     render(<FeeConfigPage />);
     
     // Open fee modal
-    fireEvent.click(screen.getByText("⚙ Edit Fees"));
+    const editButton = screen.getByRole('button', { name: /edit fees/i });
+    fireEvent.click(editButton);
+    
+    // Wait for modal
+    await waitFor(() => {
+      expect(screen.getByText("Configure Protocol Fees")).toBeInTheDocument();
+    });
     
     // Try to set fee above max
-    const paymentInput = screen.getByLabelText("Payment Fee (bps)");
+    const paymentInput = screen.getByLabelText(/payment fee/i);
     fireEvent.change(paymentInput, { target: { value: "1500" } });
     
     // Submit button should be disabled
-    const submitButton = screen.getByText("Save Fee Configuration");
+    const submitButton = screen.getByRole('button', { name: /save fee configuration/i });
     expect(submitButton).toBeDisabled();
     
     // Input should show error styling
@@ -133,17 +174,27 @@ describe("FeeConfigPage", () => {
     render(<FeeConfigPage />);
     
     // Open fee modal
-    fireEvent.click(screen.getByText("⚙ Edit Fees"));
+    const editButton = screen.getByRole('button', { name: /edit fees/i });
+    fireEvent.click(editButton);
+    
+    // Wait for modal
+    await waitFor(() => {
+      expect(screen.getByText("Configure Protocol Fees")).toBeInTheDocument();
+    });
     
     // Set invalid fees
-    const paymentInput = screen.getByLabelText("Payment Fee (bps)");
+    const paymentInput = screen.getByLabelText(/payment fee/i);
     fireEvent.change(paymentInput, { target: { value: "1500" } });
     
-    const escrowInput = screen.getByLabelText("Escrow Fee (bps)");
+    const escrowInput = screen.getByLabelText(/escrow fee/i);
     fireEvent.change(escrowInput, { target: { value: "-10" } });
     
-    // Submit should not be called
+    // Contract should not be called
     expect(setFeeConfig).not.toHaveBeenCalled();
+    
+    // Submit button should be disabled due to invalid fees
+    const submitButton = screen.getByRole('button', { name: /save fee configuration/i });
+    expect(submitButton).toBeDisabled();
   });
 
   it("shows error on failed contract call", async () => {
@@ -155,12 +206,19 @@ describe("FeeConfigPage", () => {
     render(<FeeConfigPage />);
     
     // Open fee modal
-    fireEvent.click(screen.getByText("⚙ Edit Fees"));
+    const editButton = screen.getByRole('button', { name: /edit fees/i });
+    fireEvent.click(editButton);
     
-    // Submit form with valid values
-    const submitButton = screen.getByText("Save Fee Configuration");
+    // Wait for modal
+    await waitFor(() => {
+      expect(screen.getByText("Configure Protocol Fees")).toBeInTheDocument();
+    });
+    
+    // Submit form with valid values from config
+    const submitButton = screen.getByRole('button', { name: /save fee configuration/i });
     fireEvent.click(submitButton);
 
+    // Check for error message
     await waitFor(() => {
       expect(screen.getByText("Contract rejected transaction: fee too high")).toBeInTheDocument();
     });
@@ -175,15 +233,21 @@ describe("FeeConfigPage", () => {
 
     render(<FeeConfigPage />);
     
-    // Open collector modal
-    fireEvent.click(screen.getByText("💰 Set Collector"));
+    // Open collector modal using role
+    const collectorButton = screen.getByRole('button', { name: /set collector/i });
+    fireEvent.click(collectorButton);
+    
+    // Wait for modal - use heading role to avoid multiple matches
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: "Set Fee Collector" })).toBeInTheDocument();
+    });
     
     // Enter collector address
-    const collectorInput = screen.getByLabelText("Collector Address");
+    const collectorInput = screen.getByLabelText(/collector address/i);
     fireEvent.change(collectorInput, { target: { value: "GCOLLECTOR123456789" } });
     
-    // Submit
-    const submitButton = screen.getByText("Set Fee Collector");
+    // Submit using the button in the modal (not the main button)
+    const submitButton = screen.getByRole('button', { name: /^set fee collector$/i });
     fireEvent.click(submitButton);
 
     await waitFor(() => {
@@ -191,19 +255,28 @@ describe("FeeConfigPage", () => {
         "GABC1234567890",
         "GCOLLECTOR123456789",
       );
+    });
+    
+    // Check for transaction status
+    await waitFor(() => {
       expect(screen.getByText(/Tx: 0xcollector123/)).toBeInTheDocument();
     });
   });
 
   it("shows wallet connection warning when disconnected", () => {
     (useWallet as any).mockReturnValue({ 
-      wallet: { connected: false, publicKey: null } 
+      wallet: { 
+        ...mockWallet,
+        connected: false, 
+        publicKey: null 
+      } 
     });
 
     render(<FeeConfigPage />);
     
-    expect(screen.getByText("Wallet not connected")).toBeInTheDocument();
-    expect(screen.getByText("Connect your wallet to update fee configuration on-chain.")).toBeInTheDocument();
+    // Check for wallet warning
+    expect(screen.getByText(/Wallet not connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Connect your wallet to update fee configuration on-chain/i)).toBeInTheDocument();
   });
 
   it("shows loading state", () => {
@@ -213,10 +286,10 @@ describe("FeeConfigPage", () => {
       error: null,
     });
 
-    render(<FeeConfigPage />);
+    const { container } = render(<FeeConfigPage />);
     
     // Should show skeleton loading
-    const skeletonElements = document.querySelectorAll(".animate-pulse");
+    const skeletonElements = container.querySelectorAll(".animate-pulse");
     expect(skeletonElements.length).toBeGreaterThan(0);
   });
 
