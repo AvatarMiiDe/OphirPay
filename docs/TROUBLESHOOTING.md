@@ -122,8 +122,12 @@ rustup target list --installed   # should include wasm32v1-none
 ```
 
 If the error persists, make sure the target was added to the **same
-toolchain** that `cargo` is using (check with `rustup show`; CI pins
-`1.91.0` via `dtolnay/rust-toolchain@1.91.0`). When in doubt, re-run:
+toolchain** that `cargo` is using (check with `rustup show`). The repo pins
+its Rust toolchain in `contracts/rust-toolchain.toml` (channel `1.91.0`,
+with both `wasm32-unknown-unknown` and `wasm32v1-none` targets listed), so
+running `cargo`/`rustup` from inside `contracts/` automatically uses the
+pinned toolchain and auto-installs its targets. When in doubt, install the
+pinned toolchain explicitly:
 
 ```bash
 rustup toolchain install 1.91.0
@@ -158,9 +162,13 @@ Any of the following:
 
 - `DATABASE_URL` is not set — the repo uses `.env.example` as a template;
   the file must be copied to `.env` (or `.env.local`) before Prisma runs.
-- The database file/schema does not exist yet — on SQLite
-  (`DATABASE_URL="file:./dev.db"`) the file is created by Prisma, but the
-  schema must be pushed/generated first.
+- **The default local database is PostgreSQL, not SQLite.** `.env.example`
+  ships `DATABASE_PROVIDER=postgresql` with
+  `DATABASE_URL=postgresql://localhost:5432/ophirpay`, and
+  `prisma/schema.prisma` enables the PostgreSQL datasource. If no PostgreSQL
+  server is running locally, `prisma db push` fails with `P1001: Can't reach
+  database server` — the connectivity error this entry is meant to resolve.
+  SQLite is an opt-in dev alternative (see step 5), not the default.
 - A schema/database drift between `prisma/schema.prisma` and the local
   database after pulling new commits.
 - A stale Prisma client after a schema change.
@@ -171,26 +179,45 @@ Any of the following:
    ```bash
    cp .env.example .env
    ```
-2. Confirm `DATABASE_URL` is present and points where you expect. For local
-   development the default is SQLite:
+2. Confirm the variables are present and point where you expect:
    ```bash
-   grep DATABASE_URL .env
-   # DATABASE_URL="file:./dev.db"
+   grep -E 'DATABASE_URL|DATABASE_PROVIDER' .env
+   # DATABASE_PROVIDER=postgresql
+   # DATABASE_URL=postgresql://localhost:5432/ophirpay
    ```
-3. Apply the schema and regenerate the client (in this order):
+3. Make sure a PostgreSQL server is reachable at that URL. The quickest
+   path is the repository's bundled `docker-compose.yml` (PostgreSQL 16,
+   user/password/db all `ophirpay`):
+   ```bash
+   docker compose up -d db
+   ```
+   then point the URL at it:
+   ```bash
+   # .env
+   DATABASE_URL=postgresql://ophirpay:ophirpay@localhost:5432/ophirpay
+   ```
+   Alternatively, install/start PostgreSQL locally and create the `ophirpay`
+   database before continuing.
+4. Apply the schema and regenerate the client (in this order):
    ```bash
    npx prisma db push
    npx prisma generate
    ```
-4. If the app still uses a stale client, regenerate and restart the dev
+5. **SQLite dev alternative (no server needed):** the schema header in
+   `prisma/schema.prisma` documents the switch — set
+   `DATABASE_PROVIDER=sqlite` and `DATABASE_URL="file:./dev.db"`, and swap
+   the datasource in `prisma/schema.prisma` (uncomment the `sqlite` block,
+   comment out the `postgresql` block). Then `npx prisma db push` again.
+6. If the app still uses a stale client, regenerate and restart the dev
    server:
    ```bash
    npm run db:generate
    npm run dev
    ```
-5. For PostgreSQL (production/Neon), use a connection string that includes
-   credentials, e.g. `postgresql://user:pass@host:5432/dbname?sslmode=require`,
-   and ensure the database exists before running `db push`.
+7. For a remote PostgreSQL (production/Neon), use a connection string that
+   includes credentials, e.g.
+   `postgresql://user:pass@host:5432/dbname?sslmode=require`, and ensure the
+   database exists before running `db push`.
 
 **Verification**
 
@@ -345,7 +372,9 @@ port mapping).
    PORT=3001 npm run dev
    ```
 3. Update `NEXT_PUBLIC_APP_URL` in `.env` if you change the port, so
-   absolute URLs (CSRF, webhooks, demo mode) point at the right origin.
+   absolute URLs built from it — payment links, SEO/metadata, and the proxy
+   base URL — point at the right origin. (CSRF and webhook calls are not
+   affected: CSRF uses relative requests and webhook URLs are user-provided.)
 4. If a stale Next.js process lingers, stop it before restarting:
    ```bash
    pkill -f "next dev"   # careful: stops all next dev processes
