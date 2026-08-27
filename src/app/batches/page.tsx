@@ -3,6 +3,8 @@
 
 
 import Link from "next/link";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useRouter } from "next/navigation";
 import { timeAgo, getStatusColor } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -12,6 +14,7 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import type { Batch } from "@/types";
 
 export default function BatchesPage() {
+  usePageTitle(PAGE_TITLES.BATCHES);
   const router = useRouter();
   const {
     data: rawBatches,

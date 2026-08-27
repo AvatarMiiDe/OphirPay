@@ -3,6 +3,8 @@
 
 
 import { useState, useEffect, useRef } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 
@@ -26,6 +28,7 @@ interface SseEvent {
 }
 
 export default function EventsPage() {
+  usePageTitle(PAGE_TITLES.EVENTS);
   const [connected, setConnected] = useState(false);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);
   const [viewMode, setViewMode] = useState<"live" | "onchain">("live");

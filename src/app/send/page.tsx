@@ -3,6 +3,8 @@
 
 
 import { useState, useEffect } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -51,6 +53,7 @@ type TxResult =
 // ── Page ──────────────────────────────────────────────────────
 
 export default function SendPage() {
+  usePageTitle(PAGE_TITLES.SEND);
   const { wallet, fetchBalance } = useWallet();
   const toast = useToast();
 
