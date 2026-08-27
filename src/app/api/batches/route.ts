@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import {
   createBatchSchema,
   idempotencyKeySchema,
+  type CreateBatchInput,
 } from "@/lib/validation-schemas";
 import {
   successResponse,
@@ -66,28 +67,6 @@ export async function GET(request: Request) {
 
 const IDEMPOTENCY_HEADER = "Idempotency-Key";
 
-/**
- * Resolve the idempotency key for this request.
- *
- * The `Idempotency-Key` header takes precedence; otherwise the optional
- * (already trimmed + validated by `createBatchSchema`) `idempotencyKey`
- * body field is used. Returns null when the client sent no key at all.
- */
-function resolveIdempotencyKey(
-  request: Request,
-  bodyKey?: string
-): { key: string | null; error?: Response } {
-  const headerKey = request.headers.get(IDEMPOTENCY_HEADER);
-  if (headerKey) {
-    const parsed = idempotencyKeySchema.safeParse(headerKey);
-    if (!parsed.success) {
-      return { key: null, error: validationError(parsed.error) };
-    }
-    return { key: parsed.data };
-  }
-  return { key: bodyKey ?? null };
-}
-
 /** True when `err` is a Prisma unique-constraint violation (P2002). */
 function isUniqueConstraintError(err: unknown): boolean {
   return (
@@ -109,20 +88,38 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    const parsed = createBatchSchema.safeParse(body);
+    // The Idempotency-Key header takes precedence over the body field, so it
+    // is resolved BEFORE body validation: a valid header must win even when
+    // the lower-precedence body key is invalid (otherwise a client that
+    // sends both would be rejected for a key it never intended to use). When
+    // a header is present the body key is ignored entirely.
+    const headerKey = request.headers.get(IDEMPOTENCY_HEADER);
+    let idempotencyKey: string | null = null;
+    let parsed;
+    if (headerKey) {
+      const parsedKey = idempotencyKeySchema.safeParse(headerKey);
+      if (!parsedKey.success) {
+        return validationError(parsedKey.error);
+      }
+      idempotencyKey = parsedKey.data;
+      parsed = createBatchSchema.omit({ idempotencyKey: true }).safeParse(body);
+    } else {
+      parsed = createBatchSchema.safeParse(body);
+    }
     if (!parsed.success) {
       return validationError(parsed.error);
     }
 
-    const { name, description, recipients: payments } = parsed.data;
+    // Both parse paths produce a createBatchSchema-shaped payload; the omit
+    // variant simply lacks idempotencyKey (which is already set above).
+    const data = parsed.data as CreateBatchInput;
+    const { name, description, recipients: payments } = data;
     const { userId } = auth;
 
-    const { key: idempotencyKey, error: keyError } = resolveIdempotencyKey(
-      request,
-      parsed.data.idempotencyKey
-    );
-    if (keyError) {
-      return keyError;
+    // No header supplied — fall back to the optional (already trimmed +
+    // validated by createBatchSchema) body idempotencyKey field.
+    if (idempotencyKey === null && data.idempotencyKey) {
+      idempotencyKey = data.idempotencyKey;
     }
 
     // Replay: a previous request with the same key already created this

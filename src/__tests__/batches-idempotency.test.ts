@@ -139,6 +139,30 @@ describe("POST /api/batches — idempotency", () => {
     expect(createData.idempotencyKey).toBe(VALID_HEADER_KEY);
   });
 
+  it("lets a valid header key override an invalid body key", async () => {
+    // A client that sends both must not be rejected for the lower-precedence
+    // body key — the valid header wins and the invalid body key is ignored.
+    const res = await POST(
+      makeRequest({ ...VALID_BODY, idempotencyKey: "short" }, {
+        "Idempotency-Key": VALID_HEADER_KEY,
+      })
+    );
+    expect(res.status).toBe(201);
+
+    const createData = prismaMock.batch.create.mock.calls[0][0].data;
+    expect(createData.idempotencyKey).toBe(VALID_HEADER_KEY);
+  });
+
+  it("still rejects an invalid header key even when the body key is valid", async () => {
+    const res = await POST(
+      makeRequest({ ...VALID_BODY, idempotencyKey: VALID_BODY_KEY }, {
+        "Idempotency-Key": "bad",
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(prismaMock.batch.create).not.toHaveBeenCalled();
+  });
+
   it("replays a processed key by returning the original batch (no duplicates)", async () => {
     const existing = {
       id: "batch-1",
