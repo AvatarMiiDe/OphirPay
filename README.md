@@ -14,6 +14,14 @@
   <br />
 
   <p>
+    <strong>🌐 Languages:</strong> 
+    <strong>🇬🇧 English</strong> · 
+    <a href="README.es.md">🇪🇸 Español</a> · 
+    <a href="README.fr.md">🇫🇷 Français</a> · 
+    <a href="README.ja.md">🇯🇵 日本語</a>
+  </p>
+
+  <p>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
       <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(22%20jobs)&logo=githubactions&logoColor=white" alt="CI — 22 jobs" />
     </a>
