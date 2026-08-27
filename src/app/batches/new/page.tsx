@@ -1,8 +1,7 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -13,6 +12,8 @@ import {
   NETWORK_PASSPHRASE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { estimateBatchFee } from "@/lib/fee-estimator";
+import { BatchConfirmDialog } from "@/components/BatchConfirmDialog";
 import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
@@ -49,6 +50,7 @@ let nextId = 0;
 
 export default function NewBatchPage() {
   const { wallet } = useWallet();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [recipients, setRecipients] = useState<RecipientRow[]>([
     { id: nextId++, address: "", amount: "", memo: "" },
@@ -57,6 +59,7 @@ export default function NewBatchPage() {
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [csvReport, setCsvReport] = useState<{ valid: number; errors: { row: number; message: string }[] } | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // ── Recipient management ──────────────────────────────────
 
@@ -83,6 +86,10 @@ export default function NewBatchPage() {
     );
   };
 
+  const handleDownloadTemplate = () => {
+    downloadCsvTemplate();
+  };
+
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -100,6 +107,10 @@ export default function NewBatchPage() {
           memo: r.memo ?? "",
         }))
       );
+    }
+    // Reset file input so same file can be re-uploaded
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -151,7 +162,6 @@ export default function NewBatchPage() {
       return false;
     }
 
-    // Check for duplicate addresses
     const addresses = recipients.map((r) => r.address.trim());
     const unique = new Set(addresses);
     if (unique.size !== addresses.length) {
@@ -167,7 +177,13 @@ export default function NewBatchPage() {
   const handleSend = async () => {
     if (!wallet.publicKey) return;
     if (!validate()) return;
+    setShowConfirm(true);
+  };
 
+  const handleConfirmSend = async () => {
+    if (!wallet.publicKey) return;
+
+    setShowConfirm(false);
     setResult(null);
     setStep("building");
 
@@ -178,13 +194,11 @@ export default function NewBatchPage() {
         memo: r.memo.trim() || undefined,
       }));
 
-      // 1. Build the batch transaction
       const { xdr } = await buildBatchPaymentTx({
         sourcePublicKey: wallet.publicKey,
         recipients: batchRecipients,
       });
 
-      // 2. Sign with the active wallet connector
       setStep("signing");
 
       if (!wallet.activeWalletId) {
@@ -197,11 +211,9 @@ export default function NewBatchPage() {
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
-      // 3. Submit to Horizon
       setStep("submitting");
       const response = await submitSignedTx(signedXdr);
 
-      // 4. Success!
       setStep("done");
       setResult({
         type: "success",
@@ -225,6 +237,7 @@ export default function NewBatchPage() {
     setResult(null);
     setRecipients([{ id: nextId++, address: "", amount: "", memo: "" }]);
     setValidationError(null);
+    setCsvReport(null);
   };
 
   // ── Total ────────────────────────────────────────────────
@@ -481,32 +494,36 @@ export default function NewBatchPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Recipients
           </h2>
-          <button
-            onClick={addRecipient}
-            disabled={isSubmitting || recipients.length >= 50}
-            className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-4 h-4"
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Download template
-          </button>
-          <label className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
-            Upload CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCsvUpload}
-              className="hidden"
-            />
-          </label>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Download template
+            </button>
+            <label className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+              Upload CSV
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCsvUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
 
         {csvReport && (
@@ -527,7 +544,9 @@ export default function NewBatchPage() {
         <div className="flex justify-between mb-4">
           <button
             type="button"
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            onClick={addRecipient}
+            disabled={isSubmitting || recipients.length >= 50}
+            className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
             Add Recipient
           </button>
@@ -631,6 +650,19 @@ export default function NewBatchPage() {
           </p>
         )}
       </div>
+
+      {/* Confirmation dialog */}
+      <BatchConfirmDialog
+        open={showConfirm}
+        recipients={recipients.map((r) => ({
+          address: r.address,
+          amount: r.amount,
+        }))}
+        totalAmount={totalAmount}
+        estimatedFee={estimateBatchFee(recipients.length)}
+        onConfirm={handleConfirmSend}
+        onCancel={() => setShowConfirm(false)}
+      />
     </div>
   );
 }
