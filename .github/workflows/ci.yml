@@ -711,32 +711,43 @@ jobs:
     name: "♿ Frontend — Accessibility (Axe-Core)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: next-build
+    env:
+      DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_a11y
+      DIRECT_DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ophirpay_a11y
+      AUTH_SECRET: ci-a11y-auth-secret-00000000000000000000
+      NEXT_PUBLIC_CONTRACT_ID: CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET
+      NEXT_PUBLIC_EMITTER_CONTRACT_ID: CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5a1 # v4.1.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: "npm" }
       - run: npm ci
       - run: npx prisma generate
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next/
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
-      - name: Build Next.js App
-        run: npm run build
-        env:
-          DATABASE_URL: "file:./dev.db"
-          NEXTAUTH_SECRET: "ci-secret-for-tests-only-32-chars-long"
-          NEXTAUTH_URL: "http://localhost:3000"
-      - name: Run Axe Accessibility Tests
-        run: npx playwright test e2e/accessibility.spec.ts
+      - name: Start Server and Run Axe Accessibility Tests
+        run: |
+          nohup npm run start > /tmp/next-start.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3000/ && break
+            sleep 2
+          done
+          npx playwright test e2e/accessibility.spec.ts --project=chromium
         env:
           CI: true
-          DATABASE_URL: "file:./dev.db"
-          NEXTAUTH_SECRET: "ci-secret-for-tests-only-32-chars-long"
-          NEXTAUTH_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
       - name: Upload Accessibility Report
         if: always()
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-a11y-report
           path: playwright-report/
           retention-days: 7
+
 
