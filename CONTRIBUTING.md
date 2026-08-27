@@ -10,6 +10,11 @@ Thank you for your interest in contributing! OphirPay is an open-source payment 
 4. Set up the database: `npx prisma db push && npx prisma generate`
 5. Start the dev server: `npm run dev`
 
+> 🛠️ Something not working? See the
+> [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for fixes to the most
+> common setup issues (Freighter detection, Rust/wasm32 target, Prisma
+> migrations, WASM builds, Node version, port conflicts).
+
 ## Development Workflow
 
 - **Branch naming**: `feat/feature-name`, `fix/bug-description`, `docs/what-changed`, `ci/what-changed`, `test/what-changed`
