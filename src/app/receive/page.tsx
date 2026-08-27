@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { buildReceivePayload } from "@/lib/stellar-uri";
 import { getAccountExplorerUrl } from "@/lib/stellar";
 import { shortenAddress } from "@/lib/utils";
-import type { WalletId } from "@/lib/wallets";
+import { getWalletConnector, type WalletId } from "@/lib/wallets";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { WalletSelector } from "@/components/WalletSelector";
 import { QrCode } from "@/components/ui/QrCode";
@@ -18,6 +18,45 @@ export default function ReceivePage() {
   const { wallet, connect, isConnecting, error, availableWallets } = useWallet();
   const [showSelector, setShowSelector] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState<WalletId | null>(null);
+  const [accountMismatch, setAccountMismatch] = useState<{
+    liveAddress: string;
+  } | null>(null);
+
+  // The wallet provider only refreshes `publicKey` on connect — if the user
+  // switches accounts inside the wallet extension while this page is open,
+  // the shown address/QR/URI would silently keep targeting the previous
+  // account. Re-check the live account from the active wallet connector on
+  // mount and on window focus, and warn (with a reconnect action) when it
+  // no longer matches the connected session.
+  useEffect(() => {
+    if (!wallet.connected || !wallet.publicKey || !wallet.activeWalletId) {
+      setAccountMismatch(null);
+      return;
+    }
+
+    let cancelled = false;
+    const checkLiveAddress = async () => {
+      try {
+        const connector = getWalletConnector(wallet.activeWalletId!);
+        const live = await connector.getAddress();
+        if (cancelled) return;
+        if (live && live !== wallet.publicKey) {
+          setAccountMismatch({ liveAddress: live });
+        } else {
+          setAccountMismatch(null);
+        }
+      } catch {
+        // Wallet unavailable or the read failed — keep the current state.
+      }
+    };
+
+    checkLiveAddress();
+    window.addEventListener("focus", checkLiveAddress);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", checkLiveAddress);
+    };
+  }, [wallet.connected, wallet.publicKey, wallet.activeWalletId]);
 
   const handleSelectWallet = async (walletId: WalletId) => {
     setConnectingWallet(walletId);
@@ -70,7 +109,42 @@ export default function ReceivePage() {
           )}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+        <div className="max-w-4xl space-y-6">
+          {/* Account mismatch warning — the wallet is on a different account
+              than the connected session. Surface it prominently instead of
+              silently directing senders to the previous destination. */}
+          {accountMismatch && (
+            <div
+              role="alert"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3"
+            >
+              <div className="flex items-start gap-3 min-w-0">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    Wallet account changed
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    Your wallet is now on {shortenAddress(accountMismatch.liveAddress, 8)}, but the
+                    address below still targets your previous account. Reconnect to update the
+                    receive address and QR code before sharing them.
+                  </p>
+                </div>
+              </div>
+              {wallet.activeWalletId && (
+                <button
+                  onClick={() => connect(wallet.activeWalletId!)}
+                  className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors"
+                >
+                  Reconnect
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* QR code */}
           <Card className="p-8 flex flex-col items-center text-center">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
@@ -135,6 +209,7 @@ export default function ReceivePage() {
               <span className="font-mono">{shortenAddress(address, 8)}</span>
             </p>
           </Card>
+          </div>
         </div>
       )}
 

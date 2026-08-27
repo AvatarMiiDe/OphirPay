@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
 import ReceivePage from "@/app/receive/page";
 
 const ADDRESS_A = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -14,6 +15,16 @@ vi.mock("qrcode", () => ({
     toDataURL: (...args: unknown[]) => toDataURLMock(...args),
   },
 }));
+
+const getWalletConnectorMock = vi.fn();
+
+vi.mock("@/lib/wallets", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/wallets")>();
+  return {
+    ...actual,
+    getWalletConnector: () => getWalletConnectorMock(),
+  };
+});
 
 let walletState: {
   connected: boolean;
@@ -54,6 +65,11 @@ beforeEach(() => {
   connectMock.mockReset();
   toDataURLMock.mockReset();
   toDataURLMock.mockResolvedValue("data:image/png;base64,QR");
+  // Default: the wallet reports the same account the session knows about.
+  getWalletConnectorMock.mockReset();
+  getWalletConnectorMock.mockReturnValue({
+    getAddress: () => Promise.resolve(null),
+  });
   Object.assign(navigator, {
     clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   });
@@ -137,5 +153,57 @@ describe("ReceivePage", () => {
       "href",
       "https://stellar.expert/explorer/testnet/account/" + ADDRESS_A
     );
+  });
+
+  it("warns when the wallet account changed while the page is open", async () => {
+    setWallet(ADDRESS_A);
+    // The wallet extension is now on a different account than the session.
+    getWalletConnectorMock.mockReturnValue({
+      getAddress: () => Promise.resolve(ADDRESS_B),
+    });
+
+    render(<ReceivePage />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Wallet account changed");
+    expect(alert).toHaveTextContent(/still targets your previous account/i);
+    expect(
+      screen.getByRole("button", { name: /reconnect/i })
+    ).toBeInTheDocument();
+  });
+
+  it("does not warn when the wallet account matches the session", async () => {
+    setWallet(ADDRESS_A);
+    getWalletConnectorMock.mockReturnValue({
+      getAddress: () => Promise.resolve(ADDRESS_A),
+    });
+
+    render(<ReceivePage />);
+
+    // Wait for the connected state to render, then assert no warning.
+    await screen.findByRole("img", { name: /receive qr code/i });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("reconnects from the mismatch warning and clears it", async () => {
+    setWallet(ADDRESS_A);
+    getWalletConnectorMock.mockReturnValue({
+      getAddress: () => Promise.resolve(ADDRESS_B),
+    });
+    const { rerender } = render(<ReceivePage />);
+
+    const reconnect = await screen.findByRole("button", { name: /reconnect/i });
+    fireEvent.click(reconnect);
+    expect(connectMock).toHaveBeenCalledWith("freighter");
+
+    // After reconnect the session updates to the live account.
+    setWallet(ADDRESS_B);
+    getWalletConnectorMock.mockReturnValue({
+      getAddress: () => Promise.resolve(ADDRESS_B),
+    });
+    rerender(<ReceivePage />);
+
+    // The live-account check is async — wait for the warning to clear.
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 });
