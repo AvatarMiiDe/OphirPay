@@ -69,4 +69,4 @@ export async function GET() {
       "X-Accel-Buffering": "no",
     },
   });
-});
+}
