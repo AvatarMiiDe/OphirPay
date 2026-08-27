@@ -41,8 +41,12 @@ describe("withRequestLogging", () => {
 
   it("records the actual duration of the handler", async () => {
     const spy = vi.spyOn(logger, "request").mockImplementation(() => {});
+    // Sleep 60ms (not 10ms): under load, a ~0.3ms clock skew between the
+    // jsdom performance clock and Node's timers occasionally made a 10ms
+    // sleep measure as ~9.7ms, flaking the assertion. 60ms keeps the
+    // "records the actual duration" semantics with real margin.
     const handler = withRequestLogging(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 60));
       return new Response("ok");
     });
 
