@@ -60,6 +60,7 @@ export default function NewBatchPage() {
   const [csvErrors, setCsvErrors] = useState<{ row: number; message: string }[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const importCsv = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".csv")) {
