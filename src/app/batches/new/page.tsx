@@ -60,6 +60,7 @@ export default function NewBatchPage() {
     baseFee: string;
     estimatedFee: string;
   } | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     let active = true;
