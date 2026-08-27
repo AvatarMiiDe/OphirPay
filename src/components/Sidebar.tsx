@@ -42,6 +42,7 @@ const navItems = [
   { href: "/fee-config", label: "Fee Config", Icon: FeeConfigIcon },
   { href: "/timelock", label: "Timelock", Icon: TimelockIcon },
   { href: "/policy-versions", label: "Policy Versions", Icon: PolicyVersionsIcon },
+  { href: "/keys", label: "API Keys", Icon: PolicyVersionsIcon },
 ];
 
 // Inline SVG icons for new feature pages

@@ -304,7 +304,7 @@ export default function ApiKeysPage() {
                 {editingId === key.id && (
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Effective scopes for “{key.name}”
+                      Effective scopes for "{key.name}"
                     </p>
                     <div className="grid sm:grid-cols-2 gap-2">
                       {API_SCOPES.map((scope) => {
