@@ -11,6 +11,10 @@ info:
     - `X-API-Key: <api-key>`
     
     API keys are generated at `POST /api/keys` and shown only once.
+
+    **Conventions** — see [docs/API_GUIDE.md](./API_GUIDE.md) for the
+    endpoint conventions: file structure, Zod validation, error handling,
+    auth usage, the response envelope, and rate limiting.
   version: 0.1.0
   contact:
     name: OphirPay Team

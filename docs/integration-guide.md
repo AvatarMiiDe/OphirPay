@@ -240,5 +240,6 @@ npx playwright test
 
 - [Open an issue](https://github.com/OphirPay/OphirPay/issues/new?template=bug_report.yml)
 - [Read the architecture guide](./architecture.md)
+- [Read the API endpoint conventions guide](./API_GUIDE.md) — the reference for adding or modifying API endpoints
 - [View the mainnet deployment guide](./deployment-mainnet.md)
 - [Check SUPPORT.md](../.github/SUPPORT.md)
