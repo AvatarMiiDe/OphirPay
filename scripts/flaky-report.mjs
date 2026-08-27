@@ -54,35 +54,54 @@ export function buildFlakyComment(flakyTests) {
 
 const FLAKY_COMMENT_MARKER = "<!-- flaky-e2e-report -->";
 
-async function postOrUpdateComment(body) {
+/** Resolves the PR comments API URL + auth headers, or null outside a PR context. */
+function getPrCommentContext() {
   const token = process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPOSITORY;
   const eventPath = process.env.GITHUB_EVENT_PATH;
 
-  if (!token || !repo || !eventPath) {
-    console.log("Not running in a PR context with GITHUB_TOKEN set — skipping comment.");
-    return;
-  }
+  if (!token || !repo || !eventPath) return null;
 
   const event = JSON.parse(readFileSync(eventPath, "utf8"));
   const prNumber = event.pull_request?.number;
-  if (!prNumber) {
-    console.log("No pull_request in event payload — skipping comment.");
+  if (!prNumber) return null;
+
+  return {
+    repo,
+    api: `https://api.github.com/repos/${repo}/issues/${prNumber}/comments`,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    },
+  };
+}
+
+/** Pages through all PR comments (GitHub returns them ~30 at a time) to find ours. */
+async function findMarkerComment(api, headers) {
+  let page = 1;
+  for (;;) {
+    const res = await fetch(`${api}?per_page=100&page=${page}`, { headers });
+    const comments = await res.json();
+    if (!Array.isArray(comments) || comments.length === 0) return null;
+
+    const found = comments.find((c) => c.body?.includes(FLAKY_COMMENT_MARKER));
+    if (found) return found;
+
+    if (comments.length < 100) return null; // no more pages
+    page += 1;
+  }
+}
+
+async function postOrUpdateComment(body) {
+  const ctx = getPrCommentContext();
+  if (!ctx) {
+    console.log("Not running in a PR context with GITHUB_TOKEN set — skipping comment.");
     return;
   }
+  const { api, headers, repo } = ctx;
 
-  const api = `https://api.github.com/repos/${repo}/issues/${prNumber}/comments`;
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "Content-Type": "application/json",
-  };
-
-  const existing = await fetch(api, { headers }).then((r) => r.json());
-  const previous = Array.isArray(existing)
-    ? existing.find((c) => c.body?.includes(FLAKY_COMMENT_MARKER))
-    : null;
-
+  const previous = await findMarkerComment(api, headers);
   const commentBody = `${FLAKY_COMMENT_MARKER}\n${body}`;
 
   if (previous) {
@@ -100,6 +119,24 @@ async function postOrUpdateComment(body) {
   }
 }
 
+/** Clears a stale flaky-report comment left over from a previous, flakier run. */
+async function clearStaleComment() {
+  const ctx = getPrCommentContext();
+  if (!ctx) return;
+  const { api, headers, repo } = ctx;
+
+  const previous = await findMarkerComment(api, headers);
+  if (!previous) return; // nothing to clean up
+
+  await fetch(`https://api.github.com/repos/${repo}/issues/comments/${previous.id}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({
+      body: `${FLAKY_COMMENT_MARKER}\n### ✅ No flaky E2E tests in the latest run`,
+    }),
+  });
+}
+
 async function main() {
   const reportPath = process.argv[2] ?? "playwright-report/results.json";
   let report;
@@ -115,6 +152,7 @@ async function main() {
 
   if (!comment) {
     console.log("No flaky tests this run.");
+    await clearStaleComment();
     return;
   }
 
