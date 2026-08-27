@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 
 import prisma from "@/lib/prisma";
-import { createBatchSchema } from "@/lib/validation-schemas";
+import {
+  createBatchSchema,
+  idempotencyKeySchema,
+} from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,
@@ -59,7 +62,41 @@ export async function GET(request: Request) {
   }
 }
 
-// ── POST /api/batches — Create a new batch ──────────────────
+// ── POST /api/batches — Create a new batch (idempotent) ──────
+
+const IDEMPOTENCY_HEADER = "Idempotency-Key";
+
+/**
+ * Resolve the idempotency key for this request.
+ *
+ * The `Idempotency-Key` header takes precedence; otherwise the optional
+ * (already trimmed + validated by `createBatchSchema`) `idempotencyKey`
+ * body field is used. Returns null when the client sent no key at all.
+ */
+function resolveIdempotencyKey(
+  request: Request,
+  bodyKey?: string
+): { key: string | null; error?: Response } {
+  const headerKey = request.headers.get(IDEMPOTENCY_HEADER);
+  if (headerKey) {
+    const parsed = idempotencyKeySchema.safeParse(headerKey);
+    if (!parsed.success) {
+      return { key: null, error: validationError(parsed.error) };
+    }
+    return { key: parsed.data };
+  }
+  return { key: bodyKey ?? null };
+}
+
+/** True when `err` is a Prisma unique-constraint violation (P2002). */
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -80,30 +117,89 @@ export async function POST(request: Request) {
     const { name, description, recipients: payments } = parsed.data;
     const { userId } = auth;
 
-    const batch = await prisma.batch.create({
-      data: { name, description, userId },
-    });
+    const { key: idempotencyKey, error: keyError } = resolveIdempotencyKey(
+      request,
+      parsed.data.idempotencyKey
+    );
+    if (keyError) {
+      return keyError;
+    }
 
-    // Create child payments — status is CREATED (not COMPLETED)
-    await prisma.payment.createMany({
-      data: payments.map((p) => ({
-        amount: p.amount,
-        assetCode: p.assetCode || "XLM",
-        memo: p.memo || "",
-        status: "CREATED",
-        userId,
-        batchId: batch.id,
-      })),
-    });
+    // Replay: a previous request with the same key already created this
+    // batch. Return the original instead of creating duplicates.
+    if (idempotencyKey) {
+      const existing = await prisma.batch.findFirst({
+        where: { userId, idempotencyKey },
+        include: { payments: true },
+      });
+      if (existing) {
+        return successResponse(
+          existing,
+          { timestamp: new Date().toISOString(), deduplicated: true },
+          200
+        );
+      }
+    }
 
-    const result = await prisma.batch.findUnique({
-      where: { id: batch.id },
-      include: { payments: true },
-    });
+    try {
+      // Batch + child payments are created atomically so a failure can never
+      // leave a batch without its payments (or vice versa).
+      const created = await prisma.$transaction(async (tx) => {
+        const batch = await tx.batch.create({
+          data: {
+            name,
+            description,
+            userId,
+            ...(idempotencyKey ? { idempotencyKey } : {}),
+          },
+        });
 
-    incMetric("batches_processed_total");
+        // Create child payments — status is CREATED (not COMPLETED)
+        await tx.payment.createMany({
+          data: payments.map((p) => ({
+            amount: p.amount,
+            assetCode: p.assetCode || "XLM",
+            memo: p.memo || "",
+            status: "CREATED",
+            userId,
+            batchId: batch.id,
+          })),
+        });
 
-    return successResponse(result, { timestamp: new Date().toISOString() }, 201);
+        return batch;
+      });
+
+      const result = await prisma.batch.findUnique({
+        where: { id: created.id },
+        include: { payments: true },
+      });
+
+      incMetric("batches_processed_total");
+
+      return successResponse(
+        result,
+        { timestamp: new Date().toISOString() },
+        201
+      );
+    } catch (err) {
+      // Concurrent duplicate: another request with the same key won the race
+      // and the DB unique constraint rejected our insert. Return the winner
+      // as a deduplicated replay rather than surfacing a 409 to the client.
+      if (isUniqueConstraintError(err) && idempotencyKey) {
+        const winner = await prisma.batch.findFirst({
+          where: { userId, idempotencyKey },
+          include: { payments: true },
+        });
+        if (winner) {
+          return successResponse(
+            winner,
+            { timestamp: new Date().toISOString(), deduplicated: true },
+            200
+          );
+        }
+      }
+      throw err;
+    }
   } catch (err) {
     return handleApiError(err, "POST /api/batches");
   }

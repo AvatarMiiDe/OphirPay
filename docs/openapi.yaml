@@ -435,8 +435,22 @@ paths:
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Batches]
-      summary: Create a batch payment
+      summary: Create a batch payment (idempotent)
+      description: |
+        Creates a batch with its child payments atomically. Retrying with the
+        same idempotency key (header or body) returns the original batch
+        instead of duplicating payments — the response carries
+        `meta.deduplicated: true` on a replay.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string, minLength: 8, maxLength: 255 }
+          description: |
+            Optional unique key for this batch (8–255 chars, trimmed). When
+            present, re-submitting with the same key returns the original
+            batch (`meta.deduplicated: true`) instead of creating a new one.
+            Takes precedence over the body `idempotencyKey` field.
       requestBody:
         required: true
         content:
@@ -444,8 +458,31 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateBatchRequest"
       responses:
+        "200":
+          description: Batch already exists for this idempotency key (replay — no duplicates created)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: "#/components/schemas/BatchResponse"
+                  meta:
+                    type: object
+                    properties:
+                      timestamp: { type: string }
+                      deduplicated: { type: boolean, const: true }
         "201":
           description: Batch created with child payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: "#/components/schemas/BatchResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -1284,6 +1321,11 @@ components:
         description:
           type: string
           maxLength: 500
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 255
+          description: Optional alternative to the Idempotency-Key header (trimmed before validation/storage)
         recipients:
           type: array
           minItems: 1
@@ -1307,6 +1349,22 @@ components:
                 maxLength: 28
         sourceAccountId:
           type: string
+
+    BatchResponse:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        idempotencyKey: { type: [string, 'null'] }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentResponse"
 
     CreateRecurrenceRequest:
       type: object

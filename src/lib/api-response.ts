@@ -16,6 +16,8 @@ interface ApiSuccess<T> {
     limit?: number;
     total?: number;
     timestamp?: string;
+    /** True when the request was a replay of an already-processed idempotent call. */
+    deduplicated?: boolean;
   };
 }
 

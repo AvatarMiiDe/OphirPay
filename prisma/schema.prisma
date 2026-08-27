@@ -141,6 +141,10 @@ model Batch {
   userId      String
   name        String
   description String?
+  // Optional idempotency key supplied by the client (8-255 chars) so a
+  // retried POST /api/batches returns the original batch instead of
+  // duplicating payments. NULL for batches created without a key.
+  idempotencyKey String?
   status      BatchStatus @default(CREATED)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -148,6 +152,10 @@ model Batch {
   user        User      @relation(fields: [userId], references: [id])
   payments    Payment[]
 
+  // One batch per (user, key) — the DB-level guarantee behind idempotent
+  // re-submission. PostgreSQL treats NULLs as distinct, so unkeyed batches
+  // are unaffected.
+  @@unique([userId, idempotencyKey])
   @@index([userId])
   @@index([status])
 }
