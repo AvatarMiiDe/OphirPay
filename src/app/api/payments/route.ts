@@ -21,7 +21,7 @@ import {
   prismaPagination,
 } from "@/lib/pagination-utils";
 
-export async function GET(request: Request) {
+export const GET = withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -95,9 +95,9 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/payments");
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -146,4 +146,4 @@ export async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/payments");
   }
-}
+});
