@@ -20,11 +20,15 @@ const OWNER_PROPOSED_AT: Symbol = symbol_short!("OWN_PAT");
 // account from fabricating PaymentEvents (MEDIUM-3 audit fix).
 const ALLOWED_SOURCE: Symbol = symbol_short!("ALW_SRC");
 
+// Event schema version. Bump when the emitted event shape changes.
+const EVENT_SCHEMA_VERSION: u32 = 1;
+
 // ── Data Types ─────────────────────────────────────────────────
 
 #[contracttype]
 #[derive(Clone)]
 pub struct PaymentEvent {
+    pub version: u32,
     pub id: u64,
     pub source: String,
     pub payer: Address,
@@ -113,6 +117,7 @@ impl PaymentEventEmitter {
         count += 1;
 
         let event = PaymentEvent {
+            version: EVENT_SCHEMA_VERSION,
             id: count,
             source,
             payer: payer.clone(),
@@ -130,7 +135,7 @@ impl PaymentEventEmitter {
 
         // Native event emission
         env.events().publish(
-            (Symbol::new(&env, "payment_event"), payer, payee),
+            (Symbol::new(&env, "payment_event"), EVENT_SCHEMA_VERSION, payer, payee),
             (amount, tx_hash),
         );
 
@@ -397,6 +402,7 @@ mod tests {
         assert_eq!(client.get_event_count(), 1);
 
         let event = client.get_event(&1);
+        assert_eq!(event.version, 1);
         assert_eq!(event.id, 1);
         assert_eq!(event.payer, payer);
         assert_eq!(event.payee, payee);
