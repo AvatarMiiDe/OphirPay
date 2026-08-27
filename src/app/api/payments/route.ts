@@ -13,7 +13,6 @@ import {
 import { logger } from "@/lib/logger";
 import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
-import { buildPaymentWhere } from "@/lib/payment-filters";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
