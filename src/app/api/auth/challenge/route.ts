@@ -1,22 +1,32 @@
 // SPDX-License-Identifier: MIT
 
-import { NextResponse } from "next/server";
-import { verifyCsrf, withCsrf } from "@/lib/csrf";
+import {
+  createChallengeToken,
+  challengeMessage,
+} from "@/lib/challenge";
+import { isValidStellarAddress } from "@/lib/stellar";
+import { successResponse, badRequestError } from "@/lib/api-response";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /**
  * POST /api/auth/session
  * Establish a session. Protected by CSRF.
  */
-export const POST = withCsrf(async (request: Request) => {
-  // ... existing session establishment logic
-  return NextResponse.json({ success: true });
-});
+export const GET = withRequestLogging(async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const publicKey = (searchParams.get("publicKey") ?? "").trim();
 
-/**
- * DELETE /api/auth/session
- * Revoke the session. Protected by CSRF.
- */
-export const DELETE = withCsrf(async (request: Request) => {
-  // ... existing session revocation logic
-  return NextResponse.json({ success: true });
+  if (!isValidStellarAddress(publicKey)) {
+    return badRequestError(
+      "A valid Stellar public key (G...) is required to mint a challenge."
+    );
+  }
+
+  const challenge = createChallengeToken(publicKey);
+  return successResponse({
+    challenge,
+    // The message embeds the challenge token so the signature is single-use.
+    message: challengeMessage(publicKey, challenge),
+    expiresIn: 300, // seconds
+  });
 });

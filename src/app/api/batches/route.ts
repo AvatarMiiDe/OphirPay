@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: MIT
 
-import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
+import prisma from "@/lib/prisma";
+import { createBatchSchema, paginationSchema } from "@/lib/validation-schemas";
+import {
+  successResponse,
+  validationError,
+  badRequestError,
+  unauthorizedError,
+  handleApiError,
+} from "@/lib/api-response";
+import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
-import { validateIdParam } from "@/lib/validate-params";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { incMetric } from "@/lib/metrics-counters";
+import {
+  buildCursorWhere,
+  computeNextCursor,
+  decodeCursor,
+  prismaPagination,
+} from "@/lib/pagination-utils";
 
-/**
- * GET /api/batches/[id] — single batch lookup
- * Reads from OphirPayContract on-chain. Supports ?payments=true for included payment IDs.
- */
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// ── GET /api/batches — List batches with pagination ──────────
+
+export const GET = withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -22,20 +30,80 @@ export async function GET(
       );
     }
 
-    const parsed = await validateIdParam(params, "numeric");
-    if (!parsed.success) return parsed.response;
-    const { id } = parsed;
-    const batchId = Number(id);
+    const { searchParams } = new URL(request.url);
+    const explicitPage = searchParams.get("page");
+    // `?? undefined` matters: searchParams.get() returns null for absent
+    // params, and the schema's defaults/optionals only apply to undefined.
+    const parsed = paginationSchema.safeParse({
+      page: explicitPage ?? undefined,
+      limit: searchParams.get("limit") ?? undefined,
+      cursor: searchParams.get("cursor") ?? undefined,
+      status: searchParams.get("status") ?? undefined,
+      search: searchParams.get("search") ?? undefined,
+    });
 
-    const result = await simulateContractCall(
-      DEFAULT_CONTRACT_ID,
-      "get_batch",
-      CHAIN_READ_SOURCE,
-      [nativeToScVal(batchId, { type: "u64" })]
-    );
+    if (!parsed.success) return validationError(parsed.error);
 
-    if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
-      return notFoundError(`Batch ${id} not found`);
+    const { page, limit, status, search, cursor: rawCursor } = parsed.data;
+
+    const baseWhere: Record<string, unknown> = { userId: auth.userId };
+    if (status) baseWhere.status = status;
+    if (search) {
+      baseWhere.OR = [
+        { name: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
+
+    // Keyset (cursor) pagination is the default for plain list requests — it
+    // never deep-skips, so later pages stay fast as the table grows. Offset
+    // pagination via an explicit `page` param is kept for legacy consumers.
+    const cursor = rawCursor ? decodeCursor(rawCursor) : null;
+    if (rawCursor && !cursor) {
+      return badRequestError("Invalid cursor");
+    }
+
+    const useCursor = cursor !== null || explicitPage === null;
+    const where = buildCursorWhere(baseWhere, cursor);
+
+    const [batches, total] = await Promise.all([
+      prisma.batch.findMany({
+        where,
+        include: { payments: true },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        // Fetch one extra row to learn whether another page exists.
+        ...(useCursor ? { take: limit + 1 } : prismaPagination(page, limit)),
+      }),
+      prisma.batch.count({ where: baseWhere }),
+    ]);
+
+    const visible = useCursor ? batches.slice(0, limit) : batches;
+    const pageInfo = useCursor
+      ? computeNextCursor(batches, limit)
+      : { nextCursor: null, hasMore: page * limit < total };
+
+    return successResponse(visible, {
+      page,
+      limit,
+      total,
+      nextCursor: pageInfo.nextCursor,
+      hasMore: pageInfo.hasMore,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    return handleApiError(err, "GET /api/batches");
+  }
+});
+
+// ── POST /api/batches — Create a new batch ──────────────────
+
+export const POST = withRequestLogging(async function POST(request: Request) {
+  try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
     }
 
     const batch = result.returnValue as Record<string, unknown>;
@@ -59,4 +127,4 @@ export async function GET(
   } catch (err) {
     return handleApiError(err, "GET /api/batches/[id]");
   }
-}
+});

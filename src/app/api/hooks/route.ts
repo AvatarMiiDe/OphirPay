@@ -9,19 +9,52 @@ import {
 } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
-import { validateBody, updateHookSchema } from "@/lib/validation-schemas";
-import { validateIdParam } from "@/lib/validate-params";
+import { validateBody, createHookSchema } from "@/lib/validation-schemas";
+import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
+import { withRequestLogging } from "@/lib/request-logging";
 
-// ── PATCH /api/hooks/[id] ─────────────────────────────────────
+export const GET = withRequestLogging(async function GET(request: Request) {
+  try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const eventType = searchParams.get("event_type");
+
+    const where: Record<string, unknown> = { userId: auth.userId, active: true };
+    if (eventType) where.eventType = eventType;
+
+    const hooks = await prisma.notificationHook.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        userId: true,
+        eventType: true,
+        webhookUrl: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    return successResponse(hooks);
+  } catch (err) {
+    return handleApiError(err, "GET /api/hooks");
+  }
+});
+
+// ── POST /api/hooks ───────────────────────────────────────────
 
 /**
  * Update a notification hook ledger row AFTER the matching on-chain
  * transition (unregister_hook) succeeded, so the list reflects deactivation.
  */
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = withRequestLogging(async function POST(request: Request) {
   try {
     const csrfError = verifyCsrf(request);
     if (csrfError) return csrfError;
@@ -47,4 +80,4 @@ export async function PATCH(
   } catch (err) {
     return handleApiError(err, "PATCH /api/hooks/[id]");
   }
-}
+});

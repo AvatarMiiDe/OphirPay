@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { generateCsrfToken, csrfCookieHeader } from "@/lib/csrf";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /**
  * GET /api/csrf
@@ -17,12 +18,20 @@ import { generateCsrfToken, csrfCookieHeader } from "@/lib/csrf";
  * - Cookie uses __Host- prefix in production (host-only)
  * - Token rotates on each mint (invalidates previous token)
  */
-export async function GET(): Promise<NextResponse> {
+export const GET = withRequestLogging(async function GET(request: Request) {
   const token = generateCsrfToken();
-  const isSecure = process.env.NODE_ENV === "production";
-  
-  const response = NextResponse.json({ token });
-  response.headers.set("Set-Cookie", csrfCookieHeader(token, isSecure));
-  
-  return response;
-}
+
+  // The __Host-/Secure flags are only valid over HTTPS; over plain http (dev
+  // on a LAN IP) the cookie must be set without them or browsers reject it.
+  const url = new URL(request.url);
+  const secure = url.protocol === "https:" || process.env.NODE_ENV === "production";
+
+  return new Response(JSON.stringify({ token }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Set-Cookie": csrfCookieHeader(token, secure),
+    },
+  });
+});
