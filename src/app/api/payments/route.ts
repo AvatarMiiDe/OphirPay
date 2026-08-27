@@ -89,6 +89,11 @@ export const POST = withRequestLogging(async function POST(request: Request) {
         // wrote a Stellar address into userId, breaking the relation).
         userId: auth.userId,
         sourceAccountId: parsed.data.sourceAccountId,
+        // Persist the destination Stellar address (not modeled as its own
+        // column) so payment-detail receipts can render the recipient.
+        metadata: parsed.data.destAddress
+          ? JSON.stringify({ destAddress: parsed.data.destAddress })
+          : undefined,
       },
     });
 

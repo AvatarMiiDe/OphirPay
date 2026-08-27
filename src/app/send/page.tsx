@@ -16,6 +16,7 @@ import {
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
+import { downloadReceiptPdf } from "@/lib/receipt-pdf";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -346,19 +347,51 @@ export default function SendPage() {
             </div>
           )}
 
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col gap-3">
             <button
-              onClick={reset}
-              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              onClick={() =>
+                downloadReceiptPdf({
+                  transactionHash: result.txHash,
+                  amount: result.amount,
+                  assetCode: selectedAsset.code,
+                  date: new Date().toISOString(),
+                  sender: wallet.publicKey!,
+                  recipient: result.destination,
+                  memo: memo.trim() || undefined,
+                })
+              }
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              Send Another
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                />
+              </svg>
+              Download Receipt (PDF)
             </button>
-            <Link
-              href="/"
-              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Back to Dashboard
-            </Link>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={reset}
+                className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              >
+                Send Another
+              </button>
+              <Link
+                href="/"
+                className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </div>
