@@ -1,6 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
 # OphirPay Smart Contract Deployment Workflow
+# Validate PUBLIC config in CI: bash scripts/validate-deploy-config.sh
 # ─────────────────────────────────────────────────────────────
 # Automates the full Soroban contract deployment pipeline:
 # 1. Build WASM from Rust source

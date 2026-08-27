@@ -83,6 +83,14 @@ NETWORK_MODE=PUBLIC DRY_RUN=true \
 
 The dry-run must **fail** with a clear message before any real submission. Only proceed once it confirms the correct mainnet RPC/Horizon and that friendbot is disabled.
 
+You can also run the standalone CI validation script, which asserts the deploy script's PUBLIC config compiles and targets Stellar Mainnet:
+
+```bash
+bash scripts/validate-deploy-config.sh
+```
+
+This script is used in CI to guard against accidental testnet/mainnet misconfiguration.
+
 ### 2.4 Deploy order: emitter → main
 
 Deploy the **emitter first**, then the **main contract** (the main contract is initialized with the emitter ID).

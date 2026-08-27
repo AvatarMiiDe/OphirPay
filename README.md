@@ -494,6 +494,11 @@ NETWORK_MODE=PUBLIC ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY>
 > ```bash
 > NETWORK_MODE=PUBLIC DRY_RUN=true ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
 > ```
+>
+> Validate the PUBLIC config (used in CI) before any mainnet deploy:
+> ```bash
+> bash scripts/validate-deploy-config.sh
+> ```
 </details>
 
 ---

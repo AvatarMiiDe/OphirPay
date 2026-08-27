@@ -1,73 +1,57 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
-# Validate the deploy workflow's PUBLIC (mainnet) configuration.
-# Ensures the deploy script:
+# OphirPay — Deploy Script PUBLIC-config Validation
+# ─────────────────────────────────────────────────────────────
+# Validates that scripts/deploy-workflow.sh:
 #   1. Is syntactically valid bash
-#   2. Targets the Stellar Mainnet RPC/Horizon/passphrase
-#   3. Disables friendbot
-#   4. Dry-run fails before any real submission
+#   2. PUBLIC network mode targets Stellar Mainnet (not testnet)
+#   3. Friendbot is disabled in PUBLIC mode
+#   4. The dry-run guard refuses any real submission to PUBLIC
+#
+# Intended to be run in CI (and locally) before any mainnet deploy.
+# Exit code 0 = config is safe; non-zero = a guard failed.
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-NC="\033[0m"
-
 SCRIPT="scripts/deploy-workflow.sh"
+FAIL=0
 
-echo "── Validating deploy script syntax ──"
-bash -n "$SCRIPT"
-echo -e "${GREEN}  ✓ Syntax OK${NC}"
+echo "── Validating ${SCRIPT} ──"
 
-echo "── Validating PUBLIC network configuration ──"
-
-# Verify the PUBLIC branch uses the mainnet RPC endpoint.
-if ! grep -q 'https://soroban.stellar.org:443' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC mode must use mainnet Soroban RPC (https://soroban.stellar.org:443)${NC}"
-  exit 1
+# 1. Syntax check
+if bash -n "$SCRIPT"; then
+  echo "  ✅ bash syntax OK"
+else
+  echo "  ❌ bash syntax error"
+  FAIL=1
 fi
-echo -e "${GREEN}  ✓ Mainnet RPC configured${NC}"
 
-# Verify the PUBLIC branch uses the mainnet Horizon endpoint.
-if ! grep -q 'https://horizon.stellar.org' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC mode must use mainnet Horizon (https://horizon.stellar.org)${NC}"
-  exit 1
-fi
-echo -e "${GREEN}  ✓ Mainnet Horizon configured${NC}"
+# 2. PUBLIC mode targets Stellar Mainnet
+check_grep() {
+  local pattern="$1"
+  local label="$2"
+  if grep -q "$pattern" "$SCRIPT"; then
+    echo "  ✅ ${label}"
+  else
+    echo "  ❌ missing: ${label}"
+    FAIL=1
+  fi
+}
 
-# Verify the PUBLIC branch uses the mainnet passphrase.
-if ! grep -q 'Public Global Stellar Network ; September 2015' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC mode must use the mainnet network passphrase${NC}"
-  exit 1
-fi
-echo -e "${GREEN}  ✓ Mainnet passphrase configured${NC}"
+check_grep 'soroban.stellar.org:443' 'PUBLIC RPC URL targets soroban.stellar.org'
+check_grep 'horizon.stellar.org' 'PUBLIC Horizon URL targets horizon.stellar.org'
+check_grep 'Public Global Stellar Network' 'PUBLIC network passphrase is mainnet'
+check_grep 'NETWORK_FLAG="--network public"' 'PUBLIC network flag is --network public'
+check_grep 'FRIENDBOT_ENABLED=false' 'friendbot disabled in PUBLIC mode'
 
-# Verify friendbot is disabled in PUBLIC mode.
-if ! grep -q 'FRIENDBOT_ENABLED=false' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC mode must disable friendbot${NC}"
-  exit 1
-fi
-echo -e "${GREEN}  ✓ Friendbot disabled in PUBLIC mode${NC}"
-
-# Verify the dry-run guard exists and fails before submission.
-if ! grep -q 'DRY_RUN' "$SCRIPT"; then
-  echo -e "${RED}  ✗ Deploy script must support DRY_RUN mode${NC}"
-  exit 1
-fi
-if ! grep -q 'refusing to submit any transaction to PUBLIC network' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC dry-run must fail before any real submission${NC}"
-  exit 1
-fi
-echo -e "${GREEN}  ✓ PUBLIC dry-run guard present${NC}"
-
-# Verify the network flag targets the right network.
-if ! grep -q 'NETWORK_FLAG="--network public"' "$SCRIPT"; then
-  echo -e "${RED}  ✗ PUBLIC mode must pass --network public to the stellar CLI${NC}"
-  exit 1
-fi
-echo -e "${GREEN}  ✓ PUBLIC mode targets --network public${NC}"
+# 3. Dry-run guard refuses PUBLIC submissions
+check_grep 'DRY_RUN' 'dry-run flag present'
+check_grep 'refusing to submit any transaction to PUBLIC network' 'dry-run refuses PUBLIC submissions'
 
 echo ""
-echo -e "${GREEN}┌──────────────────────────────────────────────┐${NC}"
-echo -e "${GREEN}│   Deploy config validation passed!           │${NC}"
-echo -e "${GREEN}└──────────────────────────────────────────────┘${NC}"
+if [ "$FAIL" -eq 1 ]; then
+  echo "❌ Deploy script PUBLIC config validation FAILED"
+  exit 1
+fi
+
+echo "✅ Deploy script PUBLIC config is valid and targets Stellar Mainnet"
