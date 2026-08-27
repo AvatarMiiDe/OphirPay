@@ -159,6 +159,27 @@ describe("Modal", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("keeps focus inside the dialog when the onClose identity changes mid-open", async () => {
+    // Regression: the production caller (e.g. WalletButton) recreates onClose
+    // on connection-state changes. The focus/keydown effect must not tear down
+    // and restore focus to the trigger while the dialog remains open.
+    function Harness({ onClose }: { onClose: () => void }) {
+      return <Modal open onClose={onClose} title="Dialog">Content</Modal>;
+    }
+
+    const { rerender } = render(<Harness onClose={() => {}} />);
+    const dialog = screen.getByRole("dialog");
+    const inner = dialog.querySelector('[tabindex="-1"]') as HTMLElement;
+    await waitFor(() => expect(inner).toHaveFocus());
+
+    // Caller re-renders with a brand-new onClose closure — same as when
+    // connection state changes in WalletButton.
+    rerender(<Harness onClose={() => {}} />);
+
+    expect(inner).toHaveFocus();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
   it("restores focus to the trigger element when closed via the close button", async () => {
     function Harness() {
       const [open, setOpen] = useState(false);

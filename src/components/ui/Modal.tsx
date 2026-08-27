@@ -73,7 +73,11 @@ export function Modal({
     };
   }, [open]);
 
-  // ESC to close + focus trap + body scroll lock + focus restore
+  // ESC to close + focus trap + body scroll lock + focus restore.
+  // Only depends on `open` — the close handler is read through `onCloseRef` so
+  // callers can pass a fresh `onClose` closure on every render (e.g. one that
+  // captures connection state) without tearing down this effect mid-open,
+  // which would briefly move focus back to the trigger (focus churn).
   useEffect(() => {
     if (!open) return;
 
@@ -81,7 +85,7 @@ export function Modal({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !dialogRef.current) return;
@@ -116,7 +120,7 @@ export function Modal({
       // Restore focus to the element that opened the dialog
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Guard against SSR — createPortal needs the client-side `document`
   if (!open || typeof document === "undefined") return null;
