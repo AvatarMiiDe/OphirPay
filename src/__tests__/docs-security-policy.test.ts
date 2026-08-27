@@ -75,8 +75,15 @@ describe(".github/ISSUE_TEMPLATE/security_vulnerability.yml", () => {
 
   it("is a valid issue template with a security label", () => {
     expect(template).toMatch(/name: 🔒 Security Vulnerability/);
-    expect(template).toMatch(/about: Privately report a security vulnerability/);
+    expect(template).toMatch(/about: Last-resort PUBLIC triage form/);
     expect(template).toMatch(/labels: \[".*security.*"\]/);
+  });
+
+  it("warns that the form creates a public issue and forbids exploit details", () => {
+    expect(template).toMatch(/creates a PUBLIC issue/);
+    expect(template).toMatch(/Do NOT include exploit details/);
+    expect(template).toMatch(/security@ophirpay\.com/);
+    expect(template).toMatch(/private vulnerability reporting/);
   });
 
   it("collects severity, affected component, and affected version", () => {

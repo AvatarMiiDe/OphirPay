@@ -25,13 +25,16 @@ Please report it through one of the private channels below.
    [SUPPORT.md](.github/SUPPORT.md) or the GitHub organization profile), and
    verify the fingerprint before use.
 
-3. **GitHub private vulnerability reporting**
+3. **GitHub private vulnerability reporting (preferred when enabled)**
    If the repository has private vulnerability reporting enabled, use the
    **"Report a vulnerability"** button on the
    [Security tab](https://github.com/OphirPay/OphirPay/security/advisories)
-   and fill in the
-   [Security Vulnerability template](.github/ISSUE_TEMPLATE/security_vulnerability.yml).
-   Reports submitted this way are visible only to repository maintainers.
+   to open a private advisory form. Reports submitted this way are visible
+   only to repository maintainers. (The
+   [Security Vulnerability template](.github/ISSUE_TEMPLATE/security_vulnerability.yml)
+   exists only as a last-resort public fallback for researchers who cannot
+   use any private channel — it deliberately contains no exploit-detail
+   fields.)
 
 > Never send secrets, private keys, or real user data in a report. Redact
 > sensitive material and describe it in placeholders instead.
@@ -190,8 +193,12 @@ OphirPay implements the following security headers:
 
 - All contract functions use proper access control
 - Cross-contract calls are validated and propagate failures atomically (see
-  [docs/CONTRACT_ARCHITECTURE.md](docs/CONTRACT_ARCHITECTURE.md))
+  `docs/architecture.md` for the system overview)
 - Contracts use Result types for error handling
 - Timestamps and metadata are recorded for audit trails
-- Sensitive operations are protected by reentrancy locks, two-step ownership
-  transfer (24h timelock), and timelocked upgrades
+- State-changing operations — governance proposal execution, the
+  escrow/stream lifecycle (create, release, claim, cancel), refund
+  processing, emergency withdraw, and cross-contract pause orchestration —
+  are guarded by reentrancy locks
+- Sensitive admin actions are protected by two-step ownership transfer (24h
+  timelock) and timelocked upgrades
