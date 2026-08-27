@@ -139,6 +139,17 @@ describe("Price Utility & Precision Rules", () => {
       expect(result.error).toBeDefined();
     });
 
+    it("cleans up timeout timers when fetch rejects immediately", async () => {
+      const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+      const mockFetch = vi.fn().mockRejectedValue(new Error("Immediate network drop"));
+      global.fetch = mockFetch;
+
+      const result = await fetchXlmPrice();
+      expect(result.price).toBeNull();
+      // Primary and secondary oracle timeout timers were both cleared in finally blocks
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
     it("respects external AbortSignal", async () => {
       const controller = new AbortController();
       controller.abort();

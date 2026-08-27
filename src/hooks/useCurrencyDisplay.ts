@@ -21,14 +21,20 @@ export interface UseCurrencyDisplayReturn {
 export function useCurrencyDisplay(
   defaultCurrency: DisplayCurrency = "XLM"
 ): UseCurrencyDisplayReturn {
-  const [currency, setCurrency] = useLocalStorage<DisplayCurrency>(
+  const [storedCurrency, setCurrency] = useLocalStorage<DisplayCurrency>(
     STORAGE_KEYS.CURRENCY_DISPLAY,
     defaultCurrency
   );
 
+  const currency: DisplayCurrency =
+    storedCurrency === "XLM" || storedCurrency === "USD" ? storedCurrency : defaultCurrency;
+
   const toggleCurrency = useCallback(() => {
-    setCurrency((prev) => (prev === "XLM" ? "USD" : "XLM"));
-  }, [setCurrency]);
+    setCurrency((prev) => {
+      const current = prev === "XLM" || prev === "USD" ? prev : defaultCurrency;
+      return current === "XLM" ? "USD" : "XLM";
+    });
+  }, [setCurrency, defaultCurrency]);
 
   return {
     currency,

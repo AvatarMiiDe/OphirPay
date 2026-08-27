@@ -104,6 +104,20 @@ describe("useCurrencyDisplay Hook", () => {
     });
     expect(result.current.currency).toBe("XLM");
   });
+
+  it("falls back to defaultCurrency when localStorage contains invalid value", () => {
+    window.localStorage.setItem("ophirpay-currency-display", JSON.stringify("INVALID_CURRENCY"));
+    const { result } = renderHook(() => useCurrencyDisplay("XLM"));
+
+    expect(result.current.currency).toBe("XLM");
+    expect(result.current.isXlm).toBe(true);
+    expect(result.current.isUsd).toBe(false);
+
+    act(() => {
+      result.current.toggleCurrency();
+    });
+    expect(result.current.currency).toBe("USD");
+  });
 });
 
 describe("useXlmPrice Hook", () => {

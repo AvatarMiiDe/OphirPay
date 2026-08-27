@@ -104,9 +104,10 @@ export async function fetchXlmPrice(options?: {
 
   const fetchPromise = (async (): Promise<PriceResult> => {
     // Primary: CoinGecko
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const combinedSignal = options?.signal
         ? anySignal([options.signal, controller.signal])
         : controller.signal;
@@ -118,7 +119,6 @@ export async function fetchXlmPrice(options?: {
           signal: combinedSignal,
         }
       );
-      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -130,12 +130,17 @@ export async function fetchXlmPrice(options?: {
       }
     } catch {
       // Fall through to secondary source
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
 
     // Secondary: Coinbase
+    let secondaryTimeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      secondaryTimeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const combinedSignal = options?.signal
         ? anySignal([options.signal, controller.signal])
         : controller.signal;
@@ -144,7 +149,6 @@ export async function fetchXlmPrice(options?: {
         headers: { Accept: "application/json" },
         signal: combinedSignal,
       });
-      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -157,6 +161,10 @@ export async function fetchXlmPrice(options?: {
       }
     } catch {
       // All sources failed
+    } finally {
+      if (secondaryTimeoutId) {
+        clearTimeout(secondaryTimeoutId);
+      }
     }
 
     // If cache has a stale price, return it with error indication rather than complete failure if available
