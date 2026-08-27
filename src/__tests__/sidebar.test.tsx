@@ -25,12 +25,11 @@ describe("Sidebar", () => {
   it("closes the mobile drawer when the route changes", () => {
     const { rerender } = render(<Sidebar />);
     fireEvent.click(screen.getByRole("button", { name: "Toggle menu" }));
-    expect(screen.getByRole("button", { name: "Toggle menu" }).querySelector("svg")).toBeTruthy();
+    expect(document.querySelector("aside.lg\\:hidden")?.className).toContain("translate-x-0");
 
     pathname.value = "/payments";
     rerender(<Sidebar />);
 
-    expect(screen.getByRole("button", { name: "Toggle menu" }).querySelector("svg")).toBeTruthy();
     expect(document.querySelector("aside.lg\\:hidden")?.className).toContain("-translate-x-full");
   });
 });
