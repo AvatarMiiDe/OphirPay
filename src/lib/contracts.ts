@@ -501,3 +501,44 @@ export async function fetchOnChainPayments(
 
   return { payments: payments.reverse(), total };
 }
+
+/**
+ * Read a single on-chain payment record by ID.
+ * Returns `null` when the record doesn't exist or can't be read.
+ * Public chain data — reads via Soroban simulation, no wallet signature required.
+ */
+export async function fetchOnChainPayment(
+  id: number
+): Promise<OnChainPayment | null> {
+  const contractId = OPHIRPAY_CONTRACT_ID;
+  const server = getSorobanServer();
+  const contract = new Contract(contractId);
+  const account = await server.getAccount(CHAIN_READ_SOURCE);
+
+  const tx = new TransactionBuilder(account, {
+    fee: "100000",
+    networkPassphrase: NETWORK_PASSPHRASE,
+    timebounds: { minTime: 0, maxTime: 0 },
+  })
+    .addOperation(
+      contract.call("get_payment", nativeToScVal(id, { type: "u64" }))
+    )
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if ("error" in sim && sim.error) return null;
+  if ("result" in sim && sim.result) {
+    const raw = scValToNative(sim.result.retval);
+    if (!raw || typeof raw !== "object") return null;
+    return {
+      id: Number(raw.id),
+      payer: String(raw.payer ?? ""),
+      payee: String(raw.payee ?? ""),
+      amountStroops: Number(raw.amount ?? 0),
+      txHash: String(raw.tx_hash ?? ""),
+      timestamp: raw.timestamp ? Number(raw.timestamp) : undefined,
+      metadata: raw.metadata ? String(raw.metadata) : undefined,
+    };
+  }
+  return null;
+}
