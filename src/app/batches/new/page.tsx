@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -16,6 +16,7 @@ import { formatAmount, shortenAddress } from "@/lib/utils";
 import { estimateBatchFee } from "@/lib/fee-estimator";
 import { BatchConfirmDialog } from "@/components/BatchConfirmDialog";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { parseRecipientsCsv, downloadCsvTemplate } from "@/lib/csv-import";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
 
@@ -58,6 +59,9 @@ export default function NewBatchPage() {
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Recipient management ──────────────────────────────────
 
@@ -212,6 +216,75 @@ export default function NewBatchPage() {
     setResult(null);
     setRecipients([{ id: nextId++, address: "", amount: "", memo: "" }]);
     setValidationError(null);
+    setCsvError(null);
+  };
+
+  // ── CSV Import ────────────────────────────────────────────────
+
+  const handleCsvImport = useCallback(
+    async (file: File) => {
+      setCsvError(null);
+      setValidationError(null);
+
+      try {
+        const { recipients: parsed, errors } = await parseRecipientsCsv(file);
+
+        if (errors.length > 0) {
+          setCsvError(
+            `CSV parsing errors:\n${errors.map((e) => `Row ${e.row}: ${e.message}`).join("\n")}`
+          );
+          return;
+        }
+
+        if (parsed.length === 0) {
+          setCsvError("No valid recipients found in the CSV file.");
+          return;
+        }
+
+        const newRows: RecipientRow[] = parsed.map((r) => ({
+          id: nextId++,
+          address: r.address,
+          amount: String(r.amount),
+          memo: r.memo || "",
+        }));
+
+        setRecipients(newRows);
+      } catch {
+        setCsvError("Failed to parse CSV file. Please check the format.");
+      }
+    },
+    []
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleCsvImport(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.name.endsWith(".csv")) {
+      handleCsvImport(file);
+    } else {
+      setCsvError("Please drop a .csv file.");
+    }
   };
 
   // ── Total ────────────────────────────────────────────────
@@ -225,8 +298,8 @@ export default function NewBatchPage() {
 
   if (!wallet.connected) {
     return (
-      <div className="max-w-2xl mx-auto mt-12 animate-fade-in">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-10 text-center">
+      <div className="max-w-2xl mx-auto mt-8 sm:mt-12 animate-fade-in px-1">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 sm:p-10 text-center">
           <div className="h-16 w-16 mx-auto rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -264,8 +337,8 @@ export default function NewBatchPage() {
 
   if (result?.type === "success") {
     return (
-      <div className="max-w-2xl mx-auto mt-12 animate-fade-in">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-8">
+      <div className="max-w-2xl mx-auto mt-8 sm:mt-12 animate-fade-in px-1">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 sm:p-8">
           <div className="text-center mb-6">
             <div className="h-16 w-16 mx-auto rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
               <svg
@@ -354,16 +427,16 @@ export default function NewBatchPage() {
             </div>
           </div>
 
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={reset}
-              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors min-h-[44px]"
             >
               Create Another Batch
             </button>
             <Link
               href="/batches"
-              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px] flex items-center justify-center"
             >
               View All Batches
             </Link>
@@ -377,8 +450,8 @@ export default function NewBatchPage() {
 
   if (result?.type === "error") {
     return (
-      <div className="max-w-2xl mx-auto mt-12 animate-fade-in">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-8 text-center">
+      <div className="max-w-2xl mx-auto mt-8 sm:mt-12 animate-fade-in px-1">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 sm:p-8 text-center">
           <div className="h-16 w-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -401,16 +474,16 @@ export default function NewBatchPage() {
           <p className="text-sm text-red-600 dark:text-red-400 mb-6 max-w-sm mx-auto">
             {result.message}
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={reset}
-              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors min-h-[44px]"
             >
               Try Again
             </button>
             <Link
               href="/batches"
-              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px] flex items-center justify-center"
             >
               View All Batches
             </Link>
@@ -425,7 +498,7 @@ export default function NewBatchPage() {
   const isSubmitting = step !== "idle" && step !== "done";
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 animate-fade-in">
+    <div className="max-w-2xl mx-auto mt-6 sm:mt-8 animate-fade-in px-1">
       {/* Breadcrumb */}
       <div className="mb-6">
         <Link
@@ -442,16 +515,85 @@ export default function NewBatchPage() {
         </p>
       </div>
 
+      {/* CSV Import Dropzone */}
+      <div
+        className={`bg-white dark:bg-gray-900 rounded-xl border-2 border-dashed p-4 sm:p-6 mb-4 transition-colors ${
+          isDragging
+            ? "border-ophir-500 bg-ophir-50 dark:bg-ophir-950/30"
+            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        data-testid="csv-dropzone"
+      >
+        <div className="flex flex-col items-center text-center">
+          <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-6 h-6 text-gray-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+              />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Import recipients from CSV
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Drag and drop a .csv file here, or click to select
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors min-h-[44px]"
+            >
+              Choose CSV File
+            </button>
+            <button
+              type="button"
+              onClick={downloadCsvTemplate}
+              className="px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px]"
+            >
+              Download Template
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleFileChange}
+            className="hidden"
+            aria-label="Upload CSV file"
+          />
+        </div>
+        {csvError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">
+              {csvError}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Wallet info */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 mb-4">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-gray-500 dark:text-gray-400">From</p>
-            <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
+            <p className="text-sm font-mono font-medium text-gray-900 dark:text-white truncate">
               {shortenAddress(wallet.publicKey!, 6)}
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right ml-4">
             <p className="text-sm text-gray-500 dark:text-gray-400">Balance</p>
             <p className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
               {wallet.balance !== null
@@ -463,7 +605,7 @@ export default function NewBatchPage() {
       </div>
 
       {/* Recipients form */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Recipients
@@ -471,7 +613,7 @@ export default function NewBatchPage() {
           <button
             onClick={addRecipient}
             disabled={isSubmitting || recipients.length >= 50}
-            className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors min-h-[44px] rounded-lg"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -479,7 +621,7 @@ export default function NewBatchPage() {
               viewBox="0 0 24 24"
               strokeWidth={2}
               stroke="currentColor"
-              className="w-4 h-4"
+              className="w-5 h-5"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -620,7 +762,7 @@ function RecipientRow({
   canRemove: boolean;
 }) {
   return (
-    <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 space-y-3">
+    <div className="p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           Recipient #{index + 1}
@@ -629,7 +771,7 @@ function RecipientRow({
           <button
             onClick={() => onRemove(recipient.id)}
             disabled={disabled}
-            className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 transition-colors"
+            className="px-3 py-2 text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             Remove
           </button>
@@ -647,7 +789,7 @@ function RecipientRow({
             }
             disabled={disabled}
             placeholder="G... destination address"
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden text-ellipsis"
           />
         </div>
 
@@ -655,6 +797,7 @@ function RecipientRow({
         <div className="relative">
           <input
             type="number"
+            inputMode="decimal"
             value={recipient.amount}
             onChange={(e) =>
               onChange(recipient.id, "amount", e.target.value)
@@ -663,7 +806,7 @@ function RecipientRow({
             placeholder="0.00"
             step="0.0000001"
             min="0.0000001"
-            className="w-full px-3 py-2 pr-14 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2.5 pr-14 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">
             XLM
@@ -680,7 +823,7 @@ function RecipientRow({
           disabled={disabled}
           placeholder="Memo (optional)"
           maxLength={28}
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
         />
       </div>
     </div>
