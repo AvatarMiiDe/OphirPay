@@ -2,23 +2,10 @@
 
 All notable changes to OphirPay will be documented in this file.
 
-## [Unreleased]
+## [Unreleased] — 2026-08-26
 
 ### Added
-- **Webhook signature verification docs + reference implementations**: new
-  `docs/webhook-verification.md` documents the exact HMAC canonical form
-  (empty the `signature` field, keep the key, re-serialize in key order),
-  replay protection (timestamp freshness window + idempotent processing),
-  and runnable Node.js / Python reference implementations under
-  `examples/webhook-verification/`. The examples are exercised against a
-  sample payload in `src/__tests__/webhook-verification-examples.test.ts`.
-
-### Fixed
-- **`docs/integration-guide.md` webhook verification snippet**: previously
-  stripped the `signature` field before recomputing the HMAC, which does not
-  match `buildSignedPayload`'s canonical form (the field must be emptied to
-  `""`, not removed). The guide now shows the correct canonicalization and
-  links the new verification doc.
+- **Request-id + duration structured request logging**: every API request now emits a single structured log line with the request id, HTTP method, path, response status, and duration in ms. `withRequestLogging()` wraps every route handler (the proxy cannot observe a handler's final status/duration), the proxy threads the `X-Request-Id` it mints into the downstream request headers so handlers and error logs correlate with the response header, and `logger.request()`/`handleApiError()` now include the request id in their structured context. Rate-limited (429) rejections are logged from the proxy with the same request id.
 
 ## [Unreleased] — 2026-08-12 (submission hardening pass)
 
