@@ -27,6 +27,18 @@ const EVENT_SCHEMA_VERSION: u32 = 1;
 
 #[contracttype]
 #[derive(Clone)]
+pub struct LegacyPaymentEvent {
+    pub id: u64,
+    pub source: String,
+    pub payer: Address,
+    pub payee: Address,
+    pub amount: i128,
+    pub tx_hash: String,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct PaymentEvent {
     pub version: u32,
     pub id: u64,
@@ -144,9 +156,27 @@ impl PaymentEventEmitter {
 
     /// Get event by ID
     pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
+        // Try V1 schema first (with version field)
+        if let Some(event) = env.storage().persistent().get::<_, PaymentEvent>(&event_id) {
+            return Ok(event);
+        }
+
+        // Fallback: legacy events stored without version field.
+        // The ID and other fields remain at the same positions; only the
+        // version prefix is missing. Treat missing version as 0.
         env.storage()
             .persistent()
-            .get(&event_id)
+            .get::<_, LegacyPaymentEvent>(&event_id)
+            .map(|legacy| PaymentEvent {
+                version: 0,
+                id: legacy.id,
+                source: legacy.source,
+                payer: legacy.payer,
+                payee: legacy.payee,
+                amount: legacy.amount,
+                tx_hash: legacy.tx_hash,
+                timestamp: legacy.timestamp,
+            })
             .ok_or(EmitterError::EventNotFound)
     }
 
