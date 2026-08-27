@@ -70,3 +70,6 @@ contracts/**/spec/target/
 # Playwright
 playwright-report/
 test-results/
+
+# Load-test raw results (regenerated locally; baselines live in docs/PERFORMANCE.md)
+tests/load/results/

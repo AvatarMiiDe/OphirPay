@@ -51,7 +51,9 @@
     "typecheck": "tsc --noEmit",
     "ci": "npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm run build",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "load:test": "node scripts/load-test.js",
+    "load:test:docs": "node scripts/load-test.js --write-docs"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -79,6 +81,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
+    "autocannon": "^8.0.0",
     "eslint": "^9.26.0",
     "eslint-config-next": "^16.3.0",
     "jsdom": "^29.1.1",
