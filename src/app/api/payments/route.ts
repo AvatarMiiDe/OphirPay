@@ -48,8 +48,16 @@ export const GET = withRequestLogging(async function GET(request: Request) {
 
     const { page, limit, status, search, cursor: rawCursor } = parsed.data;
 
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted`
+    // is the explicit admin/debug opt-in to see them — it never crosses user
+    // boundaries, the result is still scoped to the authenticated user.
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+
     // Always scope to the authenticated user — never expose other users' data
-    const baseWhere: Record<string, unknown> = { userId: auth.userId };
+    const baseWhere: Record<string, unknown> = {
+      userId: auth.userId,
+      ...(includeDeleted ? {} : { deletedAt: null }),
+    };
     if (status) baseWhere.status = status;
     if (search) {
       baseWhere.OR = [
