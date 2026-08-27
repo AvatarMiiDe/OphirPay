@@ -306,6 +306,7 @@ model ApiKey {
   name      String
   keyHash   String   @unique
   prefix    String   // First 8 chars for display
+  scopes    String[] @default([]) // e.g. ["read:payments","write:payments","admin"]
   lastUsed  DateTime?
   createdAt DateTime @default(now())
   expiresAt DateTime?
