@@ -294,6 +294,11 @@ jobs:
           curl -sf -o /dev/null http://localhost:3000/ || { echo "next start failed to come up"; tail -20 /tmp/next-start.log; exit 1; }
       - name: Run E2E tests against production build
         run: npx playwright test --project=chromium
+      - name: Report flaky E2E tests on the PR
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/flaky-report.mjs playwright-report/results.json
       - name: Upload E2E report on failure
         if: failure()
         uses: actions/upload-artifact@v4
