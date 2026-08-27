@@ -42,7 +42,7 @@ describe("withRequestLogging", () => {
   it("records the actual duration of the handler", async () => {
     const spy = vi.spyOn(logger, "request").mockImplementation(() => {});
     const handler = withRequestLogging(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 30));
       return new Response("ok");
     });
 
