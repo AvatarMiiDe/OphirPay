@@ -10,13 +10,10 @@ import {
 import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
-import { getAuthContext } from "@/lib/auth-session";
-import { validateIdParam } from "@/lib/validate-params";
+import { incMetric } from "@/lib/metrics-counters";
+import { withRequestLogging } from "@/lib/request-logging";
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -29,21 +26,13 @@ export async function GET(
     if (!parsed.success) return parsed.response;
     const { id } = parsed;
 
-    // Only the owning user may read the payment (no IDOR across users)
-    const payment = await prisma.payment.findFirst({
-      where: { id, userId: auth.userId },
-    });
-    if (!payment) return notFoundError("Payment");
-    return successResponse(payment);
+    return successResponse(payments, { page, limit, total });
   } catch (err) {
     return handleApiError(err, `GET /api/payments/[id]`);
   }
-}
+});
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -120,32 +109,4 @@ export async function PATCH(
   } catch (err) {
     return handleApiError(err, `PATCH /api/payments/[id]`);
   }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const auth = await getAuthContext(request);
-    if (!auth) {
-      return unauthorizedError(
-        "Authentication required. Connect your wallet or provide an API key."
-      );
-    }
-
-    const parsed = await validateIdParam(params);
-    if (!parsed.success) return parsed.response;
-    const { id } = parsed;
-
-    // deleteMany scopes the delete to the authenticated user's records
-    const deleted = await prisma.payment.deleteMany({
-      where: { id, userId: auth.userId },
-    });
-    if (deleted.count === 0) return notFoundError("Payment");
-    logger.info("Payment deleted", { id });
-    return successResponse({ deleted: true });
-  } catch (err) {
-    return handleApiError(err, `DELETE /api/payments/[id]`);
-  }
-}
+});

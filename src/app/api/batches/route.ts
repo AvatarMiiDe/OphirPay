@@ -2,18 +2,12 @@
 
 import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
-import { validateIdParam } from "@/lib/validate-params";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { incMetric } from "@/lib/metrics-counters";
+import { withRequestLogging } from "@/lib/request-logging";
 
-/**
- * GET /api/batches/[id] — single batch lookup
- * Reads from OphirPayContract on-chain. Supports ?payments=true for included payment IDs.
- */
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// ── GET /api/batches — List batches with pagination ──────────
+
+export const GET = withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -34,8 +28,26 @@ export async function GET(
       [nativeToScVal(batchId, { type: "u64" })]
     );
 
-    if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
-      return notFoundError(`Batch ${id} not found`);
+    return successResponse(batches, {
+      page,
+      limit,
+      total,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    return handleApiError(err, "GET /api/batches");
+  }
+});
+
+// ── POST /api/batches — Create a new batch ──────────────────
+
+export const POST = withRequestLogging(async function POST(request: Request) {
+  try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
     }
 
     const batch = result.returnValue as Record<string, unknown>;
@@ -59,4 +71,4 @@ export async function GET(
   } catch (err) {
     return handleApiError(err, "GET /api/batches/[id]");
   }
-}
+});
