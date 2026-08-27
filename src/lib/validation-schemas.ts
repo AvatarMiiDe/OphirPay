@@ -140,6 +140,28 @@ export type PaginationParams = z.infer<typeof paginationSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 export type CreateBatchInput = z.infer<typeof createBatchSchema>;
 
+// ── Scheduled Payment Schemas ──────────────────────────────────
+
+export const createScheduledPaymentSchema = z.object({
+  amount: z.number().positive("Amount must be greater than 0"),
+  assetCode: z.string().default("XLM"),
+  assetIssuer: z.string().optional(),
+  destAddress: stellarAddress,
+  memo: z.string().max(28).optional(),
+  scheduledFor: z
+    .string()
+    .refine(
+      (value) => !Number.isNaN(new Date(value).getTime()),
+      "Scheduled date must be a valid date"
+    )
+    .refine(
+      (value) => new Date(value).getTime() > Date.now(),
+      "Scheduled date must be in the future"
+    ),
+});
+
+export type CreateScheduledPaymentInput = z.infer<typeof createScheduledPaymentSchema>;
+
 // ── Recurrence alias ───────────────────────────────────────────
 
 /** Alias of createRecurringSchema kept for callers using the older name. */

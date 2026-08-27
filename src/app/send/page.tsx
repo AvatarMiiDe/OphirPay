@@ -14,13 +14,14 @@ import {
   STELLAR_NETWORK,
   XLM_STROOPS,
 } from "@/lib/stellar";
-import { formatAmount, shortenAddress } from "@/lib/utils";
+import { formatAmount, formatDate, shortenAddress } from "@/lib/utils";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
+import ScheduledPaymentsList from "@/components/ScheduledPaymentsList";
 import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
 import Link from "next/link";
 
@@ -32,6 +33,7 @@ type TxStep =
   | "signing"
   | "submitting"
   | "recording"
+  | "scheduling"
   | "done";
 type TxResult =
   | {
@@ -44,6 +46,13 @@ type TxResult =
         txHash?: string;
         error?: string;
       };
+    }
+  | {
+      type: "scheduled";
+      id: string;
+      amount: string;
+      destination: string;
+      scheduledFor: string;
     }
   | { type: "error"; message: string }
   | null;
@@ -62,6 +71,8 @@ export default function SendPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
 
   // Best-effort DB record — invalidates dashboard/payments caches on success
   const recordPaymentMutation = useApiMutation<
@@ -76,6 +87,22 @@ export default function SendPage() {
     { id: string }
   >("/api/payments", {
     invalidateKeys: [["dashboard", "payments"], ["payments", "onchain"], ["events", "onchain"]],
+  });
+
+  // Scheduled payments — created via the API (no wallet signing needed);
+  // the cron endpoint executes them when the date arrives.
+  const schedulePaymentMutation = useApiMutation<
+    {
+      amount: number;
+      assetCode: string;
+      assetIssuer?: string;
+      memo?: string;
+      destAddress: string;
+      scheduledFor: string;
+    },
+    { id: string }
+  >("/api/scheduled", {
+    invalidateKeys: [["scheduled"]],
   });
 
   // Fetch live fee estimate on mount
@@ -111,6 +138,17 @@ export default function SendPage() {
       setValidationError("Memo must be 28 characters or fewer.");
       return false;
     }
+    if (scheduleEnabled) {
+      const when = new Date(scheduledFor);
+      if (!scheduledFor || Number.isNaN(when.getTime())) {
+        setValidationError("Please choose a valid date and time to schedule the payment.");
+        return false;
+      }
+      if (when.getTime() <= Date.now()) {
+        setValidationError("Scheduled time must be in the future.");
+        return false;
+      }
+    }
     return true;
   };
 
@@ -121,6 +159,41 @@ export default function SendPage() {
     if (!validate()) return;
 
     setResult(null);
+
+    // ── Scheduled flow: persist via the API, no wallet signing ──
+    if (scheduleEnabled) {
+      setStep("scheduling");
+      try {
+        const created = await schedulePaymentMutation.mutateAsync({
+          amount: parseFloat(amount),
+          assetCode: selectedAsset.code,
+          assetIssuer: selectedAsset.issuer,
+          memo: memo.trim() || undefined,
+          destAddress: destination.trim(),
+          scheduledFor: new Date(scheduledFor).toISOString(),
+        });
+        setStep("done");
+        setResult({
+          type: "scheduled",
+          id: created.id,
+          amount,
+          destination: destination.trim(),
+          scheduledFor: new Date(scheduledFor).toISOString(),
+        });
+        toast.success(
+          "Payment scheduled",
+          `${formatAmount(parseFloat(amount), selectedAsset.code)} to ${shortenAddress(destination.trim(), 6)}`
+        );
+      } catch (err) {
+        setStep("done");
+        const message =
+          err instanceof Error ? err.message : "Failed to schedule the payment.";
+        setResult({ type: "error", message });
+        toast.error("Failed to schedule payment", message);
+      }
+      return;
+    }
+
     setStep("building");
 
     try {
@@ -207,6 +280,8 @@ export default function SendPage() {
     setAmount("");
     setDestination("");
     setMemo("");
+    setScheduleEnabled(false);
+    setScheduledFor("");
     setValidationError(null);
   };
 
@@ -352,6 +427,82 @@ export default function SendPage() {
               className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
             >
               Send Another
+            </button>
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Scheduled confirmation state ─────────────────────────
+
+  if (result?.type === "scheduled") {
+    return (
+      <div className="max-w-lg mx-auto mt-12 animate-fade-in">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-8 text-center">
+          {/* Clock icon */}
+          <div className="h-16 w-16 mx-auto rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-8 h-8 text-blue-600 dark:text-blue-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+            Payment Scheduled!
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            Your payment will be sent automatically at the scheduled time.
+          </p>
+
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 text-left space-y-3 mb-6">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Amount</span>
+              <span className="text-sm font-mono font-semibold text-gray-900 dark:text-white">
+                {formatAmount(parseFloat(result.amount), selectedAsset.code)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500 dark:text-gray-400">To</span>
+              <span className="text-sm font-mono text-gray-900 dark:text-white">
+                {shortenAddress(result.destination, 6)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Scheduled for</span>
+              <span className="text-sm font-mono text-gray-900 dark:text-white">
+                {formatDate(result.scheduledFor)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+            You can cancel the payment any time before it runs from the
+            Scheduled Payments list on the send form.
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={reset}
+              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+            >
+              Schedule Another
             </button>
             <Link
               href="/"
@@ -548,6 +699,45 @@ export default function SendPage() {
           </p>
         </div>
 
+        {/* Schedule for later */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={scheduleEnabled}
+              onChange={(e) => setScheduleEnabled(e.target.checked)}
+              disabled={isSubmitting}
+              className="h-4 w-4 rounded border-gray-300 text-ophir-600 focus:ring-ophir-500"
+            />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Schedule this payment for later
+            </span>
+          </label>
+          {scheduleEnabled && (
+            <div className="mt-3">
+              <label
+                htmlFor="scheduled-for"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+              >
+                Send on
+              </label>
+              <input
+                id="scheduled-for"
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={(e) => setScheduledFor(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                The payment is stored as a scheduled payment and executed
+                automatically when the date arrives. No wallet signature is
+                needed now — you can cancel it any time before it runs.
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Validation error */}
         {validationError && (
           <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
@@ -585,13 +775,15 @@ export default function SendPage() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              {step === "building"
-                ? "Building transaction..."
-                : step === "signing"
-                  ? "Waiting for signature..."
-                  : step === "recording"
-                    ? "Recording on-chain (sign to confirm)..."
-                    : "Submitting to Stellar..."}
+              {step === "scheduling"
+                ? "Scheduling payment..."
+                : step === "building"
+                  ? "Building transaction..."
+                  : step === "signing"
+                    ? "Waiting for signature..."
+                    : step === "recording"
+                      ? "Recording on-chain (sign to confirm)..."
+                      : "Submitting to Stellar..."}
             </>
           ) : (
             <>
@@ -609,22 +801,29 @@ export default function SendPage() {
                   d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
                 />
               </svg>
-              {`Send ${selectedAsset.code}`}
+              {scheduleEnabled ? "Schedule Payment" : `Send ${selectedAsset.code}`}
             </>
           )}
         </button>
 
         {isSubmitting && (
           <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-            {step === "signing"
-              ? "Check your wallet to approve the transaction..."
-              : step === "submitting"
-                ? "Sending to the Stellar testnet..."
-                : step === "recording"
-                  ? "Confirming the on-chain payment record..."
-                  : ""}
+            {step === "scheduling"
+              ? "Saving your scheduled payment..."
+              : step === "signing"
+                ? "Check your wallet to approve the transaction..."
+                : step === "submitting"
+                  ? "Sending to the Stellar testnet..."
+                  : step === "recording"
+                    ? "Confirming the on-chain payment record..."
+                    : ""}
           </p>
         )}
+      </div>
+
+      {/* Upcoming scheduled payments */}
+      <div className="mt-6">
+        <ScheduledPaymentsList />
       </div>
     </div>
   );
