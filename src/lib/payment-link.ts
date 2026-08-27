@@ -45,7 +45,9 @@ export function parsePaymentLink(
     return null;
   }
 
-  const destination = parsed.searchParams.get("dest") ?? "";
+  // Destination is encoded in the /pay/[address] path segment.
+  const match = parsed.pathname.match(/^\/pay\/([^/]+)\/?$/);
+  const destination = match ? decodeURIComponent(match[1]) : "";
   if (!isValidStellarAddress(destination)) return null;
 
   const params: PaymentLinkParams = { destination };

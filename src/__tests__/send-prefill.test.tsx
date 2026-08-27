@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import type React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,10 +8,14 @@ import SendPage from "@/app/send/page";
 
 const VALID_ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
+const { mockUseSearchParams } = vi.hoisted(() => ({
+  mockUseSearchParams: vi.fn(() => new URLSearchParams("")),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => "/send",
-  useSearchParams: vi.fn(() => new URLSearchParams("")),
+  useSearchParams: mockUseSearchParams,
 }));
 
 vi.mock("@/hooks/useMultiWallet", () => ({
@@ -72,7 +77,12 @@ vi.mock("@/components/AssetSelector", () => ({
 }));
 
 vi.mock("next/link", () => {
-  const Link = ({ children, ...props }: any) => <a {...props}>{children}</a>;
+  const Link = ({
+    children,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a {...props}>{children}</a>
+  );
   return { __esModule: true, default: Link };
 });
 
@@ -81,8 +91,7 @@ function renderPage(searchParams: string) {
     defaultOptions: { queries: { retry: false } },
   });
   // Override the mocked useSearchParams for this render.
-  const { useSearchParams } = require("next/navigation");
-  useSearchParams.mockReturnValue(new URLSearchParams(searchParams));
+  mockUseSearchParams.mockReturnValue(new URLSearchParams(searchParams));
   return render(
     <QueryClientProvider client={queryClient}>
       <SendPage />
