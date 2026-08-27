@@ -719,13 +719,13 @@ jobs:
       NEXT_PUBLIC_CONTRACT_ID: CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET
       NEXT_PUBLIC_EMITTER_CONTRACT_ID: CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with: { node-version-file: '.nvmrc', cache: "npm" }
       - run: npm ci
       - run: npx prisma generate
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: next-build
           path: .next/
@@ -744,7 +744,7 @@ jobs:
           E2E_BASE_URL: "http://localhost:3000"
       - name: Upload Accessibility Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
           name: playwright-a11y-report
           path: playwright-report/
