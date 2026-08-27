@@ -22,6 +22,11 @@ export const createPaymentSchema = z.object({
   memo: z.string().max(28).optional(),
 });
 
+/** Body for POST /api/payments/retry — which failed payment to retry. */
+export const retryPaymentSchema = z.object({
+  id: z.string().min(1, "Payment id is required"),
+});
+
 export const updatePaymentSchema = z.object({
   status: z.enum(["CREATED", "PENDING", "COMPLETED", "FAILED", "CANCELLED"]).optional(),
   description: z.string().max(500).optional(),
