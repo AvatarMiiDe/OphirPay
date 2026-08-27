@@ -295,6 +295,41 @@ cm0py0000000000000000003,25.5000000,XLM,,Freelance payout,payout-jul,COMPLETED,b
 > `X-Export-Truncated: true` — download and page through the filters instead
 > if you need the full history.
 
+### Retry a failed payment — `POST /api/payments/retry`
+
+Auth: **required**. Retries a FAILED payment in place: the original amount,
+recipient, and memo are reused from the row, and the attempt is stamped with a
+NEW idempotency key so the previous failed attempt is never duplicated. The row
+returns to `PENDING` and flows through the normal submit path.
+
+```bash
+curl -X POST "$BASE/api/payments/retry" \
+  -H "X-API-Key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "id": "cm0py0000000000000000009" }'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "cm0py0000000000000000009",
+    "amount": 100.25,
+    "assetCode": "XLM",
+    "status": "PENDING",
+    "memo": "invoice-42",
+    "transactionHash": null,
+    "sourceAccountId": "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U",
+    "batchId": null,
+    "createdAt": "2026-08-24T09:12:00.000Z",
+    "updatedAt": "2026-08-26T10:30:00.000Z"
+  },
+  "meta": { "timestamp": "2026-08-26T10:30:00.123Z" }
+}
+```
+
+> Returns `409 CONFLICT` when the payment is not in a retryable (FAILED) state.
+
 ---
 
 ## Batches

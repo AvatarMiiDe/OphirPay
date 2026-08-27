@@ -34,9 +34,8 @@ describe("GET /api/payments", () => {
     expect(res.status).toBe(200);
     expect(mockFindMany).toHaveBeenCalledWith({
       where: { userId: "user-1" },
-      orderBy: { createdAt: "desc" },
-      skip: 0,
-      take: 20,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 51,
     });
   });
 
@@ -48,7 +47,7 @@ describe("GET /api/payments", () => {
     expect(res.status).toBe(200);
     expect(mockFindMany).toHaveBeenCalledWith({
       where: { userId: "user-1" },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: 10,
       take: 10,
     });
@@ -72,9 +71,8 @@ describe("GET /api/payments", () => {
           { transactionHash: { contains: "invoice" } },
         ],
       },
-      orderBy: { createdAt: "desc" },
-      skip: 0,
-      take: 20,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 51,
     });
   });
 });
