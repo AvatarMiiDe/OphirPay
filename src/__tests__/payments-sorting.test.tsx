@@ -14,6 +14,7 @@ import PaymentsPage from "@/app/payments/page";
 import type { OnChainPayment } from "@/lib/contracts";
 
 const replaceMock = vi.fn();
+const fetchOnChainPaymentsMock = vi.fn();
 
 let searchParams: URLSearchParams;
 
@@ -28,39 +29,43 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/contracts", () => ({
-  fetchOnChainPayments: vi.fn().mockResolvedValue({
-    payments: [
-      {
-        id: 1,
-        payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        amountStroops: 30000000, // 3 XLM
-        txHash: "a".repeat(64),
-        timestamp: 3000,
-        metadata: "RECORDED",
-      },
-      {
-        id: 2,
-        payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        amountStroops: 10000000, // 1 XLM
-        txHash: "b".repeat(64),
-        timestamp: 1000,
-        metadata: "CANCELLED",
-      },
-      {
-        id: 3,
-        payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        amountStroops: 20000000, // 2 XLM
-        txHash: "c".repeat(64),
-        timestamp: 2000,
-        metadata: "RECORDED",
-      },
-    ] as OnChainPayment[],
-    total: 3,
-  }),
+  // Lazy wrapper — vi.mock factories are hoisted, so the mock itself must be
+  // referenced only when the mocked module is imported (at test time).
+  fetchOnChainPayments: (...args: unknown[]) => fetchOnChainPaymentsMock(...args),
 }));
+
+const mockPayments = {
+  payments: [
+    {
+      id: 1,
+      payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      amountStroops: 30000000, // 3 XLM
+      txHash: "a".repeat(64),
+      timestamp: 3000,
+      metadata: "RECORDED",
+    },
+    {
+      id: 2,
+      payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      amountStroops: 10000000, // 1 XLM
+      txHash: "b".repeat(64),
+      timestamp: 1000,
+      metadata: "CANCELLED",
+    },
+    {
+      id: 3,
+      payer: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      payee: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      amountStroops: 20000000, // 2 XLM
+      txHash: "c".repeat(64),
+      timestamp: 2000,
+      metadata: "RECORDED",
+    },
+  ] as OnChainPayment[],
+  total: 3,
+};
 
 let queryClient: QueryClient;
 
@@ -115,10 +120,23 @@ async function rowIds(): Promise<string[]> {
 
 beforeEach(() => {
   replaceMock.mockClear();
+  fetchOnChainPaymentsMock.mockClear();
+  fetchOnChainPaymentsMock.mockResolvedValue(mockPayments);
   searchParams = new URLSearchParams("");
 });
 
 describe("PaymentsPage sorting", () => {
+  it("fetches the full on-chain dataset so sorting covers every record", async () => {
+    renderPage();
+    await screen.findAllByRole("row");
+
+    // Sorting/pagination are client-side — a recent-slice fetch would exclude
+    // older records from sorted views.
+    expect(fetchOnChainPaymentsMock).toHaveBeenCalledWith(
+      Number.MAX_SAFE_INTEGER
+    );
+  });
+
   it("sorts by amount ascending on first header click and persists to the URL", async () => {
     const view = renderPage();
     await screen.findAllByRole("row");

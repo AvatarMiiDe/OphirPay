@@ -100,6 +100,14 @@ interface OnChainData {
 const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
 const DEFAULT_PAGE_SIZE = 25;
 
+// Fetch the complete on-chain dataset rather than a recent slice. Sorting and
+// pagination run client-side, so operating on a partial slice would silently
+// exclude older records — a sorted view could report the wrong minimum amount
+// or omit valid payments entirely. `fetchOnChainPayments` fetches ids
+// `total - limit + 1 .. total`; an unbounded limit reads every record (and
+// stays capped by the contract's own count).
+const FETCH_ALL_RECORDS = Number.MAX_SAFE_INTEGER;
+
 export default function PaymentsPage() {
   // `useSearchParams` requires a Suspense boundary during static prerendering.
   return (
@@ -138,7 +146,7 @@ function PaymentsClient() {
       // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
       refetchOnWindowFocus: false,
     },
-    () => fetchOnChainPayments(50),
+    () => fetchOnChainPayments(FETCH_ALL_RECORDS),
   );
 
   const payments = useMemo(() => data?.payments ?? [], [data]);
