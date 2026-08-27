@@ -46,7 +46,9 @@ describe("withRequestLogging", () => {
     // sleep measure as ~9.7ms, flaking the assertion. 60ms keeps the
     // "records the actual duration" semantics with real margin.
     const handler = withRequestLogging(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      // 50ms gives the assertion below a comfortable margin so the test is not
+      // flaky when the suite runs with many parallel workers (10ms was racy).
+      await new Promise((resolve) => setTimeout(resolve, 50));
       return new Response("ok");
     });
 
