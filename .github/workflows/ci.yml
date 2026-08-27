@@ -509,22 +509,28 @@ jobs:
           "
 
   # ══════════════════════════════════════════════════════════════
-  # 16. OPENAPI VALIDATE — Validate the OpenAPI specification
+  # 16. OPENAPI VALIDATE — Validate the OpenAPI specification and
+  #     check spec ↔ implementation conformance (drift detection).
+  #     `npm run test:openapi` (vitest) asserts every spec endpoint
+  #     has a route handler and every route handler is documented.
   # ══════════════════════════════════════════════════════════════
   openapi-validate:
-    name: "1️⃣6️⃣ Docs — OpenAPI (Validate)"
+    name: "1️⃣6️⃣ Docs — OpenAPI (Validate + Conformance)"
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
       - name: Install OpenAPI lint tools
         run: npm install -g @redocly/cli@1.25.11
       - name: Lint OpenAPI spec
         run: redocly lint docs/openapi.yaml
       - name: Bundle OpenAPI spec (catches $ref errors)
         run: redocly bundle docs/openapi.yaml -o /tmp/openapi-bundled.yaml && echo "✅ OpenAPI spec is valid and bundled"
+      - name: Check spec ↔ implementation conformance (drift detection)
+        run: npm run test:openapi
 
   # ══════════════════════════════════════════════════════════════
   # 17. SPELL CHECK — Check for typos in docs, comments, and code

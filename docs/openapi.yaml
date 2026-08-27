@@ -731,6 +731,43 @@ paths:
         "200":
           description: Session revoked
 
+  /api/auth/challenge:
+    get:
+      tags: [Session]
+      summary: Mint a proof-of-ownership challenge for a wallet
+      description: |
+        Returns a short-lived, server-signed challenge plus the exact message
+        the wallet must sign. `POST /api/auth/session` only issues a session
+        cookie when the signature over this message verifies against the
+        public key.
+      parameters:
+        - name: publicKey
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Stellar wallet public key (G...)
+      responses:
+        "200":
+          description: Challenge minted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge, message, expiresIn]
+                properties:
+                  challenge:
+                    type: string
+                    description: Single-use challenge token
+                  message:
+                    type: string
+                    description: Exact message the wallet must sign
+                  expiresIn:
+                    type: integer
+                    description: Challenge lifetime in seconds
+        "400":
+          description: Invalid or missing public key
+
   /api/csrf:
     get:
       tags: [Session]
@@ -1781,4 +1818,3 @@ components:
       - RPC_UNAVAILABLE
       - DATABASE_UNAVAILABLE
       - CACHE_UNAVAILABLE
-      - EMAIL_UNAVAILABLE

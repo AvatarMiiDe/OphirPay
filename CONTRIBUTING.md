@@ -64,7 +64,21 @@ npm run test:watch    # Watch mode
 npm run coverage      # Coverage report
 npm run typecheck     # TypeScript check
 npm run lint          # ESLint
+npm run test:openapi  # OpenAPI spec ↔ implementation conformance (drift)
 ```
+
+`npm run test:openapi` runs the schema-conformance suite
+(`src/__tests__/openapi-conformance.test.ts`). It fails when the spec
+(`docs/openapi.yaml`) and the route handlers drift apart in either direction:
+
+- every endpoint documented in the spec must have a working route handler,
+- every implemented route handler must be documented in the spec,
+- templated paths must declare their path parameters and map to `[segment]`
+  route dirs,
+- every `$ref` must resolve, and every operation must declare complete
+  request/response shapes.
+
+Add or update the spec entry whenever you add or change an API route.
 
 ## Smart Contracts
 
