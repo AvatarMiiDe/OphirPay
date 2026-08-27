@@ -88,9 +88,16 @@ paths:
         - name: page
           in: query
           schema: { type: integer, default: 1 }
+          description: Offset page number. Ignored when cursor is provided.
         - name: limit
           in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: >-
+            Opaque keyset cursor from a previous response's meta.nextCursor.
+            Preferred over page for large datasets — it never deep-skips.
         - name: status
           in: query
           schema:
@@ -186,41 +193,45 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/payments/export:
-    get:
+  /api/payments/retry:
+    post:
       tags: [Payments]
-      summary: Export payments as CSV
+      summary: Retry a failed payment
       description: |
-        Server-side CSV export of the CURRENT filter results — every row
-        matching `status` / `search` (same filters as GET /api/payments), not
-        just the page loaded in the browser. Includes all key fields plus memo
-        and transaction hash. Rows are capped at 10,000; when the cap is hit
-        the `X-Export-Truncated: true` response header is set. The filename
-        embeds the export date (e.g. ophirpay-payments-2026-08-26.csv).
+        Retries a failed payment in place: the original amount, recipient and
+        memo are reused (they live on the row) and the attempt is stamped with
+        a NEW idempotency key, so the previous failed attempt is never
+        duplicated. The row returns to PENDING and flows through the normal
+        submit path (PENDING → SIGNED → SUBMITTED → … → COMPLETED).
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
-      parameters:
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [CREATED, SIGNED, SUBMITTED, CONFIRMED, PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED]
-        - name: search
-          in: query
-          schema: { type: string }
-          description: Search in description, memo, or transaction hash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  description: Id of the FAILED payment to retry
       responses:
         "200":
-          description: CSV attachment
+          description: Payment reset to PENDING with a new idempotency key
           content:
-            text/csv:
+            application/json:
               schema:
-                type: string
-          headers:
-            X-Export-Truncated:
-              schema: { type: boolean }
-              description: True when the result set was capped at 10,000 rows
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: "#/components/schemas/PaymentResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Payment is not in a retryable (FAILED) state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
@@ -454,9 +465,16 @@ paths:
         - name: page
           in: query
           schema: { type: integer, default: 1 }
+          description: Offset page number. Ignored when cursor is provided.
         - name: limit
           in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: >-
+            Opaque keyset cursor from a previous response's meta.nextCursor.
+            Preferred over page for large datasets — it never deep-skips.
         - name: status
           in: query
           schema: { type: string }
@@ -467,6 +485,10 @@ paths:
       responses:
         "200":
           description: Paginated batch list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBatches"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
@@ -1235,6 +1257,7 @@ components:
         memo: { type: [string, 'null'] }
         status: { type: string }
         transactionHash: { type: [string, 'null'] }
+        idempotencyKey: { type: [string, 'null'], description: 'Per-attempt key; regenerated on every retry' }
         sourceAccountId: { type: string }
         userId: { type: string }
         batchId: { type: [string, 'null'] }
@@ -1256,6 +1279,42 @@ components:
             page: { type: integer }
             limit: { type: integer }
             total: { type: integer }
+            nextCursor: { type: [string, 'null'] }
+            hasMore: { type: boolean }
+
+    BatchResponse:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status:
+          type: string
+          enum: [CREATED, PROCESSING, COMPLETED, PARTIALLY_COMPLETED, FAILED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentResponse"
+
+    PaginatedBatches:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchResponse"
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            nextCursor: { type: [string, 'null'] }
+            hasMore: { type: boolean }
 
     CreatePaymentRequestSchema:
       type: object
