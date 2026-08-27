@@ -307,7 +307,18 @@ model ApiKey {
   expiresAt DateTime?
 
   user      User     @relation(fields: [userId], references: [id])
+  requestLogs ApiKeyRequestLog[]
 
   @@index([userId])
   @@index([prefix])
+}
+
+model ApiKeyRequestLog {
+  id        String   @id @default(cuid())
+  keyId     String
+  createdAt DateTime @default(now())
+
+  key       ApiKey   @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@index([keyId, createdAt])
 }
