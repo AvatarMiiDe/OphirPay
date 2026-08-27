@@ -65,6 +65,8 @@
 - [🔄 CI/CD Pipeline](#-cicd-pipeline)
 - [📸 Screenshots](#-screenshots)
 - [🛠 Tech Stack](#-tech-stack)
+- [📊 Database Schema](docs/SCHEMA.md)
+- [🚀 Deployment Guide](docs/DEPLOYMENT.md)
 - [🤝 Contributing](#-contributing)
 - [🗺 Roadmap](#-roadmap)
 - [🔬 Formal Verification](#-formal-verification)
