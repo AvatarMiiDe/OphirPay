@@ -12,76 +12,68 @@ Instead, email **security@ophirpay.com** with:
 
 We will respond within 48 hours and work with you on a fix.
 
-## Security Best Practices
+## CSRF Protection Policy
 
-### For Users
-- OphirPay never stores private keys — all signing happens client-side via Freighter
-- Always verify the destination address before signing
-- Check transaction details in Freighter before approving
-- Use a hardware wallet for production/mainnet operations
+OphirPay implements CSRF (Cross-Site Request Forgery) protection using the
+**double-submit cookie pattern**. This section documents the policy and
+implementation details.
 
-### For Developers
-- Run `npm audit` regularly to check for dependency vulnerabilities
-- Keep all dependencies up to date
-- Review PRs for security implications
-- Never commit secrets or API keys
-- Use environment variables for all sensitive configuration
+### Policy
 
-## Supported Versions
+All state-changing API routes (`POST`, `PATCH`, `DELETE`, `PUT`) **must**
+implement CSRF protection. Read-only routes (`GET`, `HEAD`, `OPTIONS`) are
+exempt as they do not modify state.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | ✅ Active (current)|
-| 0.1.x   | ⚠️ Security patches only |
+### Implementation
 
-## Bug Bounty Program
+1. **Token Generation**: Clients request a CSRF token from `GET /api/csrf`.
+   The server generates a cryptographically secure random token (256 bits),
+   sets it as an `HttpOnly` cookie, and returns the token in the response body.
 
-OphirPay offers rewards for responsibly disclosed vulnerabilities:
+2. **Token Storage**: The client stores the token in memory (not localStorage
+   or sessionStorage) and sends it as the `x-csrf-token` header on all
+   mutating requests.
 
-| Severity | Reward | Examples |
-|---|---|---|
-| **Critical** (9.0-10.0) | Up to $5,000 | Fund drainage, unauthorized admin takeover, key extraction |
-| **High** (7.0-8.9) | Up to $2,000 | Reentrancy, signature bypass, privilege escalation |
-| **Medium** (4.0-6.9) | Up to $500 | CSRF on sensitive endpoints, information disclosure, DoS |
-| **Low** (0.1-3.9) | Swag + recognition | Minor issues, defense-in-depth improvements |
+3. **Token Validation**: On mutating requests, the server compares the
+   `x-csrf-token` header against the CSRF cookie value using constant-time
+   comparison to prevent timing attacks.
 
-### Scope
+4. **Token Rotation**: Tokens are single-use per mint. Each call to
+   `GET /api/csrf` invalidates the previous token and issues a new one.
 
-- Smart contracts: `contracts/ophirpay/src/lib.rs`, `contracts/emitter/src/lib.rs`
-- API routes: `src/app/api/**/route.ts`
-- Authentication: Wallet session auth, API key auth
-- Webhook system: URL validation, HMAC signing, SSRF prevention
-- Infrastructure: Dockerfile, Kubernetes manifests, Helm chart
+### Cookie Security Attributes
 
-### Rules
+| Attribute | Value | Purpose |
+|-----------|-------|---------|
+| `HttpOnly` | `true` | Prevents JavaScript access (XSS protection) |
+| `Secure` | `true` (production) | HTTPS only |
+| `SameSite` | `Strict` | Prevents cross-site requests |
+| `Path` | `/` | Applies to all routes |
+| `Prefix` | `__Host-` (production) | Host-only, no domain override |
 
-1. **Do not** exploit the vulnerability beyond what is necessary to demonstrate it
-2. **Do not** access, modify, or delete other users' data
-3. **Do not** disrupt the live service (ophirpay.vercel.app)
-4. **Do not** disclose the vulnerability publicly before it is resolved
-5. Provide a clear proof-of-concept with steps to reproduce
+### Development vs Production
 
-### Process
+- **Production (HTTPS)**: Cookie named `__Host-csrf` with `Secure` attribute
+- **Development (HTTP)**: Cookie named `csrf` without `Secure` attribute
+  (browsers reject `__Host-` cookies without Secure on non-localhost HTTP)
 
-1. Email **security@ophirpay.com** with your report
-2. We acknowledge within 48 hours
-3. We validate and determine severity within 5 business days
-4. We ship a fix and publish an advisory
-5. You receive credit in the advisory + reward
+### Route Protection Requirements
 
-> Payouts are in XLM or USDC on Stellar. We follow [CVSS v3.1](https://www.first.org/cvss/v3.1/specification-document) scoring.
+All route handlers must implement CSRF protection using one of these methods:
 
-## Security Headers
+```typescript
+// Method 1: Manual enforcement
+import { verifyCsrf } from "@/lib/csrf";
 
-OphirPay implements the following security headers:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `X-XSS-Protection: 0`
+export async function POST(request: Request) {
+  const csrfError = verifyCsrf(request);
+  if (csrfError) return csrfError;
+  // ... handle request
+}
 
-## Smart Contract Security
+// Method 2: Higher-order function wrapper
+import { withCsrf } from "@/lib/csrf";
 
-- All contract functions use proper access control
-- Cross-contract calls are validated
-- Contracts use Result types for error handling
-- Timestamps and metadata are recorded for audit trails
+export const POST = withCsrf(async (request: Request) => {
+  // ... handle request
+});
