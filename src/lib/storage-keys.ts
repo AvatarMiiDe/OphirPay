@@ -22,4 +22,7 @@ export const STORAGE_KEYS = {
   WALLET_CONNECTED: "ophirpay-wallet-connected",
   /** Currency display preference ("XLM" | "USD") */
   CURRENCY_DISPLAY: "ophirpay-currency-display",
+  /** In-app notification center data & read status */
+  NOTIFICATIONS: "ophirpay-notifications",
+  NOTIFICATIONS_READ: "ophirpay-notifications-read",
 } as const;

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import {
@@ -21,7 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
-import { XLM_ASSET, type AssetInfo } from "@/lib/assets";
+import { XLM_ASSET, getAssetInfo, type AssetInfo } from "@/lib/assets";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -51,8 +52,18 @@ type TxResult =
 // ── Page ──────────────────────────────────────────────────────
 
 export default function SendPage() {
+  // `useSearchParams` requires a Suspense boundary during static prerendering.
+  return (
+    <Suspense fallback={null}>
+      <SendPageClient />
+    </Suspense>
+  );
+}
+
+function SendPageClient() {
   const { wallet, fetchBalance } = useWallet();
   const toast = useToast();
+  const searchParams = useSearchParams();
 
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
@@ -84,6 +95,29 @@ export default function SendPage() {
       .then((fee) => setFeeEstimate({ baseFee: fee.baseFee, congestion: fee.networkCongestion }))
       .catch(() => {});
   }, []);
+
+  // Pre-fill the form from a shareable payment link (?dest=...&amount=...&memo=...&asset=...)
+  useEffect(() => {
+    const dest = searchParams.get("dest");
+    if (!dest) return;
+
+    if (!isValidStellarAddress(dest)) {
+      setValidationError(
+        "Invalid Stellar address in payment link. Must start with G and be 56 characters long."
+      );
+      return;
+    }
+
+    setDestination(dest);
+    const amountParam = searchParams.get("amount");
+    if (amountParam) setAmount(amountParam);
+    const memoParam = searchParams.get("memo");
+    if (memoParam) setMemo(memoParam);
+    const assetParam = searchParams.get("asset");
+    if (assetParam) {
+      setSelectedAsset(getAssetInfo(assetParam));
+    }
+  }, [searchParams]);
 
   // ── Validation ───────────────────────────────────────────
 
