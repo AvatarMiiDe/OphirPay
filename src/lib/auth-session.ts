@@ -19,7 +19,7 @@
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
-import { authenticateRequest, type ApiKeyScope } from "@/lib/api-auth";
+import { authenticateRequest } from "@/lib/api-auth";
 import { isValidStellarAddress } from "@/lib/stellar";
 
 export const SESSION_COOKIE_NAME = "ophirpay_session";
@@ -132,7 +132,6 @@ export interface AuthContext {
   userId: string;
   publicKey?: string;
   keyId?: string;
-  scopes?: string[];
 }
 
 /**
@@ -145,8 +144,7 @@ export interface AuthContext {
  * respond with 401 in that case.
  */
 export async function getAuthContext(
-  request: Request,
-  requiredScope?: ApiKeyScope,
+  request: Request
 ): Promise<AuthContext | null> {
   const session = readSessionCookie(request);
   if (session) {
@@ -169,12 +167,7 @@ export async function getAuthContext(
   }
 
   const apiAuth = await authenticateRequest(request);
-  if (apiAuth) {
-    const methodScope = request.method === "GET" || request.method === "HEAD" ? "read" : "write";
-    const effectiveScope = requiredScope ?? methodScope;
-    if (!apiAuth.scopes.includes(effectiveScope)) return null;
-    return { userId: apiAuth.userId, keyId: apiAuth.keyId, scopes: apiAuth.scopes };
-  }
+  if (apiAuth) return { userId: apiAuth.userId, keyId: apiAuth.keyId };
 
   return null;
 }
