@@ -92,6 +92,7 @@ function SendPageClient() {
   const [recipientStatus, setRecipientStatus] = useState<
     "unknown" | "checking" | "funded" | "unfunded"
   >("unknown");
+
   // Path payment estimate state
   const [pathEstimate, setPathEstimate] = useState<PathPaymentEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
@@ -172,6 +173,7 @@ function SendPageClient() {
       clearTimeout(timer);
     };
   }, [destination, wallet.publicKey]);
+
   // Fetch strict-send path estimate when cross-asset send is active
   useEffect(() => {
     if (!isCrossAsset) {
