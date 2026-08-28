@@ -790,6 +790,14 @@ fn inc_counter(env: &Env, key: &Symbol) {
     env.storage().instance().set(key, &val.saturating_add(1));
 }
 
+/// Add delta to a u64 counter key. Same single-key optimization.
+fn add_u64_counter(env: &Env, key: &Symbol, delta: u64) {
+    let val: u64 = env.storage().instance().get(key).unwrap_or(0);
+    env.storage()
+        .instance()
+        .set(key, &val.saturating_add(delta));
+}
+
 /// Add delta to an i128 counter key. Same single-key optimization.
 /// Same TTL note as inc_counter.
 fn add_counter(env: &Env, key: &Symbol, delta: i128) {
@@ -2155,10 +2163,8 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &pause_fn, args);
+            let _: () = env.invoke_contract(&emitter, &pause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
         } else {
             release_reentrancy_lock(&env);
         }
@@ -2189,15 +2195,11 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &unpause_fn, args);
+            let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
         } else {
             release_reentrancy_lock(&env);
         }
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -3789,6 +3791,7 @@ impl OphirPayContract {
 
         inc_counter(&env, &STAT_BATCHES);
         add_counter(&env, &STAT_AMT_BATCHED, total_amount);
+        add_u64_counter(&env, &STAT_PAYMENTS, successful as u64);
 
         record_audit(
             &env,
