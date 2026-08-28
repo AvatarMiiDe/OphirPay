@@ -145,6 +145,12 @@ model Batch {
   userId      String
   name        String
   description String?
+
+  // Idempotency (issue #170): a client-supplied key lets a retry of a batch
+  // submission be recognized as a duplicate. Deduplication is scoped per
+  // user, so two different users can safely reuse the same key.
+  idempotencyKey String?
+
   status      BatchStatus @default(CREATED)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -154,6 +160,7 @@ model Batch {
 
   @@index([userId])
   @@index([status])
+  @@unique([userId, idempotencyKey])
 }
 
 enum BatchStatus {
