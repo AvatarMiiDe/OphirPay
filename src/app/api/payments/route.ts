@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
@@ -23,7 +24,7 @@ import {
   prismaPagination,
 } from "@/lib/pagination-utils";
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/payments", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -48,8 +49,16 @@ export const GET = withRequestLogging(async function GET(request: Request) {
 
     const { page, limit, status, search, cursor: rawCursor } = parsed.data;
 
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted`
+    // is the explicit admin/debug opt-in to see them — it never crosses user
+    // boundaries, the result is still scoped to the authenticated user.
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+
     // Always scope to the authenticated user — never expose other users' data
-    const baseWhere: Record<string, unknown> = { userId: auth.userId };
+    const baseWhere: Record<string, unknown> = {
+      userId: auth.userId,
+      ...(includeDeleted ? {} : { deletedAt: null }),
+    };
     if (status) baseWhere.status = status;
     if (search) {
       baseWhere.OR = [
@@ -97,9 +106,9 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/payments");
   }
-});
+}));
 
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/payments", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -151,4 +160,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/payments");
   }
-});
+}));
