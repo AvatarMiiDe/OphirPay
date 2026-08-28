@@ -251,12 +251,19 @@ Each replay attempt is recorded as a delivery. View history at
 ## Testing
 
 ```bash
-# Frontend tests (800)
+# Frontend tests (834)
 npm test
 
-# Contract tests
+# Contract unit tests
 cd contracts/ophirpay && cargo test
 cd contracts/emitter && cargo test
+
+# Contract integration tests (Rust test harness)
+cd contracts/ophirpay && cargo test --test integration_tests
+
+# Live testnet RPC integration test suite
+npm run test:testnet
+# or: node scripts/testnet-integration.mjs
 
 # E2E tests (71)
 npx playwright test
