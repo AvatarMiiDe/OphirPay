@@ -15,9 +15,6 @@ const UPGRADE_TIMELOCK: Symbol = symbol_short!("UPG_LOCK");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const PENDING_OWNER: Symbol = symbol_short!("PND_OWN");
 const OWNER_PROPOSED_AT: Symbol = symbol_short!("OWN_PAT");
-// Allow-listed source contract (the OphirPay orchestrator). When set,
-// emit_payment only accepts events from this address — preventing any
-// account from fabricating PaymentEvents (MEDIUM-3 audit fix).
 const ALLOWED_SOURCE: Symbol = symbol_short!("ALW_SRC");
 
 // Event schema version. Bump when the emitted event shape changes.
@@ -38,6 +35,35 @@ pub struct PaymentEvent {
     pub timestamp: u64,
 }
 
+/// Legacy event shape stored before schema versioning was introduced.
+/// Used only for backward-compatible reads of pre-upgrade events.
+#[contracttype]
+#[derive(Clone)]
+pub struct LegacyPaymentEvent {
+    pub id: u64,
+    pub source: String,
+    pub payer: Address,
+    pub payee: Address,
+    pub amount: i128,
+    pub tx_hash: String,
+    pub timestamp: u64,
+}
+
+impl LegacyPaymentEvent {
+    pub fn into_payment_event(self) -> PaymentEvent {
+        PaymentEvent {
+            version: EVENT_SCHEMA_VERSION,
+            id: self.id,
+            source: self.source,
+            payer: self.payer,
+            payee: self.payee,
+            amount: self.amount,
+            tx_hash: self.tx_hash,
+            timestamp: self.timestamp,
+        }
+    }
+}
+
 #[contracterror]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -56,7 +82,6 @@ pub enum EmitterError {
     InvalidTxHash = 12,
     EmitFailed = 13,
     CrossContractCallFailed = 14,
-    // Future Expansion Reserved (20-99) ─────────────────
 }
 
 // ── Contract ───────────────────────────────────────────────────
@@ -79,8 +104,6 @@ impl PaymentEventEmitter {
     }
 
     /// Record an external payment event.
-    /// Caller must authorize AND be the allow-listed source (typically the main
-    /// OphirPay contract). Returns the new event ID, or an EmitterError.
     pub fn emit_payment(
         env: Env,
         caller: Address,
@@ -92,9 +115,6 @@ impl PaymentEventEmitter {
     ) -> Result<u64, EmitterError> {
         caller.require_auth();
 
-        // Allow-list check (MEDIUM-3 audit fix): if an allowed source has been
-        // configured, only it may emit. The owner may always emit (owner is
-        // implicitly trusted, e.g. during bootstrap before the source is set).
         if let Some(allowed) = env.storage().instance().get::<_, Address>(&ALLOWED_SOURCE) {
             let owner: Address = env
                 .storage()
@@ -106,8 +126,6 @@ impl PaymentEventEmitter {
             }
         }
 
-        // Reject emits while paused — return EmitterError so cross-contract
-        // callers receive a proper error instead of panicking the whole TX.
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
             return Err(EmitterError::ContractPaused);
@@ -133,21 +151,37 @@ impl PaymentEventEmitter {
         env.storage().instance().set(&EVENT_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
-        // Native event emission
+        // Native event emission (rustfmt-compliant multi-line tuple)
         env.events().publish(
-            (Symbol::new(&env, "payment_event"), EVENT_SCHEMA_VERSION, payer, payee),
+            (
+                Symbol::new(&env, "payment_event"),
+                EVENT_SCHEMA_VERSION,
+                payer,
+                payee,
+            ),
             (amount, tx_hash),
         );
 
         Ok(count)
     }
 
-    /// Get event by ID
+    /// Get event by ID with legacy backward compatibility.
     pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
-        env.storage()
-            .persistent()
-            .get(&event_id)
-            .ok_or(EmitterError::EventNotFound)
+        // Read raw bytes first to avoid trapping on legacy data
+        let raw: Option<soroban_sdk::Bytes> = env.storage().persistent().get(&event_id);
+
+        if let Some(bytes) = raw {
+            // Try V1 schema first (with version field)
+            if let Ok(event) = soroban_sdk::xdr::from_xdr::<PaymentEvent>(&bytes) {
+                return Ok(event);
+            }
+            // Fallback to legacy schema (without version field)
+            if let Ok(legacy) = soroban_sdk::xdr::from_xdr::<LegacyPaymentEvent>(&bytes) {
+                return Ok(legacy.into_payment_event());
+            }
+        }
+
+        Err(EmitterError::EventNotFound)
     }
 
     /// Get total event count
@@ -164,7 +198,6 @@ impl PaymentEventEmitter {
     }
 
     /// Set the allow-listed source contract that may emit events (owner only).
-    /// Pass `None` to clear the allow-list (not recommended).
     pub fn set_allowed_source(
         env: Env,
         caller: Address,
@@ -305,7 +338,6 @@ impl PaymentEventEmitter {
     }
 
     /// Pause event emission (owner only).
-    /// Used by the OphirPay orchestrator to freeze both contracts atomically.
     pub fn pause(env: Env, caller: Address) -> Result<(), EmitterError> {
         caller.require_auth();
         let owner: Address = env
@@ -465,7 +497,6 @@ mod tests {
         client.set_allowed_source(&owner, &Some(allowed.clone()));
         assert_eq!(client.get_allowed_source(), Some(allowed.clone()));
 
-        // Allowed source can emit
         let id = client.emit_payment(
             &allowed,
             &String::from_str(&env, "OphirPay"),
@@ -476,7 +507,6 @@ mod tests {
         );
         assert_eq!(id, 1);
 
-        // Attacker cannot emit
         let result = client.try_emit_payment(
             &attacker,
             &String::from_str(&env, "fake"),
@@ -488,7 +518,6 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(client.get_event_count(), 1);
 
-        // Owner can always emit (implicitly trusted)
         let id = client.emit_payment(
             &owner,
             &String::from_str(&env, "owner"),
@@ -499,7 +528,6 @@ mod tests {
         );
         assert_eq!(id, 2);
 
-        // Clearing the allow-list re-opens emission
         client.set_allowed_source(&owner, &None);
         assert_eq!(client.get_allowed_source(), None);
     }
@@ -515,11 +543,9 @@ mod tests {
 
         let _ = client.init(&owner);
 
-        // Propose new owner — ownership should NOT change yet
         client.transfer_ownership(&owner, &new_owner);
         assert_eq!(client.get_owner(), owner);
 
-        // Advance time past 24h timelock and accept
         env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
         client.accept_ownership(&new_owner);
         assert_eq!(client.get_owner(), new_owner);
