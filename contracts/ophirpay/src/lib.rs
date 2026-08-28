@@ -2179,6 +2179,9 @@ impl OphirPayContract {
             let pause_fn = Symbol::new(&env, "pause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
             let _: () = env.invoke_contract(&emitter, &pause_fn, args);
+            release_reentrancy_lock(&env);
+        } else {
+            release_reentrancy_lock(&env);
         }
 
         record_audit(
@@ -2208,6 +2211,9 @@ impl OphirPayContract {
             let unpause_fn = Symbol::new(&env, "unpause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
             let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
+            release_reentrancy_lock(&env);
+        } else {
+            release_reentrancy_lock(&env);
         }
 
         record_audit(
