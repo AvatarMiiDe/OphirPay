@@ -147,7 +147,7 @@ impl PaymentEventEmitter {
 
         // Native event emission
         env.events().publish(
-            (Symbol::new(&env, "payment_event"), EVENT_SCHEMA_VERSION, payer, payee),
+            (                 Symbol::new(&env, "payment_event"),                 EVENT_SCHEMA_VERSION,                 payer,                 payee,             ),
             (amount, tx_hash),
         );
 
