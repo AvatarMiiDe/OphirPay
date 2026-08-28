@@ -4,6 +4,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -66,6 +68,7 @@ function statusVariant(status: string): "success" | "danger" | "warning" | "info
 }
 
 export default function WebhookDeliveryDashboardPage() {
+  usePageTitle(PAGE_TITLES.WEBHOOK_DELIVERIES);
   const params = useParams();
   const webhookId = params.id as string;
   const toast = useToast();

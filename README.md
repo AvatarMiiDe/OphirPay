@@ -14,6 +14,14 @@
   <br />
 
   <p>
+    <strong>🌐 Languages:</strong> 
+    <strong>🇬🇧 English</strong> · 
+    <a href="README.es.md">🇪🇸 Español</a> · 
+    <a href="README.fr.md">🇫🇷 Français</a> · 
+    <a href="README.ja.md">🇯🇵 日本語</a>
+  </p>
+
+  <p>
     <a href="https://github.com/OphirPay/OphirPay/actions/workflows/ci.yml">
       <img src="https://img.shields.io/github/actions/workflow/status/OphirPay/OphirPay/ci.yml?label=CI%20(22%20jobs)&logo=githubactions&logoColor=white" alt="CI — 22 jobs" />
     </a>
@@ -41,6 +49,9 @@
     <a href="https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET">
       <img src="https://img.shields.io/badge/contract-stellar%20testnet-7B68EE.svg" alt="Contract on Testnet" />
     </a>
+    <a href="docs/deployment-mainnet.md">
+      <img src="https://img.shields.io/badge/mainnet-pending%20deployment-lightgrey.svg" alt="Mainnet deployment pending" />
+    </a>
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
     </a>
@@ -61,11 +72,15 @@
 - [🔐 Wallet Integration](#-wallet-integration)
 - [📡 Real-Time Events](#-real-time-events)
 - [🧪 Smart Contracts](#-smart-contracts)
+- [🌟 New to Stellar?](docs/STELLAR_101.md)
 - [📊 Testing & Quality](#-testing--quality)
 - [🔄 CI/CD Pipeline](#-cicd-pipeline)
 - [📸 Screenshots](#-screenshots)
 - [🛠 Tech Stack](#-tech-stack)
+- [📊 Database Schema](docs/SCHEMA.md)
+- [🚀 Deployment Guide](docs/DEPLOYMENT.md)
 - [🤝 Contributing](#-contributing)
+- [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)
 - [🔬 Formal Verification](#-formal-verification)
 - [🛡️ Security Audit](#️-security-audit)
@@ -91,6 +106,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract communication** | ✅ | ❌ |
 | **Multi-wallet support** (6 wallets: Freighter, xBull, Rabet, Albedo, Lobstr, Ledger) | ✅ | ❌ |
 | **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
+| **Path payments** (cross-asset sends, rate preview, slippage protection) | ✅ | ❌ |
 | **PWA with offline support** | ✅ | ❌ |
 | **Classified error handling** (3 types, 300 contract variants) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
@@ -107,6 +123,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
 | **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
+| **In-app notification center** (bell, unread count, live SSE updates, session persistence) | ✅ | ❌ |
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
@@ -211,6 +228,8 @@ bash scripts/demo-test.sh
 ---
 
 ## ⚡ Quick Start
+
+> **New to Stellar?** Read our [Stellar 101 explainer](docs/STELLAR_101.md) for a concise primer on accounts, transactions, XLM, and Soroban — aimed at web developers new to blockchain.
 
 ### Prerequisites
 
@@ -366,6 +385,7 @@ OphirPayContract.emergency_pause_all() / emergency_unpause_all()
 | **WASM Hash** | Deployed: `2114b304...` · Hardened `31d9aa78...` proposed (24h timelock, security fixes) |
 | **State** | Initialized, actively recording payments on-chain |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET) |
+| **Mainnet ID** | *Pending deployment* — see [docs/deployment-mainnet.md](docs/deployment-mainnet.md) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -410,6 +430,7 @@ OphirPayContract.emergency_pause_all() / emergency_unpause_all()
 | **WASM Hash** | Deployed: `6ff35169...` · Allow-list `6d02394b...` proposed (24h timelock) |
 | **Purpose** | Stores payment-event records (queried by the SSE stream) + receives cross-contract pause/unpause |
 | **Explorer** | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN) |
+| **Mainnet ID** | *Pending deployment* — see [docs/deployment-mainnet.md](docs/deployment-mainnet.md) |
 
 | Function | Access | Description |
 |---|---|---|
@@ -478,6 +499,22 @@ stellar contract invoke --id <OPHIRPAY_ID> --source-account <SECRET_KEY> \
 ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
 ```
 Automatically builds WASM, uploads, deploys, initializes, and verifies both contracts.
+
+For Stellar Mainnet, set `NETWORK_MODE=PUBLIC` (see [docs/deployment-mainnet.md](docs/deployment-mainnet.md)):
+
+```bash
+NETWORK_MODE=PUBLIC ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
+```
+
+> ⚠ **WARNING:** `NETWORK_MODE=PUBLIC` targets the live Stellar Mainnet. There is no friendbot — the deployer account must be funded with real XLM. Always run a dry-run first:
+> ```bash
+> NETWORK_MODE=PUBLIC DRY_RUN=true ./scripts/deploy-workflow.sh <SECRET_KEY> <OWNER_PUBLIC_KEY> <EMITTER_CONTRACT_ID>
+> ```
+>
+> Validate the PUBLIC config (used in CI) before any mainnet deploy:
+> ```bash
+> bash scripts/validate-deploy-config.sh
+> ```
 </details>
 
 ---
@@ -660,6 +697,10 @@ Every push to `main` triggers **22 jobs** across six tracks:
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
+
+> 💡 **New to Stellar/Soroban?** Read the [Stellar & Soroban glossary](GLOSSARY.md)
+> first — it explains the XLM, testnet, Horizon, Soroban, and other terms you'll
+> encounter throughout the codebase.
 
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feat/amazing-feature`

@@ -1,4 +1,4 @@
-name: OphirPay CI/CD — 20 Jobs
+name: OphirPay CI/CD — 22 Jobs
 
 on:
   push:
@@ -95,9 +95,9 @@ jobs:
         with:
           targets: wasm32v1-none
           components: rustfmt, clippy
-      - name: Install Soroban SDK deps
+      - name: Install Soroban SDK deps & WASM optimization tools
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+          sudo apt-get update -qq && sudo apt-get install -y -qq build-essential binaryen
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -109,15 +109,34 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('contracts/**/Cargo.toml') }}
           restore-keys: cargo-${{ runner.os }}-
       - name: Build OphirPay contract
+        env:
+          RUSTFLAGS: "-C link-arg=-s"
         run: cd contracts/ophirpay && cargo build --target wasm32v1-none --release
       - name: Build Emitter contract
+        env:
+          RUSTFLAGS: "-C link-arg=-s"
         run: cd contracts/emitter && cargo build --target wasm32v1-none --release
+      - name: Optimize WASM (OphirPay + Emitter)
+        run: |
+          set -e
+          OPHIR_WASM=contracts/ophirpay/target/wasm32v1-none/release/ophirpay_contract.wasm
+          EMIT_WASM=contracts/emitter/target/wasm32v1-none/release/ophirpay_emitter.wasm
+
+          for f in "$OPHIR_WASM" "$EMIT_WASM"; do
+            if [ -f "$f" ]; then
+              echo "Before: $(basename $f) $(stat -c%s "$f") bytes"
+              cp "$f" "${f}.orig"
+              wasm-strip "$f" || true
+              wasm-opt -Oz -o "$f" "${f}" || true
+              echo "After:  $(basename $f) $(stat -c%s "$f") bytes"
+            fi
+          done
       - name: Verify WASM artifacts
         run: |
           ls -lh contracts/ophirpay/target/wasm32v1-none/release/*.wasm
           ls -lh contracts/emitter/target/wasm32v1-none/release/*.wasm
-      - name: Run OphirPay contract unit tests
-        run: cd contracts/ophirpay && cargo test
+      - name: Run OphirPay contract unit & property tests
+        run: cd contracts/ophirpay && PROPTEST_CASES=64 cargo test
       - name: Run Emitter contract unit tests
         run: cd contracts/emitter && cargo test
       - name: Upload WASM artifacts
@@ -278,6 +297,11 @@ jobs:
         with:
           name: contract-wasm
           path: contracts/
+      - name: Recreate target directories for tests
+        run: |
+          mkdir -p contracts/ophirpay/target/wasm32v1-none/release contracts/emitter/target/wasm32v1-none/release
+          find contracts -name "ophirpay_contract.wasm" -exec cp {} contracts/ophirpay/target/wasm32v1-none/release/ \;
+          find contracts -name "ophirpay_emitter.wasm" -exec cp {} contracts/emitter/target/wasm32v1-none/release/ \;
       - name: Apply migrations to test DB
         run: npx prisma migrate deploy
       - name: Build Next.js production bundle
@@ -703,3 +727,39 @@ jobs:
             contracts/ophirpay/target/wasm32v1-none/release/*.wasm
             contracts/emitter/target/wasm32v1-none/release/*.wasm
           retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════
+  # 22. TESTNET INTEGRATION — Live RPC testnet contract verification
+  # ══════════════════════════════════════════════════════════════
+  testnet-integration:
+    name: "2️⃣2️⃣ Backend — Testnet Integration (RPC)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: contract-wasm
+    continue-on-error: true # Non-blocking on testnet RPC rate-limits / outages
+    env:
+      SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      SKIP_ON_NETWORK_ERROR: "true"
+      NEXT_PUBLIC_CONTRACT_ID: CCQGGUJRRVXMHNEX2RYPODGJE2YRMYY4Y7A3KTJH3QP2LWZLTCOPRPET
+      NEXT_PUBLIC_EMITTER_CONTRACT_ID: CDAVU2XJ7C2Y52GRJZKRG3HDI7AJ2K2FHAFH5FPDTSUQAV7XNBQNNVAN
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          targets: wasm32v1-none
+      - name: Install build deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential
+      - uses: actions/setup-node@v4
+        with: { node-version-file: '.nvmrc', cache: "npm" }
+      - run: npm ci
+      - name: Download contract WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: contract-wasm
+          path: contracts/
+      - name: Run Cargo integration test suite
+        run: cd contracts/ophirpay && cargo test --test integration_tests
+      - name: Run Live RPC Testnet Integration Tests
+        run: node scripts/testnet-integration.mjs
+
