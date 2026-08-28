@@ -273,6 +273,7 @@ function SendPageClient() {
         "This recipient account does not exist yet. Enable “Fund new account (sponsor)” to create it in the same transaction, or use an existing address."
       );
       return false;
+    }
     if (isCrossAsset) {
       if (isEstimating) {
         setValidationError("Calculating exchange rate path... Please wait.");
@@ -299,15 +300,6 @@ function SendPageClient() {
 
     try {
       // 1. Build the transaction
-      const { xdr } = await buildPaymentTx({
-        sourcePublicKey: wallet.publicKey,
-        destination: destination.trim(),
-        amount,
-        memo: memo.trim() || undefined,
-        assetCode: selectedAsset.code,
-        assetIssuer: selectedAsset.issuer,
-        sponsorCreate,
-      });
       let xdr: string;
 
       if (isCrossAsset && pathEstimate) {
@@ -334,6 +326,7 @@ function SendPageClient() {
           memo: memo.trim() || undefined,
           assetCode: selectedAsset.code,
           assetIssuer: selectedAsset.issuer,
+          sponsorCreate,
         });
         xdr = res.xdr;
       }
