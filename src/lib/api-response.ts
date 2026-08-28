@@ -131,6 +131,7 @@ export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
 }
 
+
 export function rateLimitError(
   message = "Too many requests",
   retryAfterSeconds?: number,
@@ -148,6 +149,15 @@ export function rateLimitError(
     } satisfies ApiError,
     { status: 429, headers }
   );
+export function forbiddenError(
+  message = "Forbidden",
+  details?: unknown
+) {
+  return errorResponse(ERROR_CODES.INSUFFICIENT_SCOPE, message, 403, details);
+}
+
+export function rateLimitError(message = "Too many requests") {
+  return errorResponse(ERROR_CODES.RATE_LIMITED, message, 429);
 }
 
 export function conflictError(message: string) {

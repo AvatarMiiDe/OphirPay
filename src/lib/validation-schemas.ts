@@ -33,6 +33,28 @@ export const updatePaymentSchema = z.object({
   memo: z.string().max(28).optional(),
 });
 
+// Keep in sync with the PaymentStatus enum in prisma/schema.prisma.
+const paymentStatusValues = [
+  "CREATED",
+  "SIGNED",
+  "SUBMITTED",
+  "CONFIRMED",
+  "PENDING",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+
+/** Status filter accepted by the payment CSV export endpoint. */
+export const paymentStatusSchema = z.enum(paymentStatusValues);
+
+/** Query params for GET /api/payments/export — same filters as the list route. */
+export const paymentExportParamsSchema = z.object({
+  status: paymentStatusSchema.optional(),
+  search: z.string().optional(),
+});
+
 // ── Batch Schemas ─────────────────────────────────────────────
 
 export const batchRecipientSchema = z.object({
