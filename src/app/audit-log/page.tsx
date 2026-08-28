@@ -2,15 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 
-import {
-  Suspense,
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -139,76 +133,9 @@ async function fetchAuditLog(filters: {
 }
 
 export default function AuditLogPage() {
-  // `useSearchParams` requires a Suspense boundary during static prerendering.
-  return (
-    <Suspense fallback={<AuditLogFallback />}>
-      <AuditLogClient />
-    </Suspense>
-  );
-}
-
-function AuditLogFallback() {
-  return (
-    <div className="animate-fade-in space-y-6">
-      <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-      <div className="space-y-3">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AuditLogClient() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  // ── Filters come from URL params so filtered/paginated views are shareable ──
-  const actor = searchParams.get("actor") ?? "";
-  const action = searchParams.get("action") ?? "";
-  const since = parseTimestamp(searchParams.get("since"));
-  const until = parseTimestamp(searchParams.get("until"));
-
-  const pageParam = parseInt(searchParams.get("page") ?? "", 10);
-  const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
-
-  const pageSizeParam = parseInt(searchParams.get("pageSize") ?? "", 10);
-  const pageSize = (PAGE_SIZES as readonly number[]).includes(pageSizeParam)
-    ? pageSizeParam
-    : DEFAULT_PAGE_SIZE;
-
-  const updateQuery = useCallback(
-    (updates: Record<string, string | null>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries(updates)) {
-        if (value === null) params.delete(key);
-        else params.set(key, value);
-      }
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-    },
-    [searchParams, router, pathname]
-  );
-
-  // Actor is a free-text input — debounce the URL write so we don't refetch
-  // (and re-scan the on-chain ledger) on every keystroke.
-  const [actorDraft, setActorDraft] = useState(actor);
-  const debouncedActor = useDebounce(actorDraft, 400);
-
-  // Keep the draft in sync when the URL changes externally (back/forward).
-  useEffect(() => {
-    setActorDraft(actor);
-  }, [actor]);
-
-  useEffect(() => {
-    if (debouncedActor !== actor) {
-      updateQuery({ actor: debouncedActor || null, page: null });
-    }
-  }, [debouncedActor, actor, updateQuery]);
-
-  // ── Live SSE streaming ──
+  usePageTitle(PAGE_TITLES.AUDIT_LOG);
+  const [filter, setFilter] = useState("");
+  const [connected, setConnected] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [connected, setConnected] = useState(false);
   const [liveEntries, setLiveEntries] = useState<AuditEntry[]>([]);

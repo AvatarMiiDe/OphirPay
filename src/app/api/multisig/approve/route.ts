@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { successResponse, unauthorizedError, handleApiError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, approveMultisigSchema } from "@/lib/validation-schemas";
 import { approveMultisigPayment } from "@/lib/contract-advanced";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /**
  * POST /api/multisig/approve — signer approves a pending proposal
  * Calls OphirPayContract.approve_payment() on-chain.
  */
-export async function POST(request: Request) {
+export const POST = withMetrics("POST /api/multisig/approve", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -39,4 +41,4 @@ export async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/multisig/approve");
   }
-}
+}));

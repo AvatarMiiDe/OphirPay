@@ -3,6 +3,8 @@
 
 
 import { Suspense, useMemo, useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
@@ -14,6 +16,7 @@ import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -30,6 +33,7 @@ const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
 const DEFAULT_PAGE_SIZE = 25;
 
 export default function PaymentsPage() {
+  usePageTitle(PAGE_TITLES.PAYMENTS);
   // `useSearchParams` requires a Suspense boundary during static prerendering.
   return (
     <Suspense fallback={<PaymentsFallback />}>
@@ -123,12 +127,43 @@ function PaymentsClient() {
       page: null,
     });
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    // Prefer the server-side export (GET /api/payments/export): it applies the
+    // CURRENT search filter to the full DB-backed record set, so the CSV is
+    // not limited to the rows loaded into the page. It falls back to a
+    // client-side export of the loaded rows when there is no server session
+    // (e.g. wallet connected but the session cookie expired) so the button
+    // never dead-ends in a 401.
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("search", debouncedSearch);
+
+    try {
+      const res = await fetch(`/api/payments/export?${params.toString()}`, {
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch {
+      // Network failure or missing session — fall through to the client-side
+      // export below.
+    }
+
     exportToCsv(filtered, [
       { key: "id", header: "Payment ID" },
       { key: "payer", header: "Payer" },
       { key: "payee", header: "Payee" },
       { key: "amountStroops", header: "Amount (Stroops)" },
+      { key: "metadata", header: "Metadata" },
       { key: "txHash", header: "Tx Hash" },
     ], { filename: `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv` });
   };
@@ -151,8 +186,7 @@ function PaymentsClient() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleExport}
-            disabled={payments.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             title="Export CSV"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -231,7 +265,7 @@ function PaymentsClient() {
       {/* Table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" aria-busy={loading}>
             <thead>
               <tr className="text-left text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
                 <th className="py-3 px-4 font-medium">Payment</th>
@@ -242,13 +276,26 @@ function PaymentsClient() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={5} className="py-4 px-4">
-                    <LoadingSkeleton variant="table" lines={5} />
-                  </td>
-                </tr>
-              )}
+              {loading &&
+                // Skeleton rows pulse in place so the table keeps its height
+                // (no layout shift) while the on-chain read is in flight.
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr
+                    key={i}
+                    aria-hidden="true"
+                    className="border-b border-gray-100 dark:border-gray-800/50"
+                  >
+                    <td className="py-3 px-4" colSpan={5}>
+                      <div className="flex items-center gap-4">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-4 flex-1" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
 
               {!loading && filtered.length === 0 && !error && (
                 <tr>
