@@ -188,7 +188,10 @@ model Payment {
   /// Human-readable error message when the payment failed.
   errorMessage      String?
 
-  /// When the row was created.
+  // Idempotency: a per-attempt key so retries (issue #159) are never
+  // mistaken for the original attempt. Regenerated on every retry.
+  idempotencyKey    String?
+
   createdAt         DateTime  @default(now())
   /// Last time any field on this row changed (maintained by Prisma).
   updatedAt         DateTime  @updatedAt
