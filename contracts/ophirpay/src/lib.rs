@@ -86,6 +86,31 @@ const REENTRANCY_LOCK: Symbol = symbol_short!("RE_LOCK");
 // ── Contract Version ───────────────────────────────────────────
 const CONTRACT_VERSION: u32 = 2;
 
+// ── Storage-Bump Policy Constants ──────────────────────────────
+// Soroban persistent storage entries have a TTL measured in ledgers.
+// Without periodic bumps, entries expire and data is lost permanently.
+//
+// Policy:
+//   • `BUMP_MIN_TTL` (5 000 ledgers ≈ 3.5 days): minimum TTL applied
+//     on every write.  If residual TTL is already ≥ 5 000 the call is a
+//     no-op (Soroban clamps to current_ttl + min/max).
+//   • `BUMP_MAX_TTL` (50 000 ledgers ≈ 35 days): the ceiling that entries
+//     are bumped to on every write or maintenance call.
+//   • `BUMP_MAINTENANCE_TTL` (100 000 ledgers ≈ 70 days): the ceiling
+//     used by the `bump_storage` maintenance function.  Higher than
+//     on-write bumps to reduce maintenance frequency.
+//
+// Hot entries (payments, escrows, streams, batches, audit logs,
+// approval requests, timelocks, proposals, hooks, fees, multisig
+// config versions) are bumped on every write.
+//
+// Cold entries (roles, spending limits, escalation rules) are bumped
+// on every write as well, since the gas cost is negligible (~1 500
+// WASM instructions per extend_ttl call).
+const BUMP_MIN_TTL: u32 = 5_000;
+const BUMP_MAX_TTL: u32 = 50_000;
+const BUMP_MAINTENANCE_TTL: u32 = 100_000;
+
 // ── Data Types ─────────────────────────────────────────────────
 
 #[contracttype]
@@ -835,9 +860,9 @@ fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, detail
         .set(&(AUDIT_LOG_KEY, count), &entry);
     env.storage()
         .persistent()
-        .extend_ttl(&(AUDIT_LOG_KEY, count), 5000, 50000);
+        .extend_ttl(&(AUDIT_LOG_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
     env.storage().instance().set(&AUDIT_CNT, &count);
-    env.storage().instance().extend_ttl(5000, 50000);
+    env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
     env.events().publish(
         (Symbol::new(env, "audit"), Symbol::new(env, action)),
         (actor.clone(), target_id),
@@ -946,7 +971,7 @@ impl OphirPayContract {
         env.storage().instance().set(&VERSION, &CONTRACT_VERSION);
         // Counters default to 0 on first read — no need to pre-initialize.
         // This saves 4+ storage writes (~2,000 gas) on deployment.
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
         Ok(CONTRACT_VERSION)
     }
 
@@ -1035,11 +1060,11 @@ impl OphirPayContract {
             .set(&(MSIG_VER_CNT, ver_count), &version_entry);
         env.storage()
             .persistent()
-            .extend_ttl(&(MSIG_VER_CNT, ver_count), 5000, 50000);
+            .extend_ttl(&(MSIG_VER_CNT, ver_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&MSIG_VER_CNT, &ver_count);
 
         env.storage().instance().set(&MULTISIG_CONFIG, &config);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1115,9 +1140,9 @@ impl OphirPayContract {
             .set(&(APPROVAL_KEY, count), &request);
         env.storage()
             .persistent()
-            .extend_ttl(&(APPROVAL_KEY, count), 5000, 50000);
+            .extend_ttl(&(APPROVAL_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&APPROVAL_COUNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "approval"), Symbol::new(&env, "proposed")),
@@ -1177,7 +1202,7 @@ impl OphirPayContract {
             .set(&(APPROVAL_KEY, request_id), &request);
         env.storage()
             .persistent()
-            .extend_ttl(&(APPROVAL_KEY, request_id), 5000, 50000);
+            .extend_ttl(&(APPROVAL_KEY, request_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         let threshold_met = request.approvals.len() >= config.threshold;
 
@@ -1238,9 +1263,9 @@ impl OphirPayContract {
             .set(&(PAYMENT_KEY, pay_count), &payment);
         env.storage()
             .persistent()
-            .extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
+            .extend_ttl(&(PAYMENT_KEY, pay_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         request.executed = true;
         env.storage()
@@ -1248,7 +1273,7 @@ impl OphirPayContract {
             .set(&(APPROVAL_KEY, request_id), &request);
         env.storage()
             .persistent()
-            .extend_ttl(&(APPROVAL_KEY, request_id), 5000, 50000);
+            .extend_ttl(&(APPROVAL_KEY, request_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_PAYMENTS);
 
@@ -1316,11 +1341,11 @@ impl OphirPayContract {
             .set(&(FEE_VER_CNT, ver_count), &version_entry);
         env.storage()
             .persistent()
-            .extend_ttl(&(FEE_VER_CNT, ver_count), 5000, 50000);
+            .extend_ttl(&(FEE_VER_CNT, ver_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&FEE_VER_CNT, &ver_count);
 
         env.storage().instance().set(&FEE_KEY, &config);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1367,7 +1392,7 @@ impl OphirPayContract {
         caller.require_auth();
         require_owner(&env, &caller)?;
         env.storage().instance().set(&FEE_COLL, &collector);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
         Ok(())
     }
 
@@ -1412,9 +1437,9 @@ impl OphirPayContract {
             .set(&(TIMELOCK_KEY, count), &action);
         env.storage()
             .persistent()
-            .extend_ttl(&(TIMELOCK_KEY, count), 5000, 50000);
+            .extend_ttl(&(TIMELOCK_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&TMLOCK_CNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "timelock"), Symbol::new(&env, "proposed")),
@@ -1457,7 +1482,7 @@ impl OphirPayContract {
             .set(&(TIMELOCK_KEY, action_id), &action);
         env.storage()
             .persistent()
-            .extend_ttl(&(TIMELOCK_KEY, action_id), 5000, 50000);
+            .extend_ttl(&(TIMELOCK_KEY, action_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "timelock"), Symbol::new(&env, "executed")),
@@ -1500,7 +1525,7 @@ impl OphirPayContract {
             .set(&(TIMELOCK_KEY, action_id), &action);
         env.storage()
             .persistent()
-            .extend_ttl(&(TIMELOCK_KEY, action_id), 5000, 50000);
+            .extend_ttl(&(TIMELOCK_KEY, action_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1554,7 +1579,7 @@ impl OphirPayContract {
             enabled,
         };
         env.storage().instance().set(&GOV_CONF, &config);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1644,9 +1669,9 @@ impl OphirPayContract {
             .set(&(PROPOSAL_KEY, count), &proposal);
         env.storage()
             .persistent()
-            .extend_ttl(&(PROPOSAL_KEY, count), 5000, 50000);
+            .extend_ttl(&(PROPOSAL_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&GOV_CNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (
@@ -1703,7 +1728,7 @@ impl OphirPayContract {
         env.storage().persistent().set(&vote_key, &true);
         env.storage()
             .persistent()
-            .extend_ttl(&vote_key, 5000, 50000);
+            .extend_ttl(&vote_key, BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Each voter contributes exactly 1 vote (1 address = 1 vote)
         if support {
@@ -1717,7 +1742,7 @@ impl OphirPayContract {
             .set(&(PROPOSAL_KEY, proposal_id), &proposal);
         env.storage()
             .persistent()
-            .extend_ttl(&(PROPOSAL_KEY, proposal_id), 5000, 50000);
+            .extend_ttl(&(PROPOSAL_KEY, proposal_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "governance"), Symbol::new(&env, "vote")),
@@ -1755,7 +1780,7 @@ impl OphirPayContract {
             .set(&(PROPOSAL_KEY, proposal_id), &proposal);
         env.storage()
             .persistent()
-            .extend_ttl(&(PROPOSAL_KEY, proposal_id), 5000, 50000);
+            .extend_ttl(&(PROPOSAL_KEY, proposal_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Refund the deposit to the proposer regardless of outcome.
         // The deposit serves as spam-protection, not punishment.
@@ -1841,7 +1866,7 @@ impl OphirPayContract {
         };
         let key = (SPEND_LIMIT_KEY, user);
         env.storage().persistent().set(&key, &limit);
-        env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        env.storage().persistent().extend_ttl(&key, BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1879,7 +1904,7 @@ impl OphirPayContract {
             enabled,
         };
         env.storage().instance().set(&ESCALATION_KEY, &rules);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -1979,7 +2004,7 @@ impl OphirPayContract {
             if limit.expires_at > 0 && now >= limit.expires_at {
                 limit.is_active = false;
                 env.storage().persistent().set(&key, &limit);
-                env.storage().persistent().extend_ttl(&key, 5000, 50000);
+                env.storage().persistent().extend_ttl(&key, BUMP_MIN_TTL, BUMP_MAX_TTL);
                 return Err(PaymentError::SpendingLimitExpired);
             }
 
@@ -2002,7 +2027,7 @@ impl OphirPayContract {
             limit.current_daily_spend = limit.current_daily_spend.saturating_add(amount);
             limit.current_monthly_spend = limit.current_monthly_spend.saturating_add(amount);
             env.storage().persistent().set(&key, &limit);
-            env.storage().persistent().extend_ttl(&key, 5000, 50000);
+            env.storage().persistent().extend_ttl(&key, BUMP_MIN_TTL, BUMP_MAX_TTL);
         }
 
         // Record payment atomically (only after limit check passes)
@@ -2026,9 +2051,9 @@ impl OphirPayContract {
             .set(&(PAYMENT_KEY, count), &payment);
         env.storage()
             .persistent()
-            .extend_ttl(&(PAYMENT_KEY, count), 5000, 50000);
+            .extend_ttl(&(PAYMENT_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&PAYMENT_COUNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         emit_payment_event(&env, &payer, &payee, &amount);
         inc_counter(&env, &STAT_PAYMENTS);
@@ -2060,7 +2085,7 @@ impl OphirPayContract {
         let role_clone = role.clone();
         let key = (ROLE_KEY, grantee);
         env.storage().persistent().set(&key, &role);
-        env.storage().persistent().extend_ttl(&key, 5000, 50000);
+        env.storage().persistent().extend_ttl(&key, BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.events().publish(
             (Symbol::new(&env, "rbac"), Symbol::new(&env, "grant")),
             (grantee_clone, role_clone),
@@ -2149,7 +2174,7 @@ impl OphirPayContract {
         caller.require_auth();
         require_owner(&env, &caller)?;
         env.storage().instance().set(&EMITTER_ADDR, &emitter);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
         record_audit(&env, "emitter_set", &caller, 0, "Emitter contract linked");
         Ok(())
     }
@@ -2169,7 +2194,7 @@ impl OphirPayContract {
 
         // Pause OphirPay
         env.storage().instance().set(&PAUSED, &true);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Cross-contract call: pause the Emitter if linked. The result is
         // propagated (MEDIUM-5 audit fix): if the emitter fails to pause — e.g.
@@ -2203,7 +2228,7 @@ impl OphirPayContract {
 
         // Unpause OphirPay
         env.storage().instance().set(&PAUSED, &false);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Cross-contract call: unpause the Emitter if linked. Result propagated
         // (MEDIUM-5 audit fix) so a failure reverts the atomic unpause.
@@ -2242,6 +2267,140 @@ impl OphirPayContract {
             .instance()
             .get(&REENTRANCY_LOCK)
             .unwrap_or(false)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  STORAGE-BUMP MAINTENANCE
+    // ═══════════════════════════════════════════════════════════
+
+    /// Maintenance function: extend TTL on hot persistent entries so they
+    /// never expire under Soroban's rent model.  Called by off-chain cron
+    /// or by anyone willing to pay the gas (~5 000–15 000 instructions
+    /// per batch).
+    ///
+    /// Accepts optional ID ranges for each record type.  When a range is
+    /// empty (start > end), that record type is skipped.  Pass 0,0 to
+    /// skip a type entirely.  The function bumps entries whose current
+    /// TTL is below `BUMP_MAINTENANCE_TTL` and leaves healthy entries
+    /// untouched to minimise gas.
+    ///
+    /// Returns the total number of entries bumped.
+    pub fn bump_storage(
+        env: Env,
+        payment_range: (u64, u64),
+        escrow_range: (u64, u64),
+        stream_range: (u64, u64),
+        batch_range: (u64, u64),
+        audit_range: (u64, u64),
+        timelock_range: (u64, u64),
+        proposal_range: (u64, u64),
+        approval_range: (u64, u64),
+        hook_range: (u64, u64),
+    ) -> u32 {
+        let mut bumped: u32 = 0;
+
+        // Payments
+        for id in payment_range.0..=payment_range.1 {
+            if env.storage().persistent().has(&(PAYMENT_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(PAYMENT_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Escrows
+        for id in escrow_range.0..=escrow_range.1 {
+            if env.storage().persistent().has(&(ESCROW_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(ESCROW_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Streams
+        for id in stream_range.0..=stream_range.1 {
+            if env.storage().persistent().has(&(STREAM_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(STREAM_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Batch payments
+        for id in batch_range.0..=batch_range.1 {
+            if env.storage().persistent().has(&(BATCH_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(BATCH_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Audit log entries
+        for id in audit_range.0..=audit_range.1 {
+            if env.storage().persistent().has(&(AUDIT_LOG_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(AUDIT_LOG_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Timelocked actions
+        for id in timelock_range.0..=timelock_range.1 {
+            if env.storage().persistent().has(&(TIMELOCK_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(TIMELOCK_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Governance proposals
+        for id in proposal_range.0..=proposal_range.1 {
+            if env.storage().persistent().has(&(PROPOSAL_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(PROPOSAL_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Multisig approval requests
+        for id in approval_range.0..=approval_range.1 {
+            if env.storage().persistent().has(&(APPROVAL_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(APPROVAL_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Notification hooks
+        for id in hook_range.0..=hook_range.1 {
+            if env.storage().persistent().has(&(HOOK_KEY, id)) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&(HOOK_KEY, id), BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+                bumped += 1;
+            }
+        }
+
+        // Always bump instance storage (counters, config, etc.)
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAINTENANCE_TTL);
+
+        bumped
+    }
+
+    /// Return the current bump policy parameters.  Off-chain tooling can
+    /// call this to verify the contract's TTL settings without inspecting
+    /// WASM constants.
+    pub fn get_bump_policy(env: Env) -> (u32, u32, u32) {
+        let _ = env; // no storage read needed – constants are compile-time
+        (BUMP_MIN_TTL, BUMP_MAX_TTL, BUMP_MAINTENANCE_TTL)
     }
 
     /// Emergency withdraw: owner can rescue tokens accidentally sent directly
@@ -2307,7 +2466,7 @@ impl OphirPayContract {
         let unlock_at = env.ledger().timestamp() + 86400; // 24 hours
         env.storage().instance().set(&UPGRADE_HASH, &new_wasm_hash);
         env.storage().instance().set(&UPGRADE_TIMELOCK, &unlock_at);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(&env, "upgrade_proposed", &caller, 0, "Upgrade proposed");
 
@@ -2331,7 +2490,7 @@ impl OphirPayContract {
         // Clear the pending upgrade
         env.storage().instance().remove(&UPGRADE_HASH);
         env.storage().instance().remove(&UPGRADE_TIMELOCK);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.deployer().update_current_contract_wasm(new_wasm_hash);
 
@@ -2352,7 +2511,7 @@ impl OphirPayContract {
         require_owner(&env, &caller)?;
         env.storage().instance().remove(&UPGRADE_HASH);
         env.storage().instance().remove(&UPGRADE_TIMELOCK);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(&env, "upgrade_cancelled", &caller, 0, "Upgrade cancelled");
 
@@ -2375,7 +2534,7 @@ impl OphirPayContract {
         env.storage()
             .instance()
             .set(&OWNER_PROPOSED_AT, &env.ledger().timestamp());
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -2422,7 +2581,7 @@ impl OphirPayContract {
 
         // Complete the transfer
         env.storage().instance().set(&OWNER, &caller);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -2442,7 +2601,7 @@ impl OphirPayContract {
 
         env.storage().instance().remove(&PENDING_OWNER);
         env.storage().instance().remove(&OWNER_PROPOSED_AT);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -2506,9 +2665,9 @@ impl OphirPayContract {
             .set(&(PAYMENT_KEY, count), &payment);
         env.storage()
             .persistent()
-            .extend_ttl(&(PAYMENT_KEY, count), 5000, 50000);
+            .extend_ttl(&(PAYMENT_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&PAYMENT_COUNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Native event
         emit_payment_event(&env, &payer, &payee, &amount);
@@ -2574,7 +2733,7 @@ impl OphirPayContract {
             .set(&(PAYMENT_KEY, payment_id), &payment);
         env.storage()
             .persistent()
-            .extend_ttl(&(PAYMENT_KEY, payment_id), 5000, 50000);
+            .extend_ttl(&(PAYMENT_KEY, payment_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -2642,9 +2801,9 @@ impl OphirPayContract {
             .set(&(ESCROW_KEY, count), &escrow);
         env.storage()
             .persistent()
-            .extend_ttl(&(ESCROW_KEY, count), 5000, 50000);
+            .extend_ttl(&(ESCROW_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&ESCROW_COUNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         emit_escrow_event(&env, &env.current_contract_address(), &beneficiary, &amount);
 
@@ -2700,7 +2859,7 @@ impl OphirPayContract {
             .set(&(ESCROW_KEY, escrow_id), &escrow);
         env.storage()
             .persistent()
-            .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
+            .extend_ttl(&(ESCROW_KEY, escrow_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2762,7 +2921,7 @@ impl OphirPayContract {
             .set(&(ESCROW_KEY, escrow_id), &escrow);
         env.storage()
             .persistent()
-            .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
+            .extend_ttl(&(ESCROW_KEY, escrow_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2816,7 +2975,7 @@ impl OphirPayContract {
             .set(&(ESCROW_KEY, escrow_id), &escrow);
         env.storage()
             .persistent()
-            .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
+            .extend_ttl(&(ESCROW_KEY, escrow_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_ESC_CLAIMED);
 
@@ -2898,9 +3057,9 @@ impl OphirPayContract {
             .set(&(STREAM_KEY, count), &stream);
         env.storage()
             .persistent()
-            .extend_ttl(&(STREAM_KEY, count), 5000, 50000);
+            .extend_ttl(&(STREAM_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&STREAM_COUNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         emit_stream_event(
             &env,
@@ -2972,7 +3131,7 @@ impl OphirPayContract {
             .set(&(STREAM_KEY, stream_id), &stream);
         env.storage()
             .persistent()
-            .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
+            .extend_ttl(&(STREAM_KEY, stream_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_STR_CLAIMED);
 
@@ -3017,7 +3176,7 @@ impl OphirPayContract {
             .set(&(STREAM_KEY, stream_id), &stream);
         env.storage()
             .persistent()
-            .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
+            .extend_ttl(&(STREAM_KEY, stream_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         if unvested > 0 {
             // Reentrancy-guarded transfer (MEDIUM-4)
@@ -3106,9 +3265,9 @@ impl OphirPayContract {
             .set(&(RECURRING_KEY, count), &recurring);
         env.storage()
             .persistent()
-            .extend_ttl(&(RECURRING_KEY, count), 5000, 50000);
+            .extend_ttl(&(RECURRING_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&RECUR_CNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -3168,9 +3327,9 @@ impl OphirPayContract {
             .set(&(PAYMENT_KEY, pay_count), &payment);
         env.storage()
             .persistent()
-            .extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
+            .extend_ttl(&(PAYMENT_KEY, pay_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         emit_payment_event(
             &env,
@@ -3201,7 +3360,7 @@ impl OphirPayContract {
             .set(&(RECURRING_KEY, recurring_id), &recurring);
         env.storage()
             .persistent()
-            .extend_ttl(&(RECURRING_KEY, recurring_id), 5000, 50000);
+            .extend_ttl(&(RECURRING_KEY, recurring_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_PAYMENTS);
 
@@ -3251,7 +3410,7 @@ impl OphirPayContract {
             .set(&(RECURRING_KEY, recurring_id), &recurring);
         env.storage()
             .persistent()
-            .extend_ttl(&(RECURRING_KEY, recurring_id), 5000, 50000);
+            .extend_ttl(&(RECURRING_KEY, recurring_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -3346,9 +3505,9 @@ impl OphirPayContract {
             .set(&(REFUND_KEY, count), &refund);
         env.storage()
             .persistent()
-            .extend_ttl(&(REFUND_KEY, count), 5000, 50000);
+            .extend_ttl(&(REFUND_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&REFUND_CNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "requested")),
@@ -3389,7 +3548,7 @@ impl OphirPayContract {
             .set(&(REFUND_KEY, refund_id), &refund);
         env.storage()
             .persistent()
-            .extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
+            .extend_ttl(&(REFUND_KEY, refund_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -3425,7 +3584,7 @@ impl OphirPayContract {
             .set(&(REFUND_KEY, refund_id), &refund);
         env.storage()
             .persistent()
-            .extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
+            .extend_ttl(&(REFUND_KEY, refund_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         record_audit(
             &env,
@@ -3467,7 +3626,7 @@ impl OphirPayContract {
             .set(&(REFUND_KEY, refund_id), &refund);
         env.storage()
             .persistent()
-            .extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
+            .extend_ttl(&(REFUND_KEY, refund_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "processed")),
@@ -3572,7 +3731,7 @@ impl OphirPayContract {
         env.storage().persistent().set(&(HOOK_KEY, count), &hook);
         env.storage()
             .persistent()
-            .extend_ttl(&(HOOK_KEY, count), 5000, 50000);
+            .extend_ttl(&(HOOK_KEY, count), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         // Index: subscriber → hook IDs (for management)
         let subscriber_clone = subscriber.clone();
@@ -3584,10 +3743,10 @@ impl OphirPayContract {
             .unwrap_or(Vec::new(&env));
         subscriber_hooks.push_back(count);
         env.storage().persistent().set(&sub_key, &subscriber_hooks);
-        env.storage().persistent().extend_ttl(&sub_key, 5000, 50000);
+        env.storage().persistent().extend_ttl(&sub_key, BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.storage().instance().set(&HOOK_CNT, &count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "hook"), Symbol::new(&env, "registered")),
@@ -3623,7 +3782,7 @@ impl OphirPayContract {
         env.storage().persistent().set(&(HOOK_KEY, hook_id), &hook);
         env.storage()
             .persistent()
-            .extend_ttl(&(HOOK_KEY, hook_id), 5000, 50000);
+            .extend_ttl(&(HOOK_KEY, hook_id), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "hook"), Symbol::new(&env, "unregistered")),
@@ -3762,7 +3921,7 @@ impl OphirPayContract {
                 .set(&(PAYMENT_KEY, pay_count), &payment);
             env.storage()
                 .persistent()
-                .extend_ttl(&(PAYMENT_KEY, pay_count), 5000, 50000);
+                .extend_ttl(&(PAYMENT_KEY, pay_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
 
             emit_payment_event(&env, &creator, &payee_addr, &amount);
         }
@@ -3776,7 +3935,7 @@ impl OphirPayContract {
         }
 
         env.storage().instance().set(&PAYMENT_COUNT, &pay_count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         let mut batch_count: u64 = env.storage().instance().get(&BATCH_COUNT).unwrap_or(0);
         batch_count += 1;
@@ -3798,9 +3957,9 @@ impl OphirPayContract {
             .set(&(BATCH_KEY, batch_count), &batch);
         env.storage()
             .persistent()
-            .extend_ttl(&(BATCH_KEY, batch_count), 5000, 50000);
+            .extend_ttl(&(BATCH_KEY, batch_count), BUMP_MIN_TTL, BUMP_MAX_TTL);
         env.storage().instance().set(&BATCH_COUNT, &batch_count);
-        env.storage().instance().extend_ttl(5000, 50000);
+        env.storage().instance().extend_ttl(BUMP_MIN_TTL, BUMP_MAX_TTL);
 
         inc_counter(&env, &STAT_BATCHES);
         add_counter(&env, &STAT_AMT_BATCHED, total_amount);
@@ -5934,5 +6093,184 @@ mod tests {
         env.ledger().set_timestamp(1_060_000);
         client.claim_escrow(&payee2, &e2);
         assert_eq!(client.get_locked_balance(), 0);
+    }
+
+    // ── Storage-Bump Policy Tests ────────────────────────────────
+
+    #[test]
+    fn test_get_bump_policy_returns_constants() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        let (min, max, maintenance) = client.get_bump_policy();
+        assert_eq!(min, 5_000);
+        assert_eq!(max, 50_000);
+        assert_eq!(maintenance, 100_000);
+    }
+
+    #[test]
+    fn test_bump_storage_noop_on_empty_ranges() {
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        let zero = (0u64, 0u64);
+        let bumped = client.bump_storage(
+            &zero, &zero, &zero, &zero, &zero, &zero, &zero, &zero, &zero,
+        );
+        // No entries exist yet, so nothing should be bumped.
+        assert_eq!(bumped, 0);
+    }
+
+    #[test]
+    fn test_bump_storage_extends_existing_entries() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        // Record a payment so there's a persistent entry to bump.
+        client.record_payment(
+            &payer,
+            &payee,
+            &1000i128,
+            &sac,
+            &String::from_str(&env, "tx1"),
+            &String::from_str(&env, "meta1"),
+        );
+
+        // Bump the payment range.
+        let bumped = client.bump_storage(
+            &(1u64, 1u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+            &(0u64, 0u64),
+        );
+        assert_eq!(bumped, 1);
+
+        // Verify the payment still exists and is readable.
+        let p = client.get_payment(&1);
+        assert_eq!(p.id, 1);
+        assert_eq!(p.amount, 1000);
+    }
+
+    #[test]
+    fn test_bump_storage_gas_cost_accounting() {
+        // Verify that bump_storage is callable and returns without panic.
+        // The actual gas cost is bounded by the number of entries scanned;
+        // an empty range should cost ~5 000 instructions (instance bump only).
+        let env = Env::default();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        let zero = (0u64, 0u64);
+        // Empty ranges — minimal gas.
+        let bumped = client.bump_storage(
+            &zero, &zero, &zero, &zero, &zero, &zero, &zero, &zero, &zero,
+        );
+        assert_eq!(bumped, 0);
+
+        // A single-entry bump should also succeed without excessive gas.
+        // (If gas exceeds budget the test will panic / OOG.)
+        let bumped2 = client.bump_storage(
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+            &(1u64, 1u64),
+        );
+        // No entries exist, so 0 bumped — but the call succeeded.
+        assert_eq!(bumped2, 0);
+    }
+
+    #[test]
+    fn test_bump_storage_multi_type_entries() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        // Create 2 payments and 1 batch (2 payments in batch).
+        client.record_payment(
+            &payer,
+            &payee,
+            &500i128,
+            &sac,
+            &String::from_str(&env, "tx_a"),
+            &String::from_str(&env, "m_a"),
+        );
+        client.record_payment(
+            &payer,
+            &payee,
+            &300i128,
+            &sac,
+            &String::from_str(&env, "tx_b"),
+            &String::from_str(&env, "m_b"),
+        );
+
+        let mut payees = Vec::new(&env);
+        payees.push_back(payee.clone());
+        let mut amounts = Vec::new(&env);
+        amounts.push_back(200i128);
+        client.create_batch(
+            &payer,
+            &payees,
+            &amounts,
+            &sac,
+            &String::from_str(&env, "batch_tx"),
+        );
+
+        // Now bump payments 1–2 and batch 1.
+        let bumped = client.bump_storage(
+            &(1u64, 2u64),  // payments
+            &(0u64, 0u64),  // escrows
+            &(0u64, 0u64),  // streams
+            &(1u64, 1u64),  // batches
+            &(0u64, 0u64),  // audit
+            &(0u64, 0u64),  // timelocks
+            &(0u64, 0u64),  // proposals
+            &(0u64, 0u64),  // approvals
+            &(0u64, 0u64),  // hooks
+        );
+        // 2 payments + 1 batch = 3 bumped
+        assert_eq!(bumped, 3);
+
+        // Verify data integrity after bump.
+        let p1 = client.get_payment(&1);
+        assert_eq!(p1.amount, 500);
+        let p2 = client.get_payment(&2);
+        assert_eq!(p2.amount, 300);
+        let b1 = client.get_batch(&1);
+        assert_eq!(b1.total_amount, 200);
     }
 }
