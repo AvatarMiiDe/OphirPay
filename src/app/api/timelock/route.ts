@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /**
  * GET /api/timelock — list pending timelocked actions from the Soroban contract.
  * Reads total count from OphirPayContract.get_timelock_count().
  * Use query param `id` to look up a specific action.
  */
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/timelock", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -77,4 +79,4 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/timelock");
   }
-}
+}));

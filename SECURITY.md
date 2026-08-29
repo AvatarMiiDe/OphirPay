@@ -132,6 +132,49 @@ If legal action is initiated by a third party against you for research that
 followed this policy, we will consider making a public statement in your
 support.
 
+## Responsible Disclosure Process
+
+### Step 1: Report the Vulnerability
+
+Email **security@ophirpay.com** with the following information:
+
+- **Subject**: `[SECURITY] Brief description of the vulnerability`
+- **Body**:
+  - Description of the vulnerability
+  - Steps to reproduce (include URLs, endpoints, and request/response examples if applicable)
+  - Affected versions (check `package.json` or `Cargo.toml`)
+  - Potential impact (what an attacker could achieve)
+  - Any suggested mitigations (if you have them)
+  - Your preferred contact method for follow-up questions
+
+### Step 2: Acknowledgment
+
+We will acknowledge receipt of your report within **48 hours** via email.
+
+### Step 3: Validation
+
+Our security team will validate the vulnerability within **5 business days**. We may contact you for additional details or clarification.
+
+### Step 4: Resolution
+
+Once validated, we will:
+- Develop and test a fix
+- Deploy the fix to production
+- Publish a security advisory on GitHub
+- Credit you in the advisory (unless you prefer anonymity)
+
+### Step 5: Reward
+
+If eligible, you will receive a reward based on the severity of the vulnerability (see Bug Bounty Program below).
+
+## Security.txt
+
+OphirPay publishes a `security.txt` file at `/.well-known/security.txt` following the [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116) standard. This file provides security researchers with contact information and disclosure policies.
+
+The file is accessible at:
+- **Production**: https://ophirpay.vercel.app/.well-known/security.txt
+- **Repository**: https://github.com/OphirPay/OphirPay/blob/main/.well-known/security.txt
+
 ## Security Best Practices
 
 ### For Users
@@ -141,6 +184,7 @@ support.
 - Always verify the destination address before signing
 - Check transaction details in Freighter before approving
 - Use a hardware wallet for production/mainnet operations
+- Never share your wallet seed phrase or private keys
 
 ### For Developers
 
@@ -169,6 +213,7 @@ OphirPay offers rewards for responsibly disclosed vulnerabilities:
 3. **Do not** disrupt the live service (ophirpay.vercel.app)
 4. **Do not** disclose the vulnerability publicly before it is resolved
 5. Provide a clear proof-of-concept with steps to reproduce
+6. Report vulnerabilities in good faith
 
 ### Process
 
@@ -187,7 +232,8 @@ OphirPay implements the following security headers:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `X-XSS-Protection: 0`
+- `X-XSS-Protection: 1; mode=block`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 
 ## Smart Contract Security
 
