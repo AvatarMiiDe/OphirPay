@@ -5,6 +5,7 @@ node_modules/
 
 # testing
 coverage/
+dependency-audit-report/
 
 # next.js
 .next/
@@ -69,4 +70,5 @@ contracts/**/spec/target/
 
 # Playwright
 playwright-report/
+playwright-visual-report/
 test-results/

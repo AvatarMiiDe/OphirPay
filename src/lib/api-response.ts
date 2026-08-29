@@ -17,6 +17,10 @@ interface ApiSuccess<T> {
     limit?: number;
     total?: number;
     timestamp?: string;
+    /** Opaque cursor for the next page (keyset pagination). */
+    nextCursor?: string | null;
+    /** Whether more rows exist after this page. */
+    hasMore?: boolean;
   };
 }
 
@@ -125,6 +129,13 @@ export function serverError(message = "Internal server error") {
 
 export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
+}
+
+export function forbiddenError(
+  message = "Forbidden",
+  details?: unknown
+) {
+  return errorResponse(ERROR_CODES.INSUFFICIENT_SCOPE, message, 403, details);
 }
 
 export function rateLimitError(message = "Too many requests") {
