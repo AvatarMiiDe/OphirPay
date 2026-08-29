@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
