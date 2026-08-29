@@ -18,7 +18,7 @@ import { shortenAddress } from "@/lib/utils";
 import Link from "next/link";
 
 interface PauseStateData {
-  paused: boolean;
+  paused: boolean | "unknown";
   available: boolean;
 }
 
@@ -36,7 +36,9 @@ export default function PauseControlsPage() {
     ["pause-state"],
     "/api/pause-state",
   );
-  const isPaused = rawData?.paused ?? false;
+  const pauseState = rawData?.paused ?? "unknown";
+  const isPaused = pauseState === true;
+  const isUnknown = pauseState === "unknown";
   const contractAvailable = rawData?.available ?? false;
 
   const handlePause = async () => {
@@ -51,6 +53,11 @@ export default function PauseControlsPage() {
       if (result.success) {
         toast.success("Contract paused on-chain — all writes are now blocked");
         setLastTxHash(result.txHash ?? null);
+        queryClient.invalidateQueries({ queryKey: ["pause-state"] });
+      } else if (result.txHash) {
+        // Transaction was submitted but hasn't confirmed yet — NOT a failure
+        setLastTxHash(result.txHash);
+        toast.warning("Transaction submitted — confirmation is taking longer than expected. Check back or verify on-chain.");
         queryClient.invalidateQueries({ queryKey: ["pause-state"] });
       } else {
         toast.error(result.error || "Pause failed — are you the contract owner?");
@@ -74,6 +81,11 @@ export default function PauseControlsPage() {
       if (result.success) {
         toast.success("Contract unpaused on-chain — writes are now enabled");
         setLastTxHash(result.txHash ?? null);
+        queryClient.invalidateQueries({ queryKey: ["pause-state"] });
+      } else if (result.txHash) {
+        // Transaction was submitted but hasn't confirmed yet — NOT a failure
+        setLastTxHash(result.txHash);
+        toast.warning("Transaction submitted — confirmation is taking longer than expected. Check back or verify on-chain.");
         queryClient.invalidateQueries({ queryKey: ["pause-state"] });
       } else {
         toast.error(result.error || "Unpause failed — are you the contract owner?");
@@ -124,14 +136,20 @@ export default function PauseControlsPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {isPaused
                 ? "All write operations are currently blocked. Read-only queries still work."
-                : "Contract is active — all operations are enabled."}
+                : isUnknown
+                  ? "Unable to determine current contract state. The contract may be unreachable."
+                  : "Contract is active — all operations are enabled."}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant={isPaused ? "danger" : "success"}>
-              {isPaused ? "⏸ Paused" : "▶ Active"}
-            </Badge>
-            {!contractAvailable && (
+            {isUnknown ? (
+              <Badge variant="warning">❓ Unknown</Badge>
+            ) : (
+              <Badge variant={isPaused ? "danger" : "success"}>
+                {isPaused ? "⏸ Paused" : "▶ Active"}
+              </Badge>
+            )}
+            {!contractAvailable && !isUnknown && (
               <Badge variant="warning">Offline</Badge>
             )}
           </div>
@@ -168,7 +186,7 @@ export default function PauseControlsPage() {
             <Button
               onClick={handleUnpause}
               loading={submitting}
-              disabled={!wallet.connected || !contractAvailable}
+              disabled={!wallet.connected || !contractAvailable || isUnknown}
               className="flex-1"
             >
               ▶ Unpause Contract
@@ -177,7 +195,7 @@ export default function PauseControlsPage() {
             <Button
               onClick={handlePause}
               loading={submitting}
-              disabled={!wallet.connected || !contractAvailable}
+              disabled={!wallet.connected || !contractAvailable || isUnknown}
               variant="danger"
               className="flex-1"
             >

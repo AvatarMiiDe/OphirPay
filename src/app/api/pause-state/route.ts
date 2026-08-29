@@ -7,6 +7,10 @@ import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/
 /**
  * GET /api/pause-state — current pause state from the Soroban contract.
  * Simulates a read-only call to OphirPayContract.is_paused().
+ *
+ * Response shapes:
+ *   { paused: boolean, available: true }  — known state
+ *   { paused: "unknown", available: false, error?: string }  — simulation failed / unreachable
  */
 export async function GET(request: Request) {
   try {
@@ -22,8 +26,8 @@ export async function GET(request: Request) {
     );
 
     if (result.status === "SIMULATION_FAILED") {
-      // Contract not deployed or unreachable — default to not paused
-      return successResponse({ paused: false, available: false, error: result.error });
+      // Contract not deployed or unreachable — explicitly report unknown state
+      return successResponse({ paused: "unknown" as const, available: false, error: result.error });
     }
 
     return successResponse({ paused: result.returnValue === true, available: true });
