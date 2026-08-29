@@ -1,401 +1,236 @@
-# Troubleshooting
+# 🧰 OphirPay Troubleshooting Guide
 
-This guide covers the most common setup issues reported by new OphirPay
-contributors. Each entry follows the same shape: **Symptom → Cause →
-Resolution**. If your issue is not listed here, open a
-[GitHub issue](https://github.com/OphirPay/OphirPay/issues/new?template=bug_report.yml)
-and include the commands you ran and their output.
+> Common setup and network errors — with **symptom → cause → fix** for each.
+> If your issue isn't here, search the [issues](https://github.com/OphirPay/OphirPay/issues)
+> and open a new one with the error message, your network (`TESTNET`/`PUBLIC`),
+> and the commands you ran.
 
-- [Quick checks](#quick-checks)
-- [1. Freighter not detected](#1-freighter-not-detected)
-- [2. Rust wasm32 target missing](#2-rust-wasm32-target-missing)
-- [3. Prisma migration errors](#3-prisma-migration-errors)
-- [4. WASM build failures](#4-wasm-build-failures)
-- [5. Node version mismatch](#5-node-version-mismatch)
-- [6. Port conflicts](#6-port-conflicts)
-- [Still stuck?](#still-stuck)
-
-## Quick checks
-
-Before diving into a specific issue, verify the local environment:
-
-```bash
-node -v        # expect the version in .nvmrc (20.x)
-npm -v
-rustc -V       # expect a recent stable toolchain (CI pins 1.91.0)
-cargo -V
-npx prisma -v
-```
-
-Confirm the repository is installed and validated:
-
-```bash
-npm install
-npm run typecheck
-npm run lint
-```
-
-If you are working on the contracts, also confirm the Rust target list:
-
-```bash
-rustup target list --installed
-```
+**Quick links:** [Setup & environment](#-setup--environment) · [Funding (friendbot)](#-funding--friendbot) · [RPC & network](#-rpc--network) · [Trustlines](#-trustlines) · [Wallet rejections](#-wallet-rejections) · [App runtime](#-app-runtime) · [Live events (SSE)](#-live-events-sse)
 
 ---
 
-## 1. Freighter not detected
+## 🔧 Setup & environment
 
-**Symptom**
+### `npm install` fails or hangs
 
-The app loads, but Freighter is not listed in the wallet selector, shows a
-"Not found" badge, or `connect("freighter")` fails with a message about the
-extension.
+| | |
+|---|---|
+| **Symptom** | `npm install` errors out, or the install never finishes |
+| **Cause** | Lockfile out of sync, registry/network issue, or a platform-specific dependency |
+| **Fix** | 1. Delete `node_modules` and re-run `npm ci` (uses the committed lockfile): `rm -rf node_modules && npm ci`. 2. If you changed dependencies, run `npm install` and **commit the updated `package-lock.json`**. 3. Check `npm config get registry` is a reachable registry (default `https://registry.npmjs.org/`). |
 
-**Cause**
+### `Prisma generate failed` / `Schema not found`
 
-Freighter is a browser extension and is only available inside a browser
-context:
+| | |
+|---|---|
+| **Symptom** | `next build` or `npm run dev` fails at the Prisma step |
+| **Cause** | Prisma client not generated, or wrong `DATABASE_PROVIDER` |
+| **Fix** | Run `npx prisma generate`. Verify `DATABASE_PROVIDER` is set (`postgresql` for production, `sqlite` for local dev). Then re-run the build. |
 
-- The extension is not installed, is disabled, or is not unlocked.
-- The page was loaded before the extension was installed/enabled and was not
-  reloaded.
-- The browser profile blocks extension injection (e.g. private/incognito mode
-  with extensions disabled, or a hardened privacy configuration).
-- Another wallet extension conflicts with Freighter's page-level detection.
+### `ENOENT: no such file or directory, open '.env'` / `NEXT_PUBLIC_*` values missing
 
-**Resolution**
+| | |
+|---|---|
+| **Symptom** | App starts but env-driven features are blank or error at runtime |
+| **Cause** | No `.env.local` / `.env.production` file |
+| **Fix** | `cp .env.example .env.local` and fill in the required values (see the [Deployment Guide](DEPLOYMENT.md#-environment-variables)). Restart the dev server — Next.js caches env at boot. |
 
-1. Install Freighter from [freighter.app](https://freighter.app) (or the
-   Chrome/Firefox store for your browser).
-2. Open the browser's extension manager and confirm Freighter is **enabled**
-   (and not paused for this site).
-3. Unlock the wallet (Freighter shows a lock screen on first use).
-4. **Reload the app tab** after changing any extension state — extensions do
-   not hot-inject into already-loaded pages.
-5. Retry in a normal (non-private) window. If you use a hardened privacy
-   setup, add an exception for the OphirPay origin.
-6. If other wallet extensions are installed, test with a clean browser
-   profile to rule out conflicts.
+### `AUTH_SECRET is not set` at login
 
-**Verification**
+| | |
+|---|---|
+| **Symptom** | Login/session endpoints fail with an auth error |
+| **Cause** | Missing session-signing secret |
+| **Fix** | Generate one and set it: `echo "AUTH_SECRET=$(openssl rand -hex 32)" >> .env.local`. Restart. |
 
-- The wallet selector lists Freighter and shows a connected badge after
-  `connect("freighter")`.
-- The network badge shows `TESTNET` (or `PUBLIC` if configured).
+### `next build` fails after switching branches
 
----
-
-## 2. Rust wasm32 target missing
-
-**Symptom**
-
-Building a contract fails with an error such as:
-
-```text
-error: target 'wasm32v1-none' not installed
-error[E0463]: can't find crate for `core`
-```
-
-or `cargo build --target wasm32v1-none --release` reports that the target is
-not installed.
-
-**Cause**
-
-The Rust toolchain is installed, but the WebAssembly compilation target is
-not. OphirPay's contracts target **`wasm32v1-none`** (the Soroban
-`#![no_std]` target used with the modern `soroban-sdk`). Older Soroban
-projects used `wasm32-unknown-unknown`; if you see that target mentioned, the
-fix is the same command with the matching target name.
-
-**Resolution**
-
-Install the target for the active toolchain:
-
-```bash
-rustup target add wasm32v1-none
-```
-
-Then verify it is present:
-
-```bash
-rustup target list --installed   # should include wasm32v1-none
-```
-
-If the error persists, make sure the target was added to the **same
-toolchain** that `cargo` is using (check with `rustup show`). The repo pins
-its Rust toolchain in `contracts/rust-toolchain.toml` (channel `1.91.0`,
-with both `wasm32-unknown-unknown` and `wasm32v1-none` targets listed), so
-running `cargo`/`rustup` from inside `contracts/` automatically uses the
-pinned toolchain and auto-installs its targets. When in doubt, install the
-pinned toolchain explicitly:
-
-```bash
-rustup toolchain install 1.91.0
-rustup target add wasm32v1-none --toolchain 1.91.0
-```
-
-**Verification**
-
-```bash
-cd contracts/ophirpay && cargo build --target wasm32v1-none --release
-cd contracts/emitter && cargo build --target wasm32v1-none --release
-```
-
-Both builds should succeed and emit `.wasm` files under
-`contracts/*/target/wasm32v1-none/release/`.
+| | |
+|---|---|
+| **Symptom** | Build errors referencing stale code or missing modules |
+| **Cause** | Stale `.next` cache or leftover `node_modules` from another branch |
+| **Fix** | `rm -rf .next node_modules && npm ci && npm run build`. |
 
 ---
 
-## 3. Prisma migration errors
+## 💰 Funding (friendbot)
 
-**Symptom**
+### Friendbot returns an error or the account stays at 0 XLM
 
-Any of the following:
+| | |
+|---|---|
+| **Symptom** | `friendbot.stellar.org` request fails, or the account balance stays 0 after funding |
+| **Cause** | You requested funds for the **wrong network** (friendbot only funds **testnet**), the address is malformed, or the account already has funds (friendbot refuses duplicates) |
+| **Fix** | 1. Only use friendbot on **testnet**: `curl "https://friendbot.stellar.org?addr=<PUBLIC_KEY>"`. 2. Verify the address is a valid Stellar `G…` strkey (56 chars). 3. Check the balance via Horizon: `curl -s "https://horizon-testnet.stellar.org/accounts/<PUBLIC_KEY>" \| jq '.balances[] \| select(.asset_type=="native") \| .balance'`. 4. If it says the account already exists, it is funded — just poll Horizon until the balance appears. |
 
-- `npx prisma db push` fails with `Environment variable not found: DATABASE_URL`
-- `npx prisma generate` fails or generates an empty/stale client
-- The app errors at startup with `PrismaClientInitializationError` or
-  `table "User" does not exist` (SQLite: `no such table: User`)
-- `P1001: Can't reach database server` or `P1000: Authentication failed`
+### `Insufficient funds` on testnet
 
-**Cause**
+| | |
+|---|---|
+| **Symptom** | Any transaction fails with `Insufficient funds` / `op_underfunded` |
+| **Cause** | The signing account has no XLM; on **testnet** it wasn't friendbot-funded |
+| **Fix** | Fund it (friendbot for testnet, exchange for mainnet — **there is no friendbot on mainnet**), then wait a few seconds for the ledger to confirm before retrying. |
 
-- `DATABASE_URL` is not set — the repo uses `.env.example` as a template;
-  the file must be copied to `.env` (or `.env.local`) before Prisma runs.
-- **The default local database is PostgreSQL, not SQLite.** `.env.example`
-  ships `DATABASE_PROVIDER=postgresql` with
-  `DATABASE_URL=postgresql://localhost:5432/ophirpay`, and
-  `prisma/schema.prisma` enables the PostgreSQL datasource. If no PostgreSQL
-  server is running locally, `prisma db push` fails with `P1001: Can't reach
-  database server` — the connectivity error this entry is meant to resolve.
-  SQLite is an opt-in dev alternative (see step 5), not the default.
-- A schema/database drift between `prisma/schema.prisma` and the local
-  database after pulling new commits.
-- A stale Prisma client after a schema change.
+### `Insufficient funds` on mainnet
 
-**Resolution**
-
-1. Create the environment file from the template:
-   ```bash
-   cp .env.example .env
-   ```
-2. Confirm the variables are present and point where you expect:
-   ```bash
-   grep -E 'DATABASE_URL|DATABASE_PROVIDER' .env
-   # DATABASE_PROVIDER=postgresql
-   # DATABASE_URL=postgresql://localhost:5432/ophirpay
-   ```
-3. Make sure a PostgreSQL server is reachable at that URL. The quickest
-   path is the repository's bundled `docker-compose.yml` (PostgreSQL 16,
-   user/password/db all `ophirpay`):
-   ```bash
-   docker compose up -d db
-   ```
-   then point the URL at it:
-   ```bash
-   # .env
-   DATABASE_URL=postgresql://ophirpay:ophirpay@localhost:5432/ophirpay
-   ```
-   Alternatively, install/start PostgreSQL locally and create the `ophirpay`
-   database before continuing.
-4. Apply the schema and regenerate the client (in this order):
-   ```bash
-   npx prisma db push
-   npx prisma generate
-   ```
-5. **SQLite dev alternative (no server needed):** the schema header in
-   `prisma/schema.prisma` documents the switch — set
-   `DATABASE_PROVIDER=sqlite` and `DATABASE_URL="file:./dev.db"`, and swap
-   the datasource in `prisma/schema.prisma` (uncomment the `sqlite` block,
-   comment out the `postgresql` block). Then `npx prisma db push` again.
-6. If the app still uses a stale client, regenerate and restart the dev
-   server:
-   ```bash
-   npm run db:generate
-   npm run dev
-   ```
-7. For a remote PostgreSQL (production/Neon), use a connection string that
-   includes credentials, e.g.
-   `postgresql://user:pass@host:5432/dbname?sslmode=require`, and ensure the
-   database exists before running `db push`.
-
-**Verification**
-
-```bash
-npx prisma validate   # should print "schema is valid"
-npm run typecheck     # Prisma client types resolve
-npm run dev           # app boots without DB errors
-```
+| | |
+|---|---|
+| **Symptom** | Deployment or payment fails with insufficient funds |
+| **Cause** | Mainnet accounts must be funded with **real XLM**; there is no friendbot |
+| **Fix** | Send XLM from an exchange or funded wallet to the account, confirm the balance via `https://horizon.stellar.org/accounts/<PUBLIC_KEY>`, and budget ≥ 100 XLM for contract deployment (see the [Mainnet Runbook](MAINNET_RUNBOOK.md#01-funding)). |
 
 ---
 
-## 4. WASM build failures
+## 🌐 RPC & network
 
-**Symptom**
+### `failed to send HTTP request` / RPC timeout
 
-- `cargo build --target wasm32v1-none --release` fails with linker or
-  compilation errors.
-- CI's `contract-wasm` job fails while the local build passes (or vice
-  versa).
-- The build fails with `error: requires `-Zbuild-std` or `--target``, or
-  missing `core`/`alloc` crates.
+| | |
+|---|---|
+| **Symptom** | API routes or the CLI hang, then fail with a request/connection error |
+| **Cause** | Soroban RPC endpoint unreachable, wrong URL, or a firewall/proxy issue |
+| **Fix** | 1. Verify the endpoint responds: `curl -s -X POST https://soroban-testnet.stellar.org:443 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'`. 2. Check `NEXT_PUBLIC_STELLAR_RPC_URL` (testnet: `https://soroban-testnet.stellar.org:443`, mainnet: `https://soroban.stellar.org:443`). 3. Check [status.stellar.org](https://status.stellar.org) for an outage. 4. Retry — transient timeouts are normal; the app retries automatically. |
 
-**Cause**
+### `Horizon timeout` / Horizon requests fail
 
-- The `wasm32v1-none` target is missing (see
-  [entry 2](#2-rust-wasm32-target-missing)).
-- The Rust toolchain is too old or too new for the pinned `soroban-sdk`
-  (CI pins **1.91.0**). SDK version drift between branches can also break
-  the build.
-- Stale build artifacts from a previous toolchain/target combination.
-- `#![no_std]` hygiene issues — code accidentally pulling in `std` (e.g.
-  `println!`, `Vec` without `soroban_sdk::vec!`).
+| | |
+|---|---|
+| **Symptom** | Account/balance lookups fail; the dashboard shows no balances |
+| **Cause** | Horizon endpoint down, slow, or misconfigured |
+| **Fix** | 1. Verify: `curl -s https://horizon-testnet.stellar.org/ | jq .core_version`. 2. Confirm `NEXT_PUBLIC_STELLAR_HORIZON_URL` matches the network. 3. Check status.stellar.org. 4. Try the alternate Horizon instance for your network. |
 
-**Resolution**
+### `Network passphrase mismatch`
 
-1. Confirm the target is installed for the right toolchain:
-   ```bash
-   rustup target add wasm32v1-none
-   rustup show
-   ```
-2. Match the pinned toolchain from CI:
-   ```bash
-   rustup toolchain install 1.91.0
-   rustup default 1.91.0
-   ```
-3. Clean stale artifacts and rebuild:
-   ```bash
-   cd contracts/ophirpay
-   cargo clean
-   cargo build --target wasm32v1-none --release
-   ```
-4. If the error names a `std`-only item, keep the contract `#![no_std]`:
-   use `soroban_sdk::vec!`, `String::from_str`, and `Result` instead of
-   `std` types.
-5. Check the WASM size gate — the Soroban protocol limit is 128 KB per
-   contract. If the build succeeds but CI's `contract-gas-report` fails,
-   the WASM is likely over the limit:
-   ```bash
-   ls -lh contracts/ophirpay/target/wasm32v1-none/release/*.wasm
-   ```
+| | |
+|---|---|
+| **Symptom** | Transaction submission fails with a passphrase error |
+| **Cause** | `STELLAR_NETWORK_PASSPHRASE` doesn't match the configured network |
+| **Fix** | Testnet: `Test SDF Network ; September 2015`. Mainnet: `Public Global Stellar Network ; September 2015`. They must match `NEXT_PUBLIC_STELLAR_NETWORK` (`TESTNET`/`PUBLIC`) — see the [env table](DEPLOYMENT.md#testnet-vs-mainnet). |
 
-**Verification**
+### `Contract not found` / contract calls return empty
 
-```bash
-cd contracts/ophirpay && cargo build --target wasm32v1-none --release
-cd contracts/emitter && cargo build --target wasm32v1-none --release
-```
+| | |
+|---|---|
+| **Symptom** | API routes that read the contract return nothing, or `Contract not found` |
+| **Cause** | Wrong `NEXT_PUBLIC_CONTRACT_ID` / `NEXT_PUBLIC_EMITTER_CONTRACT_ID`, or the contract lives on a different network |
+| **Fix** | 1. Verify the IDs in `.env.local` against the [contract registry](deployment-mainnet.md#26-contract-address-registry) (testnet IDs are pre-configured in `.env.example`). 2. Confirm the contract was deployed on the same network you're pointing at. |
 
 ---
 
-## 5. Node version mismatch
+## 🤝 Trustlines
 
-**Symptom**
+### Non-native asset (e.g. USDC) can't be selected or sent
 
-- `npm install` fails with engine warnings or `EBADENGINE`.
-- `npm run dev` crashes early, or Next.js reports an unsupported Node
-  version.
-- CI passes but the local build fails (or the reverse).
+| | |
+|---|---|
+| **Symptom** | The asset is greyed out, or sending fails with a trustline error |
+| **Cause** | The destination/your account has no **trustline** for that asset+issuer. OphirPay checks this via `checkTrustline` before selecting an asset |
+| **Fix** | 1. Add a trustline for the asset in Freighter (Assets → Add asset, enter code + issuer). 2. Confirm it registered: check the account balances on Horizon and look for the asset's `asset_code`/`asset_issuer`. 3. Retry the payment. |
 
-**Cause**
+### `would exceed trustline limit` / payment over trustline cap
 
-OphirPay pins Node in `.nvmrc` (currently **20**). Next.js and the toolchain
-have a supported Node range; running a much older (or much newer) major
-version can cause build and runtime failures.
-
-**Resolution**
-
-1. Check the current version:
-   ```bash
-   node -v
-   cat .nvmrc   # expected major version
-   ```
-2. Switch to the pinned version:
-   ```bash
-   nvm use            # reads .nvmrc automatically
-   # or, without nvm:
-   nvm install 20 && nvm use 20
-   ```
-3. After switching, reinstall dependencies to avoid native-module skew:
-   ```bash
-   rm -rf node_modules
-   npm install
-   ```
-4. Verify the app boots:
-   ```bash
-   npm run typecheck && npm run dev
-   ```
-
-> If you must use a different major version, note that CI always runs the
-> version in `.nvmrc` — a locally passing build on another version is not a
-> guarantee the PR checks will pass.
-
-**Verification**
-
-```bash
-node -v                # matches .nvmrc
-npm run typecheck      # clean
-npm run dev            # serves on the configured port
-```
+| | |
+|---|---|
+| **Symptom** | Sending an amount fails at the trustline limit |
+| **Cause** | The receiving account's trustline limit is lower than the send amount |
+| **Fix** | Have the recipient raise the trustline limit (Freighter lets you edit the limit), or reduce the amount. |
 
 ---
 
-## 6. Port conflicts
+## 👛 Wallet rejections
 
-**Symptom**
+### Freighter doesn't connect / "Freighter not found"
 
-- `npm run dev` prints `EADDRINUSE` or `Port 3000 is already in use`.
-- The app opens but shows another project, or requests hang/time out.
-- `Prisma Studio` or the API server fails to bind.
+| | |
+|---|---|
+| **Symptom** | Wallet button does nothing, or "install Freighter" prompt |
+| **Cause** | Freighter extension not installed, or not unlocked |
+| **Fix** | 1. Install Freighter from the extension store. 2. Unlock it. 3. Refresh the page. 4. If it still fails, check the browser console for an `isConnected` error and retry. |
 
-**Cause**
+### Wallet says "wrong network"
 
-Another process is already listening on port `3000` (the Next.js default) —
-commonly a second OphirPay dev server, a previous run that was not stopped, or
-an unrelated service (another framework's dev server, a proxy, a container
-port mapping).
+| | |
+|---|---|
+| **Symptom** | Transaction rejected with a network error |
+| **Cause** | Freighter is on a different network than the app (`TESTNET` vs `PUBLIC`) |
+| **Fix** | Switch Freighter's network to match the app (`Testnet` for local/testnet, `Mainnet` for production) and retry. |
 
-**Resolution**
+### Wallet shows "transaction rejected"
 
-1. Find what is holding the port (platform-dependent):
-   ```bash
-   # Linux / macOS
-   lsof -i :3000
-   # Windows (Git Bash / PowerShell)
-   netstat -ano | findstr :3000
-   ```
-2. Either stop the offending process (only if you own it — it may be another
-   developer's server) or run OphirPay on a different port:
-   ```bash
-   npm run dev -- -p 3001
-   # or
-   PORT=3001 npm run dev
-   ```
-3. Update `NEXT_PUBLIC_APP_URL` in `.env` if you change the port, so
-   absolute URLs built from it — payment links, SEO/metadata, and the proxy
-   base URL — point at the right origin. (CSRF and webhook calls are not
-   affected: CSRF uses relative requests and webhook URLs are user-provided.)
-4. If a stale Next.js process lingers, stop it before restarting:
-   ```bash
-   pkill -f "next dev"   # careful: stops all next dev processes
-   ```
+| | |
+|---|---|
+| **Symptom** | The wallet popup opens but the transaction is rejected |
+| **Cause** | The user clicked "Reject", or the wallet auto-rejected (e.g. fee too high, or the account is a hardware wallet requiring confirmation) |
+| **Fix** | 1. Retry and **approve** the transaction in the popup. 2. Check the fee estimate isn't above the wallet's threshold. 3. For hardware wallets, confirm the transaction on the device. |
 
-**Verification**
+### Transaction fails after approval (in `submitted` / `failed` state)
 
-- `npm run dev -- -p 3001` serves the app at `http://localhost:3001`.
-- The home page loads and the API health check responds:
-  ```bash
-  curl -s http://localhost:3001/api/health
-  ```
+| | |
+|---|---|
+| **Symptom** | The wallet signs, but the payment errors on submission |
+| **Cause** | Common causes: insufficient funds, invalid destination, missing memo for memo-required destination, or expired timebounds |
+| **Fix** | 1. Confirm the payer has XLM to cover the amount + fee. 2. Confirm the destination `G…`/`C…` address is valid. 3. If the destination requires a memo, include one. 4. Retry — the app rebuilds the transaction. |
+
+---
+
+## ⚙️ App runtime
+
+### `Rate limit exceeded` (HTTP 429)
+
+| | |
+|---|---|
+| **Symptom** | API requests fail with 429 |
+| **Cause** | Per-IP rate limit hit (`RATE_LIMIT_RPM`, default 120/min) |
+| **Fix** | Wait for the window to reset. For sustained load, raise `RATE_LIMIT_RPM` or configure `REDIS_URL` for distributed limiting. |
+
+### `CSRF_INVALID`
+
+| | |
+|---|---|
+| **Symptom** | Form/API submissions fail with a CSRF error |
+| **Cause** | Stale session cookie or `NEXT_PUBLIC_APP_URL` mismatch |
+| **Fix** | Clear cookies and reload. Ensure `NEXT_PUBLIC_APP_URL` matches the origin you're using (localhost vs. domain). |
+
+### Payments page is empty after sending a payment
+
+| | |
+|---|---|
+| **Symptom** | The payment succeeded on-chain but doesn't appear in the UI |
+| **Cause** | The page reads from the contract via RPC; a stale RPC response or wrong contract ID |
+| **Fix** | 1. Verify on-chain: `stellar contract invoke --id <CONTRACT_ID> -- get_payment_count`. 2. Check the [contract registry](deployment-mainnet.md#26-contract-address-registry) for the right ID. 3. Refresh after a few seconds (the chain confirms asynchronously). |
+
+---
+
+## 📡 Live events (SSE)
+
+### Live feed shows "offline" / events stop arriving
+
+| | |
+|---|---|
+| **Symptom** | The `/events` page status flips to offline, or `payment:created` events stop |
+| **Cause** | The SSE route (`GET /api/events`) is unreachable — often a reverse proxy that buffers the stream, or the emitter contract/RPC is down |
+| **Fix** | 1. Verify the stream: `curl -N http://localhost:3000/api/events` — you should see a `connected` event then `heartbeat` frames every 15 s. 2. If behind Nginx, disable buffering (`proxy_buffering off;`) — see the [Nginx example](DEPLOYMENT.md#reverse-proxy-nginx). 3. Check the emitter contract ID and RPC health (see [RPC & network](#-rpc--network)). |
+
+### `WebSocket connection failed` then falls back
+
+| | |
+|---|---|
+| **Symptom** | Status shows `fallback` (SSE) instead of WS |
+| **Cause** | The WebSocket event server (port `8787`, `EVENTS_WS_PORT`) isn't running or isn't reachable; the client falls back to SSE automatically |
+| **Fix** | 1. This is **expected behavior** — SSE fallback works. 2. The WebSocket server starts automatically on boot via `instrumentation.ts` (`EVENTS_WS_PORT`, default `8787`); check the startup log for `WebSocket event server listening`. 3. Confirm `ws(s)://<host>:8787/api/events` connects. 4. In production, make sure the port is exposed through the ingress/load balancer. |
 
 ---
 
 ## Still stuck?
 
-- Re-read the [README quick start](../README.md#-quick-start) and make sure
-  every step ran in order.
-- Search existing [issues](https://github.com/OphirPay/OphirPay/issues) — your
-  problem may already have a thread.
-- Open a [bug report](https://github.com/OphirPay/OphirPay/issues/new?template=bug_report.yml)
-  with: OS and versions (`node -v`, `npm -v`, `rustc -V`), the exact commands
-  you ran, the full error output, and what you expected to happen.
+- Check [status.stellar.org](https://status.stellar.org) for network-wide issues.
+- Search [docs/AUDIT.md](AUDIT.md), [docs/DEPLOYMENT.md](DEPLOYMENT.md), and the [Mainnet Runbook](MAINNET_RUNBOOK.md).
+- Open an issue with: the **exact error message**, your **network** (`TESTNET`/`PUBLIC`), the **commands you ran**, and whether it reproduces locally.
+
+---
+
+<div align="center">
+
+**[← Back to OphirPay README](../README.md)**
+
+</div>

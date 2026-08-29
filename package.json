@@ -46,12 +46,18 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:push": "prisma db push",
     "db:validate": "prisma validate && prisma generate",
+    "db:validate:migrations": "bash scripts/validate-prisma-migrations.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "ci": "npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm run build",
+    "ci": "npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm run build && bash scripts/validate-deploy-config.sh",
+    "audit:deps": "node scripts/audit-dependencies.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
+    "test:testnet": "node scripts/testnet-integration.mjs",
+    "test:contract:integration": "node scripts/testnet-integration.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -69,7 +75,6 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
-    "@rolldown/binding-linux-x64-gnu": "^1.2.2",
     "@tailwindcss/postcss": "^4.1.6",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
