@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { NextResponse } from "next/server";
 import { Contract, TransactionBuilder, scValToNative, nativeToScVal } from "@stellar/stellar-sdk";
 import { getSorobanServer, NETWORK_PASSPHRASE } from "@/lib/stellar";
 import { DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /** Map of connected SSE clients */
 const clients = new Map<string, ReadableStreamDefaultController>();
@@ -79,7 +81,7 @@ async function pollContractForAuditEntries(
   return { entries, newLastSeenId: end };
 }
 
-export async function GET() {
+export const GET = withMetrics("GET /api/audit-log/sse", withRequestLogging(async function GET() {
   const clientId = ++clientCounter;
   const contractId = process.env.NEXT_PUBLIC_CONTRACT_ID || DEFAULT_CONTRACT_ID;
 
@@ -169,4 +171,4 @@ export async function GET() {
       "X-Accel-Buffering": "no",
     },
   });
-}
+}));
