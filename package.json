@@ -52,6 +52,8 @@
     "ci": "npm run typecheck && npm run lint -- --max-warnings 0 && npm test && npm run build && bash scripts/validate-deploy-config.sh",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
     "test:testnet": "node scripts/testnet-integration.mjs",
     "test:contract:integration": "node scripts/testnet-integration.mjs"
   },
