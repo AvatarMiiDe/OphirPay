@@ -69,6 +69,7 @@
 - [🚀 Live Demo](#-live-demo)
 - [🧭 System Architecture](#-system-architecture)
 - [⚡ Quick Start](#-quick-start)
+- [🛠 Local Development Guide](docs/LOCAL_DEV.md)
 - [🔐 Wallet Integration](#-wallet-integration)
 - [📡 Real-Time Events](#-real-time-events)
 - [🧪 Smart Contracts](#-smart-contracts)
@@ -79,6 +80,11 @@
 - [🛠 Tech Stack](#-tech-stack)
 - [📊 Database Schema](docs/SCHEMA.md)
 - [🚀 Deployment Guide](docs/DEPLOYMENT.md)
+- [📡 SSE Event Stream](docs/SSE.md)
+- [📖 SSE Integration & Architecture](docs/SSE_DOCUMENTATION.md)
+- [📜 Smart-contract SSE Reference](docs/CONTRACT_SSE_REFERENCE.md)
+- [🧪 Prisma CI & Testing](docs/PRISMA-CI.md)
+- [🗄️ Sharded Database E2E Runbook](docs/SHARDED_DATABASE_E2E.md)
 - [🤝 Contributing](#-contributing)
 - [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)
@@ -351,6 +357,10 @@ Browser ←──SSE stream─── GET /api/events ──polls──→ Paymen
 
 Visit **`/events`** in the app to see the live feed with connection status indicator, event type badges, timestamps, and auto-scroll.
 
+> 📡 **Client integrations:** see [docs/SSE.md](docs/SSE.md) for the full stream
+> contract — payload schemas for every event type, heartbeat/error behavior,
+> reconnection semantics, and example client code (browser, React, cURL).
+
 ---
 
 ## 🧪 Smart Contracts
@@ -567,6 +577,30 @@ All app tests live in `src/__tests__/` (33 files, 806 cases): auth & sessions, C
 | `error-codes.spec.ts` | Error catalog & classification |
 | `multisig.spec.ts` | Multisig propose/approve flows |
 | `governance.spec.ts` | Proposal lifecycle |
+
+### Visual Regression Tests (Playwright) — critical pages
+
+Screenshot-based visual coverage for the core pages (Dashboard, Send, Batches,
+Contracts) at desktop width, in both light and dark themes. Baselines live in
+`tests/visual/__screenshots__/` and are compared on every run.
+
+```bash
+# Compare the live render against committed baselines
+npm run test:visual
+
+# Intentionally update baselines (commit the regenerated PNG images)
+npm run test:visual:update
+```
+
+A committed change that alters a baseline beyond the configured pixel
+threshold (0.1% of pixels, set via the `maxDiffPixelRatio` option in
+`tests/visual/visual-regression.spec.ts`) fails the run and emits a diff
+artifact under `playwright-visual-report/`.
+
+**Updating baselines intentionally:** after a deliberate UI change, run
+`npm run test:visual:update`, review the regenerated screenshots in
+`tests/visual/__screenshots__/`, and commit them alongside the change. Never
+update baselines to mask an unintended regression.
 
 ### Error Classification System
 

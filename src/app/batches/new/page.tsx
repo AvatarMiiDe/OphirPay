@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useRef, useState } from "react";
-import type { DragEvent } from "react";
+import { useCallback, useState } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
+import { CsvBatchImport, type CsvRecipientRow } from "@/components/CsvBatchImport";
 import {
   isValidStellarAddress,
   buildBatchPaymentTx,
@@ -16,10 +16,12 @@ import {
   NETWORK_PASSPHRASE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
+import { estimateBatchFee } from "@/lib/fee-estimator";
+import { BatchConfirmDialog } from "@/components/BatchConfirmDialog";
 import { CopyButton } from "@/components/ui/CopyButton";
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
-import { parseRecipientsCsv } from "@/lib/csv-import";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -29,6 +31,8 @@ interface RecipientRow {
   amount: string;
   memo: string;
 }
+
+type EntryMode = "manual" | "csv";
 
 type TxStep = "idle" | "building" | "signing" | "submitting" | "done";
 
@@ -60,29 +64,35 @@ export default function NewBatchPage() {
   const [step, setStep] = useState<TxStep>("idle");
   const [result, setResult] = useState<TxResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [csvErrors, setCsvErrors] = useState<{ row: number; message: string }[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [mode, setMode] = useState<EntryMode>("manual");
+  const [csvValid, setCsvValid] = useState(false);
 
-  const importCsv = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setCsvErrors([{ row: 0, message: "Please choose a .csv file." }]);
-      return;
-    }
-    const parsed = await parseRecipientsCsv(file);
-    setCsvErrors(parsed.errors);
-    setRecipients(parsed.recipients.map((r) => ({
-      id: nextId++, address: r.address, amount: String(r.amount), memo: r.memo ?? "",
-    })));
-    setValidationError(null);
-  };
+  // ── CSV import wiring ────────────────────────────────────
 
-  const handleCsvDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (file) void importCsv(file);
+  // Sync recipients from the valid CSV rows so the total, balance check,
+  // and send flow all work identically for both entry modes.
+  const handleCsvRows = useCallback((validRows: CsvRecipientRow[]) => {
+    setRecipients(
+      validRows.map((r) => ({
+        id: nextId++,
+        address: r.address,
+        amount: r.amount,
+        memo: r.memo ?? "",
+      }))
+    );
+  }, []);
+
+  const handleCsvValidity = useCallback((valid: boolean) => {
+    setCsvValid(valid);
+  }, []);
+
+  // Switching modes remounts CsvBatchImport (its parsed state is reset), so
+  // always start CSV mode with the submit button disabled until a file is
+  // parsed and validated again.
+  const switchMode = (next: EntryMode) => {
+    setMode(next);
+    if (next === "csv") setCsvValid(false);
   };
 
   // ── Recipient management ──────────────────────────────────
@@ -141,10 +151,9 @@ export default function NewBatchPage() {
         );
         return false;
       }
-      if (r.memo.length > 28) {
-        setValidationError(
-          `Recipient #${i + 1}: memo must be 28 characters or fewer.`
-        );
+      const memoError = validateMemo(r.memo);
+      if (memoError) {
+        setValidationError(`Recipient #${i + 1}: ${memoError}.`);
         return false;
       }
       totalAmount += amountNum;
@@ -174,7 +183,13 @@ export default function NewBatchPage() {
   const handleSend = async () => {
     if (!wallet.publicKey) return;
     if (!validate()) return;
+    setShowConfirm(true);
+  };
 
+  const handleConfirmSend = async () => {
+    if (!wallet.publicKey) return;
+
+    setShowConfirm(false);
     setResult(null);
     setStep("building");
 
@@ -232,6 +247,8 @@ export default function NewBatchPage() {
     setResult(null);
     setRecipients([{ id: nextId++, address: "", amount: "", memo: "" }]);
     setValidationError(null);
+    setMode("manual");
+    setCsvValid(false);
   };
 
   // ── Total ────────────────────────────────────────────────
@@ -484,74 +501,91 @@ export default function NewBatchPage() {
 
       {/* Recipients form */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        {/* Entry mode toggle */}
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Recipients
           </h2>
-          <button
-            onClick={addRecipient}
-            disabled={isSubmitting || recipients.length >= 50}
-            className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+          <div
+            className="flex items-center p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+            role="tablist"
+            aria-label="Recipient entry mode"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-4 h-4"
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "manual"}
+              onClick={() => switchMode("manual")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === "manual"
+                  ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Add Recipient
-          </button>
-        </div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => fileInputRef.current?.click()}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleCsvDrop}
-          className={`rounded-lg border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${isDragging ? "border-ophir-500 bg-ophir-50 dark:bg-ophir-950/20" : "border-gray-300 dark:border-gray-700 hover:border-ophir-400"}`}
-        >
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drop a CSV file here or click to browse</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">address, amount, assetCode, memo</p>
-          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importCsv(file); e.currentTarget.value = ""; }} />
-        </div>
-
-        {csvErrors.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20 p-3" role="alert">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">CSV needs attention</p>
-            <ul className="mt-1 list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
-              {csvErrors.map((error, index) => <li key={`${error.row}-${index}`}>{error.row ? `Row ${error.row}: ` : ""}{error.message}</li>)}
-            </ul>
+              Manual entry
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "csv"}
+              onClick={() => switchMode("csv")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === "csv"
+                  ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Upload CSV
+            </button>
           </div>
-        )}
-
-        {recipients.some((r) => r.address || r.amount) && (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-sm"><caption className="sr-only">CSV recipient preview</caption><thead><tr className="bg-gray-50 dark:bg-gray-800 text-left"><th className="px-3 py-2">Recipient</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Memo</th></tr></thead><tbody>
-              {recipients.map((r) => <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800"><td className="px-3 py-2 font-mono text-xs">{r.address || "—"}</td><td className="px-3 py-2">{r.amount || "—"}</td><td className="px-3 py-2">{r.memo || "—"}</td></tr>)}
-            </tbody></table>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {recipients.map((r, i) => (
-            <RecipientRow
-              key={r.id}
-              index={i}
-              recipient={r}
-              onChange={updateRecipient}
-              onRemove={removeRecipient}
-              disabled={isSubmitting}
-              canRemove={recipients.length > 1}
-            />
-          ))}
         </div>
+
+        {mode === "csv" ? (
+          <CsvBatchImport
+            selfAddress={wallet.publicKey}
+            onRowsChange={handleCsvRows}
+            onValidityChange={handleCsvValidity}
+          />
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Enter recipients manually
+              </p>
+              <button
+                onClick={addRecipient}
+                disabled={isSubmitting || recipients.length >= 50}
+                className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add Recipient
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {recipients.map((r, i) => (
+                <RecipientRow
+                  key={r.id}
+                  index={i}
+                  recipient={r}
+                  onChange={updateRecipient}
+                  onRemove={removeRecipient}
+                  disabled={isSubmitting}
+                  canRemove={recipients.length > 1}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Total */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
@@ -575,7 +609,7 @@ export default function NewBatchPage() {
         {/* Submit */}
         <button
           onClick={handleSend}
-          disabled={isSubmitting}
+          disabled={isSubmitting || (mode === "csv" && !csvValid)}
           className="w-full py-3 rounded-lg bg-gradient-to-r from-ophir-600 to-stellar-dark text-white font-medium text-sm hover:from-ophir-700 hover:to-stellar disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-ophir-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
         >
           {isSubmitting ? (
@@ -637,6 +671,19 @@ export default function NewBatchPage() {
           </p>
         )}
       </div>
+
+      {/* Confirmation dialog */}
+      <BatchConfirmDialog
+        open={showConfirm}
+        recipients={recipients.map((r) => ({
+          address: r.address,
+          amount: r.amount,
+        }))}
+        totalAmount={totalAmount}
+        estimatedFee={estimateBatchFee(recipients.length)}
+        onConfirm={handleConfirmSend}
+        onCancel={() => setShowConfirm(false)}
+      />
     </div>
   );
 }
