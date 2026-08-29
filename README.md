@@ -79,7 +79,9 @@
 - [🛠 Tech Stack](#-tech-stack)
 - [📊 Database Schema](docs/SCHEMA.md)
 - [🚀 Deployment Guide](docs/DEPLOYMENT.md)
+- [📡 SSE Event Stream](docs/SSE.md)
 - [🤝 Contributing](#-contributing)
+- [📖 Stellar Glossary](GLOSSARY.md)
 - [🗺 Roadmap](#-roadmap)
 - [🔬 Formal Verification](#-formal-verification)
 - [🛡️ Security Audit](#️-security-audit)
@@ -105,6 +107,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract communication** | ✅ | ❌ |
 | **Multi-wallet support** (6 wallets: Freighter, xBull, Rabet, Albedo, Lobstr, Ledger) | ✅ | ❌ |
 | **Multi-asset support** (USDC, custom tokens) | ✅ | ❌ |
+| **Path payments** (cross-asset sends, rate preview, slippage protection) | ✅ | ❌ |
 | **PWA with offline support** | ✅ | ❌ |
 | **Classified error handling** (3 types, 300 contract variants) | ✅ | ❌ |
 | **Production error boundaries** | ✅ | ❌ |
@@ -121,6 +124,7 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **Cross-contract orchestration** (atomic pause_all) | ✅ | ❌ |
 | **Policy versioning** (immutable config history) | ✅ | ❌ |
 | **Two-step admin rotation** (24h timelock) | ✅ | ❌ |
+| **In-app notification center** (bell, unread count, live SSE updates, session persistence) | ✅ | ❌ |
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
 
@@ -347,6 +351,10 @@ Browser ←──SSE stream─── GET /api/events ──polls──→ Paymen
 | `payment:created` | New payment event detected on-chain |
 
 Visit **`/events`** in the app to see the live feed with connection status indicator, event type badges, timestamps, and auto-scroll.
+
+> 📡 **Client integrations:** see [docs/SSE.md](docs/SSE.md) for the full stream
+> contract — payload schemas for every event type, heartbeat/error behavior,
+> reconnection semantics, and example client code (browser, React, cURL).
 
 ---
 
@@ -718,6 +726,10 @@ Every push to `main` triggers **22 jobs** across six tracks:
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
+
+> 💡 **New to Stellar/Soroban?** Read the [Stellar & Soroban glossary](GLOSSARY.md)
+> first — it explains the XLM, testnet, Horizon, Soroban, and other terms you'll
+> encounter throughout the codebase.
 
 1. **Fork** the repository
 2. **Create** a feature branch: `git checkout -b feat/amazing-feature`
