@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { successResponse, handleApiError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { withRequestLogging } from "@/lib/request-logging";
 
 /**
  * GET /api/fee-config/collector — current fee collector address
  * Reads from OphirPayContract.get_fee_collector() on-chain.
  */
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/fee-config/collector", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -29,4 +31,4 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/fee-config/collector");
   }
-}
+}));
