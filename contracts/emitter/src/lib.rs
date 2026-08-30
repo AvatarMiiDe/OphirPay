@@ -151,7 +151,6 @@ impl PaymentEventEmitter {
         env.storage().instance().set(&EVENT_COUNT, &count);
         env.storage().instance().extend_ttl(5000, 50000);
 
-        // Native event emission (rustfmt-compliant multi-line tuple)
         env.events().publish(
             (
                 Symbol::new(&env, "payment_event"),
@@ -167,16 +166,15 @@ impl PaymentEventEmitter {
 
     /// Get event by ID with legacy backward compatibility.
     pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
-        // Read raw bytes first to avoid trapping on legacy data
         let raw: Option<soroban_sdk::Bytes> = env.storage().persistent().get(&event_id);
 
         if let Some(bytes) = raw {
-            // Try V1 schema first (with version field)
-            if let Ok(event) = soroban_sdk::xdr::from_xdr::<PaymentEvent>(&bytes) {
+            // Try V1 schema first (with version field) using FromXdr trait
+            if let Ok(event) = <PaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
                 return Ok(event);
             }
             // Fallback to legacy schema (without version field)
-            if let Ok(legacy) = soroban_sdk::xdr::from_xdr::<LegacyPaymentEvent>(&bytes) {
+            if let Ok(legacy) = <LegacyPaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
                 return Ok(legacy.into_payment_event());
             }
         }
