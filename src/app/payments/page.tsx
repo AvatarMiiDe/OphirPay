@@ -93,10 +93,10 @@ function PaymentsClient() {
 
   // Client-side pagination — page and page size are persisted in the URL
   // search params so filtered/paginated views are shareable.
-  const pageParam = parseInt(searchParams.get("page") ?? "", 10);
+  const pageParam = Number.parseInt(searchParams.get("page") ?? "", 10);
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
 
-  const pageSizeParam = parseInt(searchParams.get("pageSize") ?? "", 10);
+  const pageSizeParam = Number.parseInt(searchParams.get("pageSize") ?? "", 10);
   const pageSize = (ALLOWED_PAGE_SIZES as readonly number[]).includes(pageSizeParam)
     ? pageSizeParam
     : DEFAULT_PAGE_SIZE;
@@ -127,18 +127,33 @@ function PaymentsClient() {
   const { currency, setCurrency } = useCurrencyDisplay();
   const { price: xlmPrice, isUnavailable: isPriceUnavailable } = useXlmPrice();
 
-  const handleExport = () => {
-    exportToCsv(
-      filtered,
-      [
-        { key: "id", header: "Payment ID" },
-        { key: "payer", header: "Payer" },
-        { key: "payee", header: "Payee" },
-        { key: "amountStroops", header: "Amount (Stroops)" },
-        { key: "txHash", header: "Tx Hash" },
-      ],
-      { filename: `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv` }
+  const renderPaymentAmount = (payment: OnChainPayment) => {
+    const xlmAmount = payment.amountStroops / XLM_STROOPS;
+    if (currency !== "USD") {
+      return formatAmount(xlmAmount, "XLM");
+    }
+    if (xlmPrice !== null) {
+      return (
+        <div>
+          <span className="font-medium text-gray-900 dark:text-white">
+            {formatFiatAmount(convertXlmToUsd(xlmAmount, xlmPrice), { showApprox: true })}
+          </span>
+          <span className="block text-[11px] text-gray-400 dark:text-gray-500">
+            {formatAmount(xlmAmount, "XLM")}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div>
+        <span>{formatAmount(xlmAmount, "XLM")}</span>
+        <span className="block text-[11px] text-amber-600 dark:text-amber-400 font-sans">
+          (USD unavailable)
+        </span>
+      </div>
     );
+  };
+
   const handleExport = async () => {
     // Prefer the server-side export (GET /api/payments/export): it applies the
     // CURRENT search filter to the full DB-backed record set, so the CSV is
@@ -161,7 +176,7 @@ function PaymentsClient() {
         link.download = `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv`;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        link.remove();
         URL.revokeObjectURL(url);
         return;
       }
@@ -202,6 +217,7 @@ function PaymentsClient() {
             isUnavailable={isPriceUnavailable}
           />
           <button
+            type="button"
             onClick={handleExport}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             title="Export CSV"
@@ -223,6 +239,7 @@ function PaymentsClient() {
             CSV
           </button>
           <button
+            type="button"
             onClick={() => load()}
             disabled={loading}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
@@ -307,6 +324,7 @@ function PaymentsClient() {
             Failed to load on-chain payments: {error}
           </p>
           <button
+            type="button"
             onClick={() => load()}
             className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
           >
@@ -337,7 +355,6 @@ function PaymentsClient() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr
                     key={i}
-                    aria-hidden="true"
                     className="border-b border-gray-100 dark:border-gray-800/50"
                   >
                     <td className="py-3 px-4" colSpan={5}>
@@ -377,30 +394,7 @@ function PaymentsClient() {
                       </p>
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-gray-300 font-mono">
-                      {currency === "USD" ? (
-                        xlmPrice !== null ? (
-                          <div>
-                            <span className="font-medium text-gray-900 dark:text-white">
-                              {formatFiatAmount(
-                                convertXlmToUsd(payment.amountStroops / XLM_STROOPS, xlmPrice),
-                                { showApprox: true }
-                              )}
-                            </span>
-                            <span className="block text-[11px] text-gray-400 dark:text-gray-500">
-                              {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
-                            </span>
-                          </div>
-                        ) : (
-                          <div>
-                            <span>{formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}</span>
-                            <span className="block text-[11px] text-amber-600 dark:text-amber-400 font-sans">
-                              (USD unavailable)
-                            </span>
-                          </div>
-                        )
-                      ) : (
-                        formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")
-                      )}
+                      {renderPaymentAmount(payment)}
                     </td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
