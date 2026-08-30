@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import { randomBytes, timingSafeEqual } from "crypto";
+import { extractApiKey } from "@/lib/api-auth";
 
 const CSRF_COOKIE = "__Host-csrf";
 /** Plain-http dev fallback — `__Host-` cookies are rejected without Secure. */
@@ -78,6 +79,10 @@ export function getCsrfTokenFromHeaders(headers: Headers): string | null {
 export function verifyCsrf(request: Request): Response | null {
   // Skip CSRF check for GET/HEAD/OPTIONS
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return null;
+
+  // API keys are sent explicitly in headers — browsers never attach them on
+  // cross-site requests, so CSRF does not apply to machine-to-machine calls.
+  if (extractApiKey(request)) return null;
 
   const cookieToken = getCsrfTokenFromCookies(request.headers.get("cookie"));
   const headerToken = getCsrfTokenFromHeaders(request.headers);

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { withRequestLogging } from "@/lib/request-logging";
 
 export const GET = withMetrics("GET /api/recurring", withRequestLogging(async function GET(request: Request) {
@@ -50,6 +51,9 @@ export const GET = withMetrics("GET /api/recurring", withRequestLogging(async fu
 
 export const POST = withMetrics("POST /api/recurring", withRequestLogging(async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(

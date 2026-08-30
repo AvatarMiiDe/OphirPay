@@ -14,6 +14,7 @@ import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { withRequestLogging } from "@/lib/request-logging";
 
 export const GET = withMetrics("GET /api/payments/[id]", withRequestLogging(async function GET(
@@ -46,6 +47,9 @@ export const PATCH = withMetrics("PATCH /api/payments/[id]", withRequestLogging(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
@@ -132,6 +136,9 @@ export const DELETE = withMetrics("DELETE /api/payments/[id]", withRequestLoggin
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
