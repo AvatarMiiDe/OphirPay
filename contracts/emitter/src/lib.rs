@@ -164,22 +164,12 @@ impl PaymentEventEmitter {
         Ok(count)
     }
 
-    /// Get event by ID with legacy backward compatibility.
+    /// Get event by ID
     pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
-        let raw: Option<soroban_sdk::Bytes> = env.storage().persistent().get(&event_id);
-
-        if let Some(bytes) = raw {
-            // Try V1 schema first (with version field) using FromXdr trait
-            if let Ok(event) = <PaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
-                return Ok(event);
-            }
-            // Fallback to legacy schema (without version field)
-            if let Ok(legacy) = <LegacyPaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
-                return Ok(legacy.into_payment_event());
-            }
-        }
-
-        Err(EmitterError::EventNotFound)
+        env.storage()
+            .persistent()
+            .get(&event_id)
+            .ok_or(EmitterError::EventNotFound)
     }
 
     /// Get total event count
