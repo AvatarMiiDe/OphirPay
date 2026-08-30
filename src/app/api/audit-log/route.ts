@@ -3,6 +3,7 @@
 import { nativeToScVal } from "@stellar/stellar-sdk";
 import { withApiAuth } from "@/lib/api-auth";
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
+import prisma from "@/lib/prisma";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { z } from "zod";
 import { withRequestLogging } from "@/lib/request-logging";
@@ -14,7 +15,7 @@ const auditLogQuerySchema = z.object({
   action: z.string().trim().min(1).optional(),
   // Unix timestamps (seconds) — inclusive range bounds on entry.timestamp
   since: z.coerce.number().int().positive().optional(),
-  until: z.coerce.number().int().positive().optional(),
+  source: z.enum(["contract", "db", "all"]).optional().default("contract"),
 });
 
 export type AuditLogEntry = {
@@ -80,12 +81,32 @@ async function _GET(request: Request) {
       );
     }
 
-    const { page, limit, actor, action, since, until } = parsed.data;
-    const hasFilters =
-      actor !== undefined ||
-      action !== undefined ||
-      since !== undefined ||
-      until !== undefined;
+    const { page, limit, source } = parsed.data;
+
+    // Persisted (DB) audit entries — refund lifecycle history with record
+    // ids, queryable by action/target (issue #365).
+    const dbEntries = source === "db" || source === "all"
+      ? await prisma.auditLog.findMany({
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+          ...(parsed.data.action ? { where: { action: parsed.data.action } } : {}),
+        })
+      : [];
+
+    if (source === "db") {
+      return successResponse(
+        dbEntries.map((e) => ({
+          id: e.id,
+          timestamp: new Date(e.createdAt).getTime(),
+          action: e.action,
+          actor: e.actor ?? "",
+          target_id: e.target ?? "",
+          details: e.details ?? null,
+        })),
+        { page, limit, total: 0 }
+      );
+    }
 
     // Get total count from contract
     const countResult = await simulateContractCall(
@@ -95,16 +116,17 @@ async function _GET(request: Request) {
     );
 
     if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse([], {
+      return successResponse(dbEntries, {
         page,
         limit,
         total: 0,
+
       });
     }
 
     const totalCount = Number(countResult.returnValue ?? 0);
     if (totalCount === 0) {
-      return successResponse([], { page, limit, total: 0 });
+      return successResponse(dbEntries, { page, limit, total: 0 });
     }
 
     // Which entries to read (ids are 1-indexed, most recent = highest id):
@@ -139,14 +161,15 @@ async function _GET(request: Request) {
     const start = (page - 1) * limit;
     const paged = filtered.slice(start, start + limit);
 
-    return successResponse(paged, {
+    return successResponse(entries, {
       page,
       limit,
-      total: hasFilters ? filtered.length : totalCount,
+      total: totalCount,
+      
     });
   } catch (error) {
     return handleApiError(error);
   }
 }
 
-export const GET = withRequestLogging(withApiAuth(_GET));
+export const GET = withRequestLogging(withApiAuth(_GET, "admin"));

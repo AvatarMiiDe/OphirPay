@@ -16,8 +16,12 @@ import {
   NETWORK_PASSPHRASE,
   STELLAR_NETWORK,
   XLM_STROOPS,
+  accountExists,
+  parseSubmissionError,
+  SPONSOR_MIN_STARTING_BALANCE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
@@ -84,6 +88,12 @@ function SendPageClient() {
   const [result, setResult] = useState<TxResult>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // Sponsored-account (new recipient) support
+  const [sponsorCreate, setSponsorCreate] = useState(false);
+  const [recipientStatus, setRecipientStatus] = useState<
+    "unknown" | "checking" | "funded" | "unfunded"
+  >("unknown");
+
   // Path payment estimate state
   const [pathEstimate, setPathEstimate] = useState<PathPaymentEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
@@ -136,6 +146,34 @@ function SendPageClient() {
       setSelectedAsset(getAssetInfo(assetParam));
     }
   }, [searchParams]);
+
+  // Detect whether the recipient account is funded. A 404 means the account
+  // does not exist yet, in which case we can offer to sponsor its creation.
+  useEffect(() => {
+    const dest = destination.trim();
+    if (!isValidStellarAddress(dest) || dest === wallet.publicKey) {
+      setRecipientStatus("unknown");
+      return;
+    }
+
+    let cancelled = false;
+    setRecipientStatus("checking");
+    const timer = setTimeout(() => {
+      accountExists(dest)
+        .then((exists) => {
+          if (cancelled) return;
+          setRecipientStatus(exists ? "funded" : "unfunded");
+        })
+        .catch(() => {
+          if (!cancelled) setRecipientStatus("unknown");
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [destination, wallet.publicKey]);
 
   // Fetch strict-send path estimate when cross-asset send is active
   useEffect(() => {
@@ -225,8 +263,19 @@ function SendPageClient() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    if (memo.length > 28) {
-      setValidationError("Memo must be 28 characters or fewer.");
+    const memoError = validateMemo(memo);
+    if (memoError) {
+      setValidationError(memoError);
+      return false;
+    }
+    if (
+      recipientStatus === "unfunded" &&
+      !sponsorCreate &&
+      selectedAsset.type === "native"
+    ) {
+      setValidationError(
+        "This recipient account does not exist yet. Enable “Fund new account (sponsor)” to create it in the same transaction, or use an existing address."
+      );
       return false;
     }
     if (isCrossAsset) {
@@ -281,6 +330,7 @@ function SendPageClient() {
           memo: memo.trim() || undefined,
           assetCode: selectedAsset.code,
           assetIssuer: selectedAsset.issuer,
+          sponsorCreate,
         });
         xdr = res.xdr;
       }
@@ -360,8 +410,7 @@ function SendPageClient() {
       }
     } catch (err) {
       setStep("done");
-      const message =
-        err instanceof Error ? err.message : "Transaction failed. Please try again.";
+      const message = parseSubmissionError(err);
       setResult({ type: "error", message });
       toast.error("Transaction failed", message);
     }
@@ -373,6 +422,8 @@ function SendPageClient() {
     setAmount("");
     setDestination("");
     setMemo("");
+    setSponsorCreate(false);
+    setRecipientStatus("unknown");
     setPathEstimate(null);
     setPathError(null);
     setValidationError(null);
@@ -837,6 +888,31 @@ function SendPageClient() {
             className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
+
+        {/* Sponsored account creation */}
+        {recipientStatus === "unfunded" && selectedAsset.type === "native" && (
+          <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sponsorCreate}
+                onChange={(e) => setSponsorCreate(e.target.checked)}
+                disabled={isSubmitting}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-ophir-600 focus:ring-ophir-500 disabled:opacity-50"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-gray-800 dark:text-gray-200">
+                  Fund new account (sponsor)
+                </span>
+                <span className="block text-gray-500 dark:text-gray-400 mt-0.5">
+                  This address isn’t funded yet. Sponsor its creation by sending a{" "}
+                  {SPONSOR_MIN_STARTING_BALANCE} XLM reserve in the same transaction
+                  (total debited: {SPONSOR_MIN_STARTING_BALANCE} XLM + your amount + fee).
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {/* Validation error */}
         {validationError && (
