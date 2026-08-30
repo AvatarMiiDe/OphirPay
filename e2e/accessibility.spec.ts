@@ -46,5 +46,25 @@ test.describe("Axe Accessibility Scans (WCAG 2.1 AA)", () => {
 
       expect(criticalOrSeriousViolations).toEqual([]);
     });
+
+    test(`[Unauthenticated] ${pageInfo.name} (${pageInfo.path}) maintains accessibility when wallet is disconnected`, async ({ page }) => {
+      // PR #271 - Mock unauthenticated wallet state to ensure empty states remain accessible
+      await page.addInitScript(() => {
+        window.localStorage.setItem('wagmi.store', JSON.stringify({ state: { connections: { value: [] } } }));
+      });
+      
+      await page.goto(pageInfo.path);
+      await page.waitForLoadState("domcontentloaded");
+
+      const accessibilityScanResults = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+        .analyze();
+
+      const criticalOrSeriousViolations = accessibilityScanResults.violations.filter(
+        (v) => v.impact === "critical" || v.impact === "serious"
+      );
+
+      expect(criticalOrSeriousViolations).toEqual([]);
+    });
   }
 });
