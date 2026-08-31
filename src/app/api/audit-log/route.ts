@@ -3,8 +3,6 @@
 import { withApiAuth } from "@/lib/api-auth";
 import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
-import { z } from "zod";
 import { withRequestLogging } from "@/lib/request-logging";
 import {
   auditLogQuerySchema,
@@ -12,24 +10,11 @@ import {
   iterateAuditLogEntries,
   type AuditLogEntry,
 } from "@/lib/audit-log";
+import { z } from "zod";
 
-const auditLogQuerySchema = z.object({
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-  actor: z.string().optional(),
-  action: z.string().optional(),
-  since: z.coerce.number().int().positive().optional(),
+const routeSchema = auditLogQuerySchema.extend({
   source: z.enum(["contract", "db", "all"]).optional().default("contract"),
 });
-
-export type AuditLogEntry = {
-  id: number;
-  timestamp: number;
-  action: string;
-  actor: string;
-  target_id: number;
-  details: string;
-};
 
 /**
  * GET /api/audit-log
@@ -46,7 +31,7 @@ async function _GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const raw = Object.fromEntries(searchParams.entries());
-    const parsed = auditLogQuerySchema.safeParse(raw);
+    const parsed = routeSchema.safeParse(raw);
     if (!parsed.success) {
       return badRequestError(
         parsed.error.issues.map((e) => e.message).join("; ")
@@ -80,39 +65,8 @@ async function _GET(request: Request) {
       );
     }
 
-    const parsed = auditLogQuerySchema.safeParse({
-      page: param("page"),
-      limit: param("limit"),
-      actor: param("actor"),
-      action: param("action"),
-      resource: param("resource"),
-      since: param("since"),
-      until: param("until"),
-      order: param("order"),
-    });
-    if (!parsed.success) return validationError(parsed.error);
-
-    if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse(dbEntries, {
-        page,
-        limit,
-        total: 0,
-
-      });
-    }
-
-    const totalCount = Number(countResult.returnValue ?? 0);
-    if (totalCount === 0) {
-      return successResponse(dbEntries, { page, limit, total: 0 });
-    }
-
-    // Fetch entries from the contract (most recent first, capped at limit)
-    const entries: AuditLogEntry[] = [];
-    const startId = Math.max(1, totalCount - (page - 1) * limit);
-    const endId = Math.max(1, startId - limit + 1);
-
-    // Collect the filtered set (bounded by the on-chain ledger) to compute the
-    // total for offset pagination.
+    // Contract (on-chain) audit entries
+    const filters = toAuditLogFilters(parsed.data);
     const all: AuditLogEntry[] = [];
     for await (const entry of iterateAuditLogEntries(filters)) {
       all.push(entry);
@@ -120,13 +74,11 @@ async function _GET(request: Request) {
     const total = all.length;
     const start = (page - 1) * limit;
     const items = all.slice(start, start + limit);
-    const hasMore = start + limit < total;
 
-    return successResponse(entries, {
+    return successResponse(items, {
       page,
       limit,
-      total: totalCount,
-      
+      total,
     });
   } catch (error) {
     return handleApiError(error);
