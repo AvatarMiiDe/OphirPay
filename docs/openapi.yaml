@@ -550,6 +550,30 @@ paths:
           description: Batch details with child payments
         "404":
           $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Batches]
+      summary: Bulk-cancel a batch's PENDING payments
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      description: >
+        Cancels all PENDING payments of the batch in one request. Payments that
+        have already been submitted (any non-PENDING status) are left untouched
+        and reported via `skipped`, so callers see exactly what changed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Counts of cancelled / skipped / total payments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCancelBatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── Recurring Payments ────────────────────────────────────
   /api/recurring:
@@ -1197,11 +1221,15 @@ paths:
     get:
       tags: [Audit Log]
       summary: Query contract audit log
+      description: |
+        Offset-paginated audit log with combined, server-side applied filters
+        (`actor`, `action`, `resource`, `since`/`until` date range) and stable
+        ordering (newest first by default). `total` reflects the filtered set.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       parameters:
         - name: page
           in: query
-          schema: { type: integer, default: 1 }
+          schema: { type: integer, minimum: 1, default: 1 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
@@ -1226,6 +1254,27 @@ paths:
           in: query
           schema: { type: integer }
           description: Inclusive upper bound on entry timestamp (Unix seconds)
+          description: Filter by exact Stellar actor address
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by exact action type
+        - name: resource
+          in: query
+          schema: { type: integer }
+          description: Filter by the affected entity id (matches target_id)
+        - name: since
+          in: query
+          schema: { type: string }
+          description: Inclusive start of the date range — Unix seconds or ISO 8601
+        - name: until
+          in: query
+          schema: { type: string }
+          description: Inclusive end of the date range — Unix seconds or ISO 8601
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+          description: Result ordering by entry id (newest first by default)
       responses:
         "200":
           description: >
@@ -1249,6 +1298,46 @@ paths:
             text/event-stream:
               schema:
                 type: string
+
+  /api/audit-log/export:
+    get:
+      tags: [Audit Log]
+      summary: Export contract audit log to CSV
+      description: |
+        Streaming CSV download of the audit log applying the same filters as
+        GET /api/audit-log. Rows are streamed chunk-by-chunk from the contract,
+        so the full result set is never held in memory.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: actor
+          in: query
+          schema: { type: string }
+          description: Filter by exact Stellar actor address
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by exact action type
+        - name: resource
+          in: query
+          schema: { type: integer }
+          description: Filter by the affected entity id (matches target_id)
+        - name: since
+          in: query
+          schema: { type: string }
+          description: Inclusive start of the date range — Unix seconds or ISO 8601
+        - name: until
+          in: query
+          schema: { type: string }
+          description: Inclusive end of the date range — Unix seconds or ISO 8601
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+          description: Result ordering by entry id
+      responses:
+        "200":
+          description: CSV attachment
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ── SSE Events ────────────────────────────────────────────
   /api/events:
@@ -1378,6 +1467,28 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PaymentResponse"
+
+    BulkCancelBatchResponse:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          properties:
+            batchId: { type: string }
+            cancelled:
+              type: integer
+              description: Number of PENDING payments flipped to CANCELLED
+            skipped:
+              type: integer
+              description: Number of already-submitted (non-PENDING) payments left untouched
+            total:
+              type: integer
+              description: Total child payments in the batch
+        meta:
+          type: object
+          properties:
+            timestamp: { type: string, format: date-time }
 
     PaginatedBatches:
       type: object
