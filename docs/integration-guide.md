@@ -162,7 +162,9 @@ Payments emit lifecycle events as they progress through their lifecycle:
 Batches, recurrences, and payment requests emit their own events
 (`batch.*`, `recurrence.*`, `request.*`). Subscribe to any subset of these
 event types when registering a webhook.
-main
+
+receive every event type
+
 
 ## Available Contract Functions
 
@@ -235,9 +237,16 @@ main
 # Frontend tests (834)
 npm test
 
-# Contract tests
+# Contract unit tests
 cd contracts/ophirpay && cargo test
 cd contracts/emitter && cargo test
+
+# Contract integration tests (Rust test harness)
+cd contracts/ophirpay && cargo test --test integration_tests
+
+# Live testnet RPC integration test suite
+npm run test:testnet
+# or: node scripts/testnet-integration.mjs
 
 # E2E tests (71)
 npx playwright test
