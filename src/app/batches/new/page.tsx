@@ -18,9 +18,18 @@ import {
 import { formatAmount, shortenAddress } from "@/lib/utils";
 import { validateMemo } from "@/lib/validation-helpers";
 import { estimateBatchFee } from "@/lib/fee-estimator";
-import { BatchConfirmDialog } from "@/components/BatchConfirmDialog";
 import { CopyButton } from "@/components/ui/CopyButton";
-import { parseRecipientsCsv, downloadCsvTemplate } from "@/lib/csv-import";
+import dynamic from "next/dynamic";
+
+// The confirmation dialog is only rendered after the user hits "Send", so it is
+// lazy-loaded to keep it out of the initial batch creation bundle.
+const BatchConfirmDialog = dynamic(
+  () =>
+    import("@/components/BatchConfirmDialog").then(
+      (mod) => mod.BatchConfirmDialog
+    ),
+  { ssr: false }
+);
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
 
