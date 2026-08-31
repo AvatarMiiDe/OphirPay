@@ -864,6 +864,39 @@ fn add_locked(env: &Env, delta: i128) {
     env.storage().instance().set(&LOCKED_BALANCE, &clamped);
 }
 
+/// Collect protocol fees from the payer and transfer to the fee collector.
+/// Returns the fee amount collected (0 if fees are disabled or no collector
+/// is set).  Returns an error if the fee transfer fails — which reverts
+/// the entire payment, ensuring fee collection is atomic.
+fn collect_fee(
+    env: &Env,
+    payer: &Address,
+    asset: &Address,
+    payment_amount: i128,
+) -> Result<i128, PaymentError> {
+    // Read fee config; if disabled or no collector, skip fee collection.
+    let config: FeeConfig = match env.storage().instance().get(&FEE_KEY) {
+        Some(c) if c.enabled => c,
+        _ => return Ok(0),
+    };
+    let collector: Address = match env.storage().instance().get(&FEE_COLL) {
+        Some(c) => c,
+        None => return Ok(0),
+    };
+
+    let fee = calculate_fee(payment_amount, config.payment_fee_bps);
+    if fee <= 0 {
+        return Ok(0);
+    }
+
+    // Transfer fee from payer to collector.  If this fails (insufficient
+    // balance, missing trustline, etc.), the entire payment reverts.
+    let token_client = token::Client::new(env, asset);
+    token_client.transfer(payer, &collector, &fee);
+
+    Ok(fee)
+}
+
 /// Get the current locked balance (funds held in active escrows + streams).
 fn record_audit(env: &Env, action: &str, actor: &Address, target_id: u64, details: &str) {
     let mut count: u64 = env.storage().instance().get(&AUDIT_CNT).unwrap_or(0);
@@ -2051,7 +2084,11 @@ impl OphirPayContract {
             env.storage().persistent().extend_ttl(&key, BUMP_MIN_TTL, BUMP_MAX_TTL);
         }
 
-        // Record payment atomically (only after limit check passes)
+        // Collect protocol fee atomically (only after limit check passes).
+        // If fee transfer fails, the entire atomic_spend reverts.
+        let _fee = collect_fee(&env, &payer, &asset, amount)?;
+
+        // Record payment atomically
         let mut count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         count = count.saturating_add(1);
 
@@ -2862,6 +2899,11 @@ impl OphirPayContract {
         if amount <= 0 {
             return Err(PaymentError::InvalidAmount);
         }
+
+        // Collect protocol fee before recording.  If fee transfer fails
+        // (insufficient balance, missing trustline), the entire payment
+        // reverts — no partial state.
+        let _fee = collect_fee(&env, &payer, &asset, amount)?;
 
         let mut count: u64 = env.storage().instance().get(&PAYMENT_COUNT).unwrap_or(0);
         count += 1;
