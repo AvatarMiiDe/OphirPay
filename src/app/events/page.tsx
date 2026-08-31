@@ -3,7 +3,8 @@
 
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { EmptyState } from "@/components/EmptyState";
@@ -14,23 +15,16 @@ import {
   type OnChainPayment,
 } from "@/lib/contracts";
 import { useApiQuery } from "@/hooks/useApiQuery";
+import { connectLiveEvents, type LiveTransport } from "@/lib/events/event-client";
+import type { LiveEvent } from "@/lib/events/event-source";
 import { XLM_STROOPS, getStellarExplorerUrl } from "@/lib/stellar";
 
-interface SseEvent {
-  event: string;
-  timestamp: string;
-  paymentId: string;
-  status: string;
-  emitter?: string;
-  payer?: string;
-  payee?: string;
-  amount?: string;
-  txHash?: string;
-}
+type SseEvent = LiveEvent;
 
 export default function EventsPage() {
-  const router = useRouter();
+  usePageTitle(PAGE_TITLES.EVENTS);
   const [connected, setConnected] = useState(false);
+  const [transport, setTransport] = useState<LiveTransport | null>(null);
   const [liveEvents, setLiveEvents] = useState<SseEvent[]>([]);
   const [viewMode, setViewMode] = useState<"live" | "onchain">("live");
   const eventsEndRef = useRef<HTMLDivElement>(null);
@@ -43,22 +37,19 @@ export default function EventsPage() {
     }
   }, [liveEvents, autoScroll]);
 
-  // SSE connection
+  // Live connection — WebSocket when available, SSE fallback otherwise.
   useEffect(() => {
-    const eventSource = new EventSource("/api/events");
-
-    eventSource.addEventListener("connected", () => setConnected(true));
-
-    eventSource.addEventListener("payment:created", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setLiveEvents((prev) => [data, ...prev].slice(0, 50));
-      } catch {}
+    return connectLiveEvents({
+      onEvent: (evt) => {
+        if (evt.event === "payment:created") {
+          setLiveEvents((prev) => [evt, ...prev].slice(0, 50));
+        }
+      },
+      onStatus: (status, t) => {
+        setConnected(status === "live");
+        setTransport(t);
+      },
     });
-
-    eventSource.onerror = () => setConnected(false);
-
-    return () => eventSource.close();
   }, []);
 
   // Load on-chain data (only when the On-Chain tab is active)
@@ -99,7 +90,7 @@ export default function EventsPage() {
                   : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
-              SSE Live
+              {transport === "ws" ? "WS Live" : "SSE Live"}
             </button>
             <button
               onClick={() => setViewMode("onchain")}

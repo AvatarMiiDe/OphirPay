@@ -42,6 +42,7 @@ const TIMELOCK_KEY: Symbol = symbol_short!("T_REC");
 const PROPOSAL_KEY: Symbol = symbol_short!("G_REC");
 const APPROVAL_KEY: Symbol = symbol_short!("A_REQ");
 const HOOK_KEY: Symbol = symbol_short!("H_REC");
+const PENDING_REVOC_KEY: Symbol = symbol_short!("PR_REV");
 const VOTE_KEY: Symbol = symbol_short!("V_REC");
 const BATCH_KEY: Symbol = symbol_short!("B_REC");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
@@ -377,6 +378,21 @@ pub struct AuditEntry {
     pub actor: Address,
     pub target_id: u64,  // the affected entity id (payment, escrow, stream, etc.)
     pub details: String, // human-readable summary
+}
+
+/// A pending two-step role revocation.  Created by `propose_revoke_role`,
+/// executable after a 24-hour timelock via `execute_revoke_role`.
+/// The target account retains its role until execution — giving them
+/// time to wind down operations and转移 assets.
+#[contracttype]
+#[derive(Clone)]
+pub struct PendingRevocation {
+    pub target: Address,
+    pub role: Role,
+    pub proposed_by: Address,
+    pub proposed_at: u64,
+    pub unlocks_at: u64,
+    pub executed: bool,
 }
 
 /// Immutable version snapshot of fee configuration.
@@ -748,6 +764,11 @@ pub enum PaymentError {
     GracePeriodActive = 298,
     ConfigurationInvalid = 299,
     SystemFatalError = 300,
+    // ── Two-Step Revocation (301-305) ──────────────────────
+    RevocationNotFound = 301,
+    RevocationNotDue = 302,
+    RevocationAlreadyExecuted = 303,
+    CannotRevokeSelf = 304,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -788,6 +809,14 @@ fn emit_stream_event(env: &Env, creator: &Address, recipient: &Address, amount: 
 fn inc_counter(env: &Env, key: &Symbol) {
     let val: u64 = env.storage().instance().get(key).unwrap_or(0);
     env.storage().instance().set(key, &val.saturating_add(1));
+}
+
+/// Add delta to a u64 counter key. Same single-key optimization.
+fn add_u64_counter(env: &Env, key: &Symbol, delta: u64) {
+    let val: u64 = env.storage().instance().get(key).unwrap_or(0);
+    env.storage()
+        .instance()
+        .set(key, &val.saturating_add(delta));
 }
 
 /// Add delta to an i128 counter key. Same single-key optimization.
@@ -862,7 +891,22 @@ fn require_not_paused(env: &Env) -> Result<(), PaymentError> {
 /// Reentrancy guard: set lock before cross-contract calls.
 /// Soroban contracts are single-threaded per invocation, but reentrancy
 /// can occur when a cross-contract call loops back to this contract.
-fn acquire_reentrancy_lock(env: &Env) -> Result<(), PaymentError> {
+///
+/// The returned guard automatically releases the lock when dropped, so it is
+/// safe to `?`-return from the guarded function without leaking the lock.
+/// Because the check must reject reentrant calls even for otherwise-invalid
+/// inputs, this must be the FIRST operation in any token-moving function.
+struct ReentrancyGuard<'a> {
+    env: &'a Env,
+}
+
+impl Drop for ReentrancyGuard<'_> {
+    fn drop(&mut self) {
+        release_reentrancy_lock(self.env);
+    }
+}
+
+fn acquire_reentrancy_lock<'a>(env: &'a Env) -> Result<ReentrancyGuard<'a>, PaymentError> {
     let locked: bool = env
         .storage()
         .instance()
@@ -872,10 +916,12 @@ fn acquire_reentrancy_lock(env: &Env) -> Result<(), PaymentError> {
         return Err(PaymentError::ReentrantCall);
     }
     env.storage().instance().set(&REENTRANCY_LOCK, &true);
-    Ok(())
+    Ok(ReentrancyGuard { env })
 }
 
 /// Release the reentrancy lock after cross-contract calls complete.
+/// Prefer using the [`ReentrancyGuard`] returned by [`acquire_reentrancy_lock`],
+/// which releases automatically on drop. This is only used internally by the guard.
 fn release_reentrancy_lock(env: &Env) {
     env.storage().instance().set(&REENTRANCY_LOCK, &false);
 }
@@ -1563,6 +1609,7 @@ impl OphirPayContract {
         deposit_asset: Address,
         deposit_amount: i128,
     ) -> Result<u64, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         proposer.require_auth();
         require_not_paused(&env)?;
 
@@ -1585,13 +1632,11 @@ impl OphirPayContract {
         // Reentrancy-guarded (MEDIUM-4) — a malicious deposit asset could
         // otherwise call back into the contract mid-transfer.
         if deposit_amount > 0 {
-            acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&proposer, &contract_addr, &deposit_amount);
             // Track deposit in LOCKED_BALANCE so emergency_withdraw can't drain it
             add_locked(&env, deposit_amount);
-            release_reentrancy_lock(&env);
         }
 
         let now = env.ledger().timestamp();
@@ -1708,6 +1753,7 @@ impl OphirPayContract {
     /// Refunds the deposit to the proposer regardless of outcome — deposit
     /// exists to prevent spam, not to punish defeated proposals.
     pub fn execute_proposal(env: Env, proposal_id: u64) -> Result<bool, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         let mut proposal: Proposal = env
             .storage()
             .persistent()
@@ -1736,13 +1782,11 @@ impl OphirPayContract {
         // The deposit serves as spam-protection, not punishment.
         // Reentrancy-guarded (MEDIUM-4).
         if proposal.deposit_amount > 0 {
-            acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &proposal.deposit_asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &proposal.proposer, &proposal.deposit_amount);
             // Release deposit from LOCKED_BALANCE now that it's refunded
             add_locked(&env, -proposal.deposit_amount);
-            release_reentrancy_lock(&env);
         }
 
         env.events().publish(
@@ -2048,7 +2092,10 @@ impl OphirPayContract {
         Ok(())
     }
 
-    /// Revoke a role from an address (admin only).
+    /// Revoke a role from an address immediately (admin only).
+    ///
+    /// For a safer two-step flow, use `propose_revoke_role` followed by
+    /// `execute_revoke_role` after the 24-hour timelock.
     pub fn revoke_role(env: Env, caller: Address, grantee: Address) -> Result<(), PaymentError> {
         caller.require_auth();
         Self::require_role(&env, caller.clone(), Role::Admin)?;
@@ -2058,6 +2105,200 @@ impl OphirPayContract {
         record_audit(&env, "role_revoked", &caller, 0, "Role revoked");
 
         Ok(())
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TWO-STEP ADMIN REVOCATION
+    // ═══════════════════════════════════════════════════════════
+
+    /// Propose revoking a role from an address (admin only).
+    ///
+    /// Creates a `PendingRevocation` with a 24-hour timelock.  The target
+    /// retains their role until `execute_revoke_role` is called after the
+    /// delay.  This prevents accidental or malicious single-transaction
+    /// removal of critical admin/auditor roles.
+    ///
+    /// An admin can only have one pending revocation at a time.  If a
+    /// revocation is already pending for the target, this returns an error.
+    pub fn propose_revoke_role(
+        env: Env,
+        caller: Address,
+        target: Address,
+    ) -> Result<u64, PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
+
+        if caller == target {
+            return Err(PaymentError::CannotRevokeSelf);
+        }
+
+        // Verify target actually has a role
+        let target_role: Option<Role> = env
+            .storage()
+            .persistent()
+            .get(&(ROLE_KEY, target.clone()));
+        if target_role.is_none() {
+            return Err(PaymentError::NotARoleHolder);
+        }
+
+        // Check no existing pending revocation for this target
+        let existing: Option<PendingRevocation> = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()));
+        if let Some(ref pending) = existing {
+            if !pending.executed {
+                return Err(PaymentError::RevocationAlreadyExecuted); // reuse: pending exists
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        let pending = PendingRevocation {
+            target: target.clone(),
+            role: target_role.unwrap(),
+            proposed_by: caller.clone(),
+            proposed_at: now,
+            unlocks_at: now.saturating_add(TMLOCK_DELAY),
+            executed: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_proposed"),
+            ),
+            (target.clone(), pending.unlocks_at),
+        );
+
+        record_audit(
+            &env,
+            "role_revocation_proposed",
+            &caller,
+            0,
+            "Admin role revocation proposed (24h timelock)",
+        );
+
+        // Return the unlocks_at timestamp so clients know when to execute
+        Ok(pending.unlocks_at)
+    }
+
+    /// Execute a pending role revocation after the 24-hour timelock.
+    ///
+    /// Anyone can call this once the timelock has elapsed — the proposal
+    /// is already authorized by the original admin.  The target's role is
+    /// removed and a `role_revoked` audit entry is recorded.
+    pub fn execute_revoke_role(
+        env: Env,
+        target: Address,
+    ) -> Result<(), PaymentError> {
+        let mut pending: PendingRevocation = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()))
+            .ok_or(PaymentError::RevocationNotFound)?;
+
+        if pending.executed {
+            return Err(PaymentError::RevocationAlreadyExecuted);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < pending.unlocks_at {
+            return Err(PaymentError::RevocationNotDue);
+        }
+
+        // Execute: remove the role
+        let key = (ROLE_KEY, target.clone());
+        env.storage().persistent().remove(&key);
+
+        // Mark pending revocation as executed
+        pending.executed = true;
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_executed"),
+            ),
+            target.clone(),
+        );
+
+        record_audit(
+            &env,
+            "role_revoked",
+            &pending.proposed_by,
+            0,
+            "Admin role revoked via two-step flow",
+        );
+
+        Ok(())
+    }
+
+    /// Cancel a pending role revocation (admin only).
+    ///
+    /// Prevents execution of a previously proposed revocation.  The target
+    /// retains their role indefinitely.  Only cancellable before execution.
+    pub fn cancel_revoke_role(
+        env: Env,
+        caller: Address,
+        target: Address,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
+
+        let mut pending: PendingRevocation = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()))
+            .ok_or(PaymentError::RevocationNotFound)?;
+
+        if pending.executed {
+            return Err(PaymentError::RevocationAlreadyExecuted);
+        }
+
+        pending.executed = true; // mark as cancelled via execution flag
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_cancelled"),
+            ),
+            target,
+        );
+
+        record_audit(
+            &env,
+            "role_revocation_cancelled",
+            &caller,
+            0,
+            "Pending admin role revocation cancelled",
+        );
+
+        Ok(())
+    }
+
+    /// Get the pending revocation for an address (if any).
+    pub fn get_pending_revocation(env: Env, target: Address) -> Option<PendingRevocation> {
+        env.storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target))
     }
 
     /// Get the role for an address.
@@ -2140,9 +2381,9 @@ impl OphirPayContract {
     /// in a single atomic transaction. If the Emitter is not linked, only
     /// OphirPay is paused. This mirrors FacilPay's cross-contract pause_all.
     pub fn emergency_pause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
-        acquire_reentrancy_lock(&env)?;
 
         // Pause OphirPay
         env.storage().instance().set(&PAUSED, &true);
@@ -2155,10 +2396,8 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let pause_fn = Symbol::new(&env, "pause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &pause_fn, args);
+            let _: () = env.invoke_contract(&emitter, &pause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
         } else {
             release_reentrancy_lock(&env);
         }
@@ -2176,9 +2415,9 @@ impl OphirPayContract {
     /// Emergency unpause: unpauses BOTH OphirPay AND the linked Emitter contract
     /// in a single atomic transaction.
     pub fn emergency_unpause_all(env: Env, caller: Address) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
-        acquire_reentrancy_lock(&env)?;
 
         // Unpause OphirPay
         env.storage().instance().set(&PAUSED, &false);
@@ -2189,15 +2428,11 @@ impl OphirPayContract {
         if let Some(emitter) = env.storage().instance().get(&EMITTER_ADDR) {
             let unpause_fn = Symbol::new(&env, "unpause");
             let args = soroban_sdk::vec![&env, caller.to_val()];
-            let result: Result<(), soroban_sdk::Error> =
-                env.invoke_contract(&emitter, &unpause_fn, args);
+            let _: () = env.invoke_contract(&emitter, &unpause_fn, args);
             release_reentrancy_lock(&env);
-            result.map_err(|_| PaymentError::CrossContractCallFailed)?;
         } else {
             release_reentrancy_lock(&env);
         }
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -2214,6 +2449,19 @@ impl OphirPayContract {
         env.storage().instance().get(&PAUSED).unwrap_or(false)
     }
 
+    /// Get the current locked balance (escrows, streams, proposal deposits).
+    pub fn get_locked_balance(env: Env) -> i128 {
+        env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0)
+    }
+
+    /// Check if the reentrancy lock is currently held.
+    pub fn is_reentrancy_locked(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&REENTRANCY_LOCK)
+            .unwrap_or(false)
+    }
+
     /// Emergency withdraw: owner can rescue tokens accidentally sent directly
     /// to this contract (bypassing escrow/stream creation). Only withdraws
     /// tokens NOT locked in active escrows or streams.
@@ -2228,6 +2476,7 @@ impl OphirPayContract {
         asset: Address,
         amount: i128,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         let owner: Address = env
             .storage()
@@ -2241,8 +2490,6 @@ impl OphirPayContract {
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
-        acquire_reentrancy_lock(&env)?;
-
         // INVARIANT: cannot withdraw locked user funds
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
@@ -2250,13 +2497,10 @@ impl OphirPayContract {
         let locked: i128 = env.storage().instance().get(&LOCKED_BALANCE).unwrap_or(0);
         let unlocked = contract_balance.saturating_sub(locked);
         if amount > unlocked {
-            release_reentrancy_lock(&env);
             return Err(PaymentError::NoTokensToWithdraw);
         }
 
         token_client.transfer(&contract_addr, &owner, &amount);
-
-        release_reentrancy_lock(&env);
 
         record_audit(
             &env,
@@ -2578,6 +2822,9 @@ impl OphirPayContract {
         deadline: u64,
         metadata: String,
     ) -> Result<u64, PaymentError> {
+        // Reentrancy guard MUST be the first check so a locked contract rejects
+        // every token-moving call (even with otherwise-invalid inputs).
+        let _guard = acquire_reentrancy_lock(&env)?;
         depositor.require_auth();
         require_not_paused(&env)?;
         if amount <= 0 {
@@ -2585,13 +2832,11 @@ impl OphirPayContract {
         }
 
         // Transfer tokens from depositor to this contract (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&depositor, &contract_addr, &amount);
 
         add_locked(&env, amount);
-        release_reentrancy_lock(&env);
 
         let mut count: u64 = env.storage().instance().get(&ESCROW_COUNT).unwrap_or(0);
         count += 1;
@@ -2637,6 +2882,7 @@ impl OphirPayContract {
 
     /// Owner releases escrow to the beneficiary (anytime).
     pub fn release_escrow(env: Env, owner: Address, escrow_id: u64) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         owner.require_auth();
         require_not_paused(&env)?;
         let stored_owner: Address = env
@@ -2659,7 +2905,6 @@ impl OphirPayContract {
         }
 
         // Transfer tokens to beneficiary (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -escrow.amount);
@@ -2674,8 +2919,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         inc_counter(&env, &STAT_ESC_RELEASED);
 
@@ -2698,6 +2941,7 @@ impl OphirPayContract {
         escrow_id: u64,
         release_to_beneficiary: bool,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         arbiter.require_auth();
         require_not_paused(&env)?;
 
@@ -2757,6 +3001,7 @@ impl OphirPayContract {
         beneficiary: Address,
         escrow_id: u64,
     ) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         beneficiary.require_auth();
         require_not_paused(&env)?;
 
@@ -2777,7 +3022,6 @@ impl OphirPayContract {
         }
 
         // Transfer tokens to beneficiary (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &escrow.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -escrow.amount);
@@ -2791,8 +3035,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(ESCROW_KEY, escrow_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         inc_counter(&env, &STAT_ESC_CLAIMED);
 
@@ -2835,6 +3077,7 @@ impl OphirPayContract {
         end_time: u64,
         metadata: String,
     ) -> Result<u64, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         creator.require_auth();
         require_not_paused(&env)?;
         if total_amount <= 0 {
@@ -2845,13 +3088,11 @@ impl OphirPayContract {
         }
 
         // Transfer total amount from creator to contract (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&creator, &contract_addr, &total_amount);
 
         add_locked(&env, total_amount);
-        release_reentrancy_lock(&env);
 
         let mut count: u64 = env.storage().instance().get(&STREAM_COUNT).unwrap_or(0);
         count += 1;
@@ -2906,6 +3147,7 @@ impl OphirPayContract {
         recipient: Address,
         stream_id: u64,
     ) -> Result<i128, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         recipient.require_auth();
         require_not_paused(&env)?;
 
@@ -2936,7 +3178,6 @@ impl OphirPayContract {
         }
 
         // Transfer claimable amount to recipient (reentrancy-guarded, MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &stream.asset);
         let contract_addr = env.current_contract_address();
         add_locked(&env, -claimable);
@@ -2951,8 +3192,6 @@ impl OphirPayContract {
             .persistent()
             .extend_ttl(&(STREAM_KEY, stream_id), 5000, 50000);
 
-        release_reentrancy_lock(&env);
-
         inc_counter(&env, &STAT_STR_CLAIMED);
 
         record_audit(
@@ -2966,8 +3205,9 @@ impl OphirPayContract {
         Ok(claimable)
     }
 
-    /// Creator cancels a stream. Unvested tokens are returned to creator.
+    /// Creator cancels a stream. All tokens not yet claimed are returned to creator.
     pub fn cancel_stream(env: Env, creator: Address, stream_id: u64) -> Result<i128, PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         creator.require_auth();
         require_not_paused(&env)?;
 
@@ -2987,10 +3227,7 @@ impl OphirPayContract {
         let now = env.ledger().timestamp();
         let vested = compute_vested(stream.total_amount, stream.start_time, stream.end_time, now);
 
-        let unvested = stream
-            .total_amount
-            .saturating_sub(vested)
-            .saturating_sub(stream.claimed_amount);
+        let unvested = stream.total_amount.saturating_sub(vested);
 
         stream.cancelled = true;
         env.storage()
@@ -3002,12 +3239,10 @@ impl OphirPayContract {
 
         if unvested > 0 {
             // Reentrancy-guarded transfer (MEDIUM-4)
-            acquire_reentrancy_lock(&env)?;
             let token_client = token::Client::new(&env, &stream.asset);
             let contract_addr = env.current_contract_address();
             token_client.transfer(&contract_addr, &creator, &unvested);
             add_locked(&env, -unvested);
-            release_reentrancy_lock(&env);
         }
 
         inc_counter(&env, &STAT_STR_CANCELLED);
@@ -3423,6 +3658,7 @@ impl OphirPayContract {
 
     /// Process an approved refund — transfers tokens back to requester.
     pub fn process_refund(env: Env, caller: Address, refund_id: u64) -> Result<(), PaymentError> {
+        let _guard = acquire_reentrancy_lock(&env)?;
         caller.require_auth();
         require_owner(&env, &caller)?;
         require_not_paused(&env)?;
@@ -3438,7 +3674,6 @@ impl OphirPayContract {
         }
 
         // Reentrancy-guarded transfer (MEDIUM-4)
-        acquire_reentrancy_lock(&env)?;
         let token_client = token::Client::new(&env, &refund.asset);
         let contract_addr = env.current_contract_address();
         token_client.transfer(&contract_addr, &refund.requester, &refund.amount);
@@ -3451,8 +3686,6 @@ impl OphirPayContract {
         env.storage()
             .persistent()
             .extend_ttl(&(REFUND_KEY, refund_id), 5000, 50000);
-
-        release_reentrancy_lock(&env);
 
         env.events().publish(
             (Symbol::new(&env, "refund"), Symbol::new(&env, "processed")),
@@ -3789,6 +4022,7 @@ impl OphirPayContract {
 
         inc_counter(&env, &STAT_BATCHES);
         add_counter(&env, &STAT_AMT_BATCHED, total_amount);
+        add_u64_counter(&env, &STAT_PAYMENTS, successful as u64);
 
         record_audit(
             &env,
@@ -5757,5 +5991,368 @@ mod tests {
             &50i128,
         );
         assert!(result.is_err());
+    }
+
+    /// REENT-1: Reentrancy lock rejects nested token operations
+    #[test]
+    fn test_reentrancy_lock_rejects_nested_calls() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let user = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let sac = create_token_contract(&env, &owner);
+
+        let _ = client.init(&owner);
+
+        assert_eq!(client.is_reentrancy_locked(), false);
+        assert_eq!(client.get_locked_balance(), 0);
+
+        // Simulate active reentrancy lock
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(&REENTRANCY_LOCK, &true);
+        });
+
+        assert_eq!(client.is_reentrancy_locked(), true);
+
+        // Every token-moving operation must return ReentrantCall
+        let memo = String::from_str(&env, "memo");
+        assert_eq!(
+            client.try_create_escrow(
+                &user,
+                &payee,
+                &None::<Address>,
+                &1000i128,
+                &sac,
+                &100_000u64,
+                &memo
+            ),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_release_escrow(&owner, &1u64),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_release_by_arbiter(&owner, &1u64, &true),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_claim_escrow(&payee, &1u64),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_create_stream(&user, &payee, &1000i128, &sac, &1000u64, &2000u64, &memo),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_claim_stream(&payee, &1u64),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_cancel_stream(&user, &1u64),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_process_refund(&owner, &1u64),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+
+        assert_eq!(
+            client.try_emergency_withdraw(&owner, &sac, &1000i128),
+            Err(Ok(PaymentError::ReentrantCall))
+        );
+    }
+
+    /// LOCK-1: Multi-operation escrow and stream lifecycle strictly conserves LOCKED_BALANCE
+    #[test]
+    fn test_locked_balance_conservation_lifecycle() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000_000);
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+        let user = Address::generate(&env);
+        let payee1 = Address::generate(&env);
+        let payee2 = Address::generate(&env);
+
+        let sac = create_token_contract(&env, &owner);
+        let sac_client = token::StellarAssetClient::new(&env, &sac);
+        sac_client.mint(&user, &10_000_000i128);
+
+        let _ = client.init(&owner);
+        assert_eq!(client.get_locked_balance(), 0);
+
+        // 1. Create Escrow 1 (1_000_000)
+        let memo = String::from_str(&env, "e1");
+        let e1 = client.create_escrow(
+            &user,
+            &payee1,
+            &None::<Address>,
+            &1_000_000i128,
+            &sac,
+            &1_050_000u64,
+            &memo,
+        );
+        assert_eq!(e1, 1);
+        assert_eq!(client.get_locked_balance(), 1_000_000);
+
+        // 2. Create Escrow 2 (2_000_000)
+        let e2 = client.create_escrow(
+            &user,
+            &payee2,
+            &None::<Address>,
+            &2_000_000i128,
+            &sac,
+            &1_050_000u64,
+            &memo,
+        );
+        assert_eq!(e2, 2);
+        assert_eq!(client.get_locked_balance(), 3_000_000);
+
+        // 3. Create Stream (3_000_000 over 1000s)
+        let s1 = client.create_stream(
+            &user,
+            &payee1,
+            &3_000_000i128,
+            &sac,
+            &1_000_000u64,
+            &1_001_000u64,
+            &memo,
+        );
+        assert_eq!(s1, 1);
+        assert_eq!(client.get_locked_balance(), 6_000_000);
+
+        // 4. Release Escrow 1
+        client.release_escrow(&owner, &e1);
+        assert_eq!(client.get_locked_balance(), 5_000_000);
+
+        // 5. Partial Stream Claim at 50% (500s elapsed -> 1_500_000 claimed)
+        env.ledger().set_timestamp(1_000_500);
+        let claimed = client.claim_stream(&payee1, &s1);
+        assert_eq!(claimed, 1_500_000);
+        assert_eq!(client.get_locked_balance(), 3_500_000);
+
+        // 6. Cancel remaining Stream (1_500_000 unvested refunded to creator)
+        let refunded = client.cancel_stream(&user, &s1);
+        assert_eq!(refunded, 1_500_000);
+        assert_eq!(client.get_locked_balance(), 2_000_000);
+
+        // 7. Claim Escrow 2 after deadline
+        env.ledger().set_timestamp(1_060_000);
+        client.claim_escrow(&payee2, &e2);
+        assert_eq!(client.get_locked_balance(), 0);
+    }
+
+    // ── Two-Step Admin Revocation Tests ─────────────────────────
+
+    #[test]
+    fn test_two_step_revocation_full_flow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        // Grant admin role
+        client.grant_role(&owner, &admin, &Role::Admin);
+        assert_eq!(client.get_role(&admin), Some(Role::Admin));
+
+        // Propose revocation
+        let now = env.ledger().timestamp();
+        let unlocks_at = client.propose_revoke_role(&owner, &admin);
+        assert_eq!(unlocks_at, now + 86400);
+
+        // Verify pending revocation exists
+        let pending = client.get_pending_revocation(&admin);
+        assert!(pending.is_some());
+        let p = pending.unwrap();
+        assert_eq!(p.target, admin);
+        assert_eq!(p.role, Role::Admin);
+        assert_eq!(p.proposed_by, owner);
+        assert_eq!(p.executed, false);
+
+        // Admin STILL has their role during the timelock
+        assert_eq!(client.get_role(&admin), Some(Role::Admin));
+
+        // Cannot execute before timelock
+        let res = client.try_execute_revoke_role(&admin);
+        assert!(res.is_err());
+
+        // Fast-forward past 24h timelock
+        env.ledger().set_timestamp(now + 86401);
+
+        // Execute revocation
+        client.execute_revoke_role(&admin);
+
+        // Admin role is now removed
+        assert_eq!(client.get_role(&admin), None);
+
+        // Pending revocation is marked executed
+        let p2 = client.get_pending_revocation(&admin).unwrap();
+        assert_eq!(p2.executed, true);
+
+        // Cannot execute again
+        let res = client.try_execute_revoke_role(&admin);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_propose_revoke_cannot_revoke_self() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        // Owner tries to propose revoking themselves
+        let res = client.try_propose_revoke_role(&owner, &owner);
+        assert_eq!(res, Err(Ok(PaymentError::CannotRevokeSelf)));
+    }
+
+    #[test]
+    fn test_propose_revoke_target_without_role_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let nobody = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        // Target has no role → NotARoleHolder
+        let res = client.try_propose_revoke_role(&owner, &nobody);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_propose_revoke_duplicate_pending_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let auditor = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        client.grant_role(&owner, &auditor, &Role::Auditor);
+
+        // First proposal succeeds
+        let _ = client.propose_revoke_role(&owner, &auditor);
+
+        // Second proposal for same target fails
+        let res = client.try_propose_revoke_role(&owner, &auditor);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_cancel_revoke_role() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        client.grant_role(&owner, &operator, &Role::Operator);
+        assert_eq!(client.get_role(&operator), Some(Role::Operator));
+
+        // Propose revocation
+        let _ = client.propose_revoke_role(&owner, &operator);
+
+        // Cancel it
+        client.cancel_revoke_role(&owner, &operator);
+
+        // Pending revocation marked executed (cancelled)
+        let p = client.get_pending_revocation(&operator).unwrap();
+        assert_eq!(p.executed, true);
+
+        // Operator retains their role
+        assert_eq!(client.get_role(&operator), Some(Role::Operator));
+
+        // Cannot cancel again
+        let res = client.try_cancel_revoke_role(&owner, &operator);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_execute_revoke_nonexistent_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        let res = client.try_execute_revoke_role(&Address::generate(&env));
+        assert_eq!(res, Err(Ok(PaymentError::RevocationNotFound)));
+    }
+
+    #[test]
+    fn test_propose_revoke_non_admin_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let auditor = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        client.grant_role(&owner, &operator, &Role::Operator);
+        client.grant_role(&owner, &auditor, &Role::Auditor);
+
+        // Operator cannot propose revocation (not Admin)
+        let res = client.try_propose_revoke_role(&operator, &auditor);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_execute_revoke_after_cancel_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(OphirPayContract, ());
+        let client = OphirPayContractClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let _ = client.init(&owner);
+
+        client.grant_role(&owner, &admin, &Role::Admin);
+
+        // Propose → cancel → try to execute
+        let _ = client.propose_revoke_role(&owner, &admin);
+        client.cancel_revoke_role(&owner, &admin);
+
+        // Fast-forward past timelock
+        env.ledger().set_timestamp(env.ledger().timestamp() + 86401);
+
+        // Execute should fail because it was cancelled
+        let res = client.try_execute_revoke_role(&admin);
+        assert!(res.is_err());
+
+        // Admin still has their role
+        assert_eq!(client.get_role(&admin), Some(Role::Admin));
     }
 }
