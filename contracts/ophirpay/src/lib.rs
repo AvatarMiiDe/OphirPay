@@ -42,6 +42,7 @@ const TIMELOCK_KEY: Symbol = symbol_short!("T_REC");
 const PROPOSAL_KEY: Symbol = symbol_short!("G_REC");
 const APPROVAL_KEY: Symbol = symbol_short!("A_REQ");
 const HOOK_KEY: Symbol = symbol_short!("H_REC");
+const PENDING_REVOC_KEY: Symbol = symbol_short!("PR_REV");
 const VOTE_KEY: Symbol = symbol_short!("V_REC");
 const BATCH_KEY: Symbol = symbol_short!("B_REC");
 const RECUR_CNT: Symbol = symbol_short!("REC_CNT");
@@ -402,6 +403,21 @@ pub struct AuditEntry {
     pub actor: Address,
     pub target_id: u64,  // the affected entity id (payment, escrow, stream, etc.)
     pub details: String, // human-readable summary
+}
+
+/// A pending two-step role revocation.  Created by `propose_revoke_role`,
+/// executable after a 24-hour timelock via `execute_revoke_role`.
+/// The target account retains its role until execution — giving them
+/// time to wind down operations and转移 assets.
+#[contracttype]
+#[derive(Clone)]
+pub struct PendingRevocation {
+    pub target: Address,
+    pub role: Role,
+    pub proposed_by: Address,
+    pub proposed_at: u64,
+    pub unlocks_at: u64,
+    pub executed: bool,
 }
 
 /// Immutable version snapshot of fee configuration.
@@ -773,6 +789,11 @@ pub enum PaymentError {
     GracePeriodActive = 298,
     ConfigurationInvalid = 299,
     SystemFatalError = 300,
+    // ── Two-Step Revocation (301-305) ──────────────────────
+    RevocationNotFound = 301,
+    RevocationNotDue = 302,
+    RevocationAlreadyExecuted = 303,
+    CannotRevokeSelf = 304,
 }
 
 // ── Native Events ──────────────────────────────────────────────
@@ -2096,7 +2117,10 @@ impl OphirPayContract {
         Ok(())
     }
 
-    /// Revoke a role from an address (admin only).
+    /// Revoke a role from an address immediately (admin only).
+    ///
+    /// For a safer two-step flow, use `propose_revoke_role` followed by
+    /// `execute_revoke_role` after the 24-hour timelock.
     pub fn revoke_role(env: Env, caller: Address, grantee: Address) -> Result<(), PaymentError> {
         caller.require_auth();
         Self::require_role(&env, caller.clone(), Role::Admin)?;
@@ -2106,6 +2130,200 @@ impl OphirPayContract {
         record_audit(&env, "role_revoked", &caller, 0, "Role revoked");
 
         Ok(())
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  TWO-STEP ADMIN REVOCATION
+    // ═══════════════════════════════════════════════════════════
+
+    /// Propose revoking a role from an address (admin only).
+    ///
+    /// Creates a `PendingRevocation` with a 24-hour timelock.  The target
+    /// retains their role until `execute_revoke_role` is called after the
+    /// delay.  This prevents accidental or malicious single-transaction
+    /// removal of critical admin/auditor roles.
+    ///
+    /// An admin can only have one pending revocation at a time.  If a
+    /// revocation is already pending for the target, this returns an error.
+    pub fn propose_revoke_role(
+        env: Env,
+        caller: Address,
+        target: Address,
+    ) -> Result<u64, PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
+
+        if caller == target {
+            return Err(PaymentError::CannotRevokeSelf);
+        }
+
+        // Verify target actually has a role
+        let target_role: Option<Role> = env
+            .storage()
+            .persistent()
+            .get(&(ROLE_KEY, target.clone()));
+        if target_role.is_none() {
+            return Err(PaymentError::NotARoleHolder);
+        }
+
+        // Check no existing pending revocation for this target
+        let existing: Option<PendingRevocation> = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()));
+        if let Some(ref pending) = existing {
+            if !pending.executed {
+                return Err(PaymentError::RevocationAlreadyExecuted); // reuse: pending exists
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        let pending = PendingRevocation {
+            target: target.clone(),
+            role: target_role.unwrap(),
+            proposed_by: caller.clone(),
+            proposed_at: now,
+            unlocks_at: now.saturating_add(TMLOCK_DELAY),
+            executed: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_proposed"),
+            ),
+            (target.clone(), pending.unlocks_at),
+        );
+
+        record_audit(
+            &env,
+            "role_revocation_proposed",
+            &caller,
+            0,
+            "Admin role revocation proposed (24h timelock)",
+        );
+
+        // Return the unlocks_at timestamp so clients know when to execute
+        Ok(pending.unlocks_at)
+    }
+
+    /// Execute a pending role revocation after the 24-hour timelock.
+    ///
+    /// Anyone can call this once the timelock has elapsed — the proposal
+    /// is already authorized by the original admin.  The target's role is
+    /// removed and a `role_revoked` audit entry is recorded.
+    pub fn execute_revoke_role(
+        env: Env,
+        target: Address,
+    ) -> Result<(), PaymentError> {
+        let mut pending: PendingRevocation = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()))
+            .ok_or(PaymentError::RevocationNotFound)?;
+
+        if pending.executed {
+            return Err(PaymentError::RevocationAlreadyExecuted);
+        }
+
+        let now = env.ledger().timestamp();
+        if now < pending.unlocks_at {
+            return Err(PaymentError::RevocationNotDue);
+        }
+
+        // Execute: remove the role
+        let key = (ROLE_KEY, target.clone());
+        env.storage().persistent().remove(&key);
+
+        // Mark pending revocation as executed
+        pending.executed = true;
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_executed"),
+            ),
+            target.clone(),
+        );
+
+        record_audit(
+            &env,
+            "role_revoked",
+            &pending.proposed_by,
+            0,
+            "Admin role revoked via two-step flow",
+        );
+
+        Ok(())
+    }
+
+    /// Cancel a pending role revocation (admin only).
+    ///
+    /// Prevents execution of a previously proposed revocation.  The target
+    /// retains their role indefinitely.  Only cancellable before execution.
+    pub fn cancel_revoke_role(
+        env: Env,
+        caller: Address,
+        target: Address,
+    ) -> Result<(), PaymentError> {
+        caller.require_auth();
+        Self::require_role(&env, caller.clone(), Role::Admin)?;
+
+        let mut pending: PendingRevocation = env
+            .storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target.clone()))
+            .ok_or(PaymentError::RevocationNotFound)?;
+
+        if pending.executed {
+            return Err(PaymentError::RevocationAlreadyExecuted);
+        }
+
+        pending.executed = true; // mark as cancelled via execution flag
+        env.storage()
+            .persistent()
+            .set(&(PENDING_REVOC_KEY, target.clone()), &pending);
+        env.storage()
+            .persistent()
+            .extend_ttl(&(PENDING_REVOC_KEY, target.clone()), BUMP_MIN_TTL, BUMP_MAX_TTL);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "rbac"),
+                Symbol::new(&env, "revocation_cancelled"),
+            ),
+            target,
+        );
+
+        record_audit(
+            &env,
+            "role_revocation_cancelled",
+            &caller,
+            0,
+            "Pending admin role revocation cancelled",
+        );
+
+        Ok(())
+    }
+
+    /// Get the pending revocation for an address (if any).
+    pub fn get_pending_revocation(env: Env, target: Address) -> Option<PendingRevocation> {
+        env.storage()
+            .persistent()
+            .get(&(PENDING_REVOC_KEY, target))
     }
 
     /// Get the role for an address.

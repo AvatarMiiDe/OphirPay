@@ -21,6 +21,10 @@ interface ApiSuccess<T> {
     nextCursor?: string | null;
     /** Whether more rows exist after this page. */
     hasMore?: boolean;
+    /** True when a request was replayed with an already-seen idempotency key. */
+    deduplicated?: boolean;
+    /** True when a replayed batch resumed its missing child payments. */
+    resumed?: boolean;
   };
 }
 
@@ -129,6 +133,13 @@ export function serverError(message = "Internal server error") {
 
 export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
+}
+
+export function forbiddenError(
+  message = "Forbidden",
+  details?: unknown
+) {
+  return errorResponse(ERROR_CODES.INSUFFICIENT_SCOPE, message, 403, details);
 }
 
 export function rateLimitError(message = "Too many requests") {

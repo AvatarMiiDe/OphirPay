@@ -72,6 +72,8 @@ The file is accessible at:
 - Use environment variables for all sensitive configuration
 - Follow the principle of least privilege
 - Validate all user inputs server-side
+- Follow the [Secrets Rotation Runbook](docs/SECRETS_ROTATION.md) for all secret rotation procedures
+- Rotate secrets every 90 days or immediately on suspected compromise
 
 ## Supported Versions
 
@@ -154,6 +156,50 @@ OphirPay implements the following security headers:
 - Input validation with Zod schemas
 - Rate limiting (120 RPM default)
 - CSP headers with Stellar-only connect-src
+
+## Dependency Vulnerability Policy
+
+OphirPay runs an automated dependency vulnerability scan that **fails the build** on advisories rated **high or critical**.
+
+### How the scan works
+
+- Runs on **every pull request** and on a **nightly schedule** (`.github/workflows/dependency-scan.yml`), plus on demand via `workflow_dispatch`.
+- Uses `npm audit --json` via `scripts/audit-dependencies.mjs`.
+- Uploads the full audit report (`dependency-audit-report/`) as a CI artifact on every run — including passes — so findings are reviewable.
+- Fails (exit 1) when any **un-suppressed** advisory is at/above `AUDIT_FAIL_ON` (default `high`, i.e. high + critical).
+- Treats an un-scannable dependency tree (registry outage, malformed output) as a **scan failure** — a broken scan must not silently pass.
+
+### When a suppression is acceptable
+
+A maintainer may document an **accepted risk** by adding an entry to `.github/dependency-suppressions.json`. Suppressions are only acceptable when **all** of the following hold:
+
+1. **No fix is available** — the vulnerable package has no patched release, and no compatible upgrade path exists (e.g. the maintainer still pins the vulnerable range).
+2. **Limited exposure** — the vulnerable code path is dev-only tooling (e.g. the Prisma CLI) or otherwise not reachable from the app runtime / production attack surface.
+3. **Justified and tracked** — the entry records a reason, an expiry date, and a tracking link (advisory URL).
+4. **Reviewed** — the entry is added by a maintainer in a reviewed PR, not silently.
+
+Suppressions are **temporary**: the policy is to re-check each suppressed advisory when it expires (or when a fix ships upstream) and upgrade then. New advisories are **never** suppressed by an existing entry — each finding must be covered by its own entry.
+
+### Running the scan locally
+
+```bash
+npm ci
+node scripts/audit-dependencies.mjs           # fails on high/critical (default)
+AUDIT_FAIL_ON=critical node scripts/audit-dependencies.mjs   # critical only
+```
+
+The JSON report lands in `dependency-audit-report/`.
+
+## Secrets Management
+
+OphirPay maintains a complete inventory of secrets, their storage locations,
+and rotation procedures in [docs/SECRETS_ROTATION.md](docs/SECRETS_ROTATION.md).
+
+Key points:
+- All secrets are stored in environment variables or platform secrets managers (never in code)
+- Git history has been audited — no real secrets have been committed
+- Gitleaks scans run on every push and PR via CI
+- Secrets should be rotated every 90 days
 
 ## Contact Information
 
