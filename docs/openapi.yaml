@@ -88,9 +88,16 @@ paths:
         - name: page
           in: query
           schema: { type: integer, default: 1 }
+          description: Offset page number. Ignored when cursor is provided.
         - name: limit
           in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: >-
+            Opaque keyset cursor from a previous response's meta.nextCursor.
+            Preferred over page for large datasets — it never deep-skips.
         - name: status
           in: query
           schema:
@@ -100,6 +107,12 @@ paths:
           in: query
           schema: { type: string }
           description: Search in description, memo, or transaction hash
+        - name: includeDeleted
+          in: query
+          schema: { type: boolean, default: false }
+          description: >
+            Admin/debug opt-in: also return soft-deleted rows. Still scoped to
+            the authenticated user — soft-deleted rows are hidden by default.
       responses:
         "200":
           description: Paginated payment list
@@ -132,6 +145,7 @@ paths:
     get:
       tags: [Payments]
       summary: Get a payment by ID
+      description: Soft-deleted payments return 404, consistent with list queries.
       parameters:
         - name: id
           in: path
@@ -174,7 +188,11 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       tags: [Payments]
-      summary: Delete a payment
+      summary: Soft-delete a payment
+      description: >
+        Marks the payment as deleted (sets `deletedAt`) instead of removing
+        the row, so audit trails and analytics survive. The row is hidden from
+        lists and behaves like it doesn't exist (404) for GET/PATCH afterwards.
       parameters:
         - name: id
           in: path
@@ -182,9 +200,49 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Payment deleted
+          description: Payment soft-deleted
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/payments/retry:
+    post:
+      tags: [Payments]
+      summary: Retry a failed payment
+      description: |
+        Retries a failed payment in place: the original amount, recipient and
+        memo are reused (they live on the row) and the attempt is stamped with
+        a NEW idempotency key, so the previous failed attempt is never
+        duplicated. The row returns to PENDING and flows through the normal
+        submit path (PENDING → SIGNED → SUBMITTED → … → COMPLETED).
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  description: Id of the FAILED payment to retry
+      responses:
+        "200":
+          description: Payment reset to PENDING with a new idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Payment is not in a retryable (FAILED) state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
@@ -418,9 +476,16 @@ paths:
         - name: page
           in: query
           schema: { type: integer, default: 1 }
+          description: Offset page number. Ignored when cursor is provided.
         - name: limit
           in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: >-
+            Opaque keyset cursor from a previous response's meta.nextCursor.
+            Preferred over page for large datasets — it never deep-skips.
         - name: status
           in: query
           schema: { type: string }
@@ -431,12 +496,28 @@ paths:
       responses:
         "200":
           description: Paginated batch list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBatches"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Batches]
-      summary: Create a batch payment
+      summary: Create a batch payment (idempotent)
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, minLength: 8, maxLength: 255 }
+          description: >-
+            Per-user key that makes submission idempotent. Re-sending the same
+            key returns the already-created batch (200) instead of double
+            sending; if the first attempt crashed before inserting child
+            payments, a retry resumes only the missing ones. An equivalent
+            `idempotencyKey` body field is accepted when no header is sent, but
+            the header takes precedence.
       requestBody:
         required: true
         content:
@@ -444,12 +525,16 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateBatchRequest"
       responses:
+        "200":
+          description: Already-processed batch returned for a replayed idempotency key (meta.deduplicated is true)
         "201":
           description: Batch created with child payments
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/batches/{id}:
     get:
@@ -463,6 +548,30 @@ paths:
       responses:
         "200":
           description: Batch details with child payments
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Batches]
+      summary: Bulk-cancel a batch's PENDING payments
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      description: >
+        Cancels all PENDING payments of the batch in one request. Payments that
+        have already been submitted (any non-PENDING status) are left untouched
+        and reported via `skipped`, so callers see exactly what changed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Counts of cancelled / skipped / total payments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCancelBatchResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -587,7 +696,7 @@ paths:
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       responses:
         "200":
-          description: API key list (id, name, prefix, timestamps only)
+          description: API key list (id, name, prefix, scopes, timestamps)
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
@@ -600,14 +709,24 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, userId]
+              required: [name]
               properties:
                 name:
                   type: string
                   description: Label for this key
-                userId:
-                  type: string
-                  description: Owning user ID
+                scopes:
+                  type: array
+                  description: >
+                    Permitted scopes for the key. Allowed values:
+                    read:payments, write:payments, read:analytics, admin.
+                    The admin scope grants all scopes. Empty means no access.
+                  items:
+                    type: string
+                    enum:
+                      - read:payments
+                      - write:payments
+                      - read:analytics
+                      - admin
       responses:
         "201":
           description: Key generated — store the raw key immediately
@@ -623,11 +742,43 @@ paths:
                       id: { type: string }
                       name: { type: string }
                       prefix: { type: string }
+                      scopes:
+                        type: array
+                        items: { type: string }
                       key:
                         type: string
                         description: Raw API key — shown only once
         "400":
           $ref: "#/components/responses/ValidationError"
+    patch:
+      tags: [API Keys]
+      summary: Update the scopes of an existing API key
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, scopes]
+              properties:
+                id:
+                  type: string
+                  description: API key ID to update
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - read:payments
+                      - write:payments
+                      - read:analytics
+                      - admin
+      responses:
+        "200":
+          description: Scopes updated
+        "400":
+          description: Missing key ID or invalid scope
     delete:
       tags: [API Keys]
       summary: Revoke an API key
@@ -1070,26 +1221,42 @@ paths:
     get:
       tags: [Audit Log]
       summary: Query contract audit log
+      description: |
+        Offset-paginated audit log with combined, server-side applied filters
+        (`actor`, `action`, `resource`, `since`/`until` date range) and stable
+        ordering (newest first by default). `total` reflects the filtered set.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       parameters:
         - name: page
           in: query
-          schema: { type: integer, default: 1 }
+          schema: { type: integer, minimum: 1, default: 1 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
         - name: actor
           in: query
           schema: { type: string }
-          description: Filter by Stellar address
+          description: Filter by exact Stellar actor address
         - name: action
           in: query
           schema: { type: string }
-          description: Filter by action type
-        - name: since
+          description: Filter by exact action type
+        - name: resource
           in: query
           schema: { type: integer }
-          description: Unix timestamp filter
+          description: Filter by the affected entity id (matches target_id)
+        - name: since
+          in: query
+          schema: { type: string }
+          description: Inclusive start of the date range — Unix seconds or ISO 8601
+        - name: until
+          in: query
+          schema: { type: string }
+          description: Inclusive end of the date range — Unix seconds or ISO 8601
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+          description: Result ordering by entry id (newest first by default)
       responses:
         "200":
           description: Paginated audit log entries
@@ -1111,6 +1278,46 @@ paths:
             text/event-stream:
               schema:
                 type: string
+
+  /api/audit-log/export:
+    get:
+      tags: [Audit Log]
+      summary: Export contract audit log to CSV
+      description: |
+        Streaming CSV download of the audit log applying the same filters as
+        GET /api/audit-log. Rows are streamed chunk-by-chunk from the contract,
+        so the full result set is never held in memory.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: actor
+          in: query
+          schema: { type: string }
+          description: Filter by exact Stellar actor address
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by exact action type
+        - name: resource
+          in: query
+          schema: { type: integer }
+          description: Filter by the affected entity id (matches target_id)
+        - name: since
+          in: query
+          schema: { type: string }
+          description: Inclusive start of the date range — Unix seconds or ISO 8601
+        - name: until
+          in: query
+          schema: { type: string }
+          description: Inclusive end of the date range — Unix seconds or ISO 8601
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+          description: Result ordering by entry id
+      responses:
+        "200":
+          description: CSV attachment
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ── SSE Events ────────────────────────────────────────────
   /api/events:
@@ -1199,6 +1406,7 @@ components:
         memo: { type: [string, 'null'] }
         status: { type: string }
         transactionHash: { type: [string, 'null'] }
+        idempotencyKey: { type: [string, 'null'], description: 'Per-attempt key; regenerated on every retry' }
         sourceAccountId: { type: string }
         userId: { type: string }
         batchId: { type: [string, 'null'] }
@@ -1220,6 +1428,64 @@ components:
             page: { type: integer }
             limit: { type: integer }
             total: { type: integer }
+            nextCursor: { type: [string, 'null'] }
+            hasMore: { type: boolean }
+
+    BatchResponse:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status:
+          type: string
+          enum: [CREATED, PROCESSING, COMPLETED, PARTIALLY_COMPLETED, FAILED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentResponse"
+
+    BulkCancelBatchResponse:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: object
+          properties:
+            batchId: { type: string }
+            cancelled:
+              type: integer
+              description: Number of PENDING payments flipped to CANCELLED
+            skipped:
+              type: integer
+              description: Number of already-submitted (non-PENDING) payments left untouched
+            total:
+              type: integer
+              description: Total child payments in the batch
+        meta:
+          type: object
+          properties:
+            timestamp: { type: string, format: date-time }
+
+    PaginatedBatches:
+      type: object
+      properties:
+        success: { type: boolean, const: true }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchResponse"
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            nextCursor: { type: [string, 'null'] }
+            hasMore: { type: boolean }
 
     CreatePaymentRequestSchema:
       type: object
@@ -1307,6 +1573,13 @@ components:
                 maxLength: 28
         sourceAccountId:
           type: string
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 255
+          description: >-
+            Optional body-form idempotency key. The Idempotency-Key header
+            takes precedence when both are provided.
 
     CreateRecurrenceRequest:
       type: object
