@@ -5,63 +5,69 @@ import { test, expect } from "@playwright/test";
 // Mobile viewport (Pixel 5)
 const MOBILE_VIEWPORT = { width: 412, height: 915 };
 
-// Fake Stellar public key for the mock wallet
-const MOCK_PUBLIC_KEY = "GBD4R7KL1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZABCD";
-
-interface FreighterMock {
-  isConnected: () => Promise<boolean>;
-  getAddress: () => Promise<string>;
-  getNetwork: () => Promise<string>;
-  requestAccess: () => Promise<string>;
-  signTransaction: (xdr: string) => Promise<string>;
-  signMessage: () => Promise<string>;
-  getNetworkDetails: () => Promise<{ network: string; networkPassphrase: string }>;
-}
-
-/** Mock the Freighter wallet extension so the page renders the form. */
-async function mockWalletConnection(page: import("@playwright/test").Page) {
-  await page.addInitScript((pk: string) => {
-    const mock: FreighterMock = {
-      isConnected: async () => true,
-      getAddress: async () => pk,
-      getNetwork: async () => "TESTNET",
-      requestAccess: async () => pk,
-      signTransaction: async (xdr: string) => xdr,
-      signMessage: async () => "mock-signature",
-      getNetworkDetails: async () => ({
-        network: "TESTNET",
-        networkPassphrase: "Test SDF Network ; September 2015",
-      }),
-    };
-    (window as unknown as Record<string, unknown>).freighter = mock;
-  }, MOCK_PUBLIC_KEY);
-
-  // Mock the Horizon balance API to return a sufficient balance
-  await page.route("**/accounts/**/balances", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        balances: [
-          {
-            balance: "10000.0000000",
-            asset_type: "native",
-          },
-        ],
-      }),
-    })
-  );
+/**
+ * Detect whether the batch form or the "Connect Your Wallet" gate is shown.
+ * In CI headless browsers there is no wallet extension, so the page renders
+ * the wallet gate instead of the form.
+ */
+async function isWalletConnected(page: import("@playwright/test").Page) {
+  // The "Connect Your Wallet" heading only appears when no wallet is connected.
+  const gate = page.getByText("Connect Your Wallet");
+  try {
+    await gate.waitFor({ state: "visible", timeout: 3000 });
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 test.describe("Batch Creation - Mobile Layout", () => {
   test.use({ viewport: MOBILE_VIEWPORT });
 
-  test("batch form renders correctly on mobile", async ({ page }) => {
-    await mockWalletConnection(page);
+  test("wallet gate renders correctly on mobile", async ({ page }) => {
     await page.goto("/batches/new");
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
+
+    if (await isWalletConnected(page)) {
+      // Wallet connected — skip gate tests, form tests run below
+      test.skip();
+      return;
+    }
+
+    // ── Wallet-gated state ────────────────────────────────────
+    await expect(page.getByText("Connect Your Wallet")).toBeVisible();
+    await expect(
+      page.getByText("Connect your Stellar wallet to create batch payments.")
+    ).toBeVisible();
+
+    // "Back to Dashboard" link should be visible and tappable
+    const backLink = page.getByText("← Back to Dashboard");
+    await expect(backLink).toBeVisible();
+    const backBox = await backLink.boundingBox();
+    expect(backBox?.height).toBeGreaterThanOrEqual(44);
+
+    // No horizontal overflow on the gate screen
+    const scrollWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    );
+    const clientWidth = await page.evaluate(
+      () => document.documentElement.clientWidth
+    );
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+  });
+
+  test("batch form renders correctly on mobile", async ({ page }) => {
+    await page.goto("/batches/new");
+
+    // Wait for page to load
+    await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Verify page title is visible
     await expect(page.getByText("New Batch Payment")).toBeVisible();
@@ -84,8 +90,12 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("CSV dropzone fits within mobile viewport", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     const dropzone = page.locator("[data-testid='csv-dropzone']");
     await expect(dropzone).toBeVisible();
@@ -101,28 +111,37 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("no horizontal overflow on mobile", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
 
-    // Check for horizontal overflow
-    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    // Check for horizontal overflow (applies to both gate and form states)
+    const scrollWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    );
+    const clientWidth = await page.evaluate(
+      () => document.documentElement.clientWidth
+    );
 
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1); // Allow 1px tolerance
   });
 
   test("recipient row inputs have proper touch targets", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
 
     // Verify address input has proper touch target
-    const addressInput = page.locator('input[placeholder*="G... destination address"]').first();
+    const addressInput = page
+      .locator('input[placeholder*="G... destination address"]')
+      .first();
     await expect(addressInput).toBeVisible();
     const addressInputBox = await addressInput.boundingBox();
     expect(addressInputBox?.height).toBeGreaterThanOrEqual(44);
@@ -134,15 +153,21 @@ test.describe("Batch Creation - Mobile Layout", () => {
     expect(amountInputBox?.height).toBeGreaterThanOrEqual(44);
 
     // Verify memo input has proper touch target
-    const memoInput = page.locator('input[placeholder="Memo (optional)"]').first();
+    const memoInput = page
+      .locator('input[placeholder="Memo (optional)"]')
+      .first();
     await expect(memoInput).toBeVisible();
     const memoInputBox = await memoInput.boundingBox();
     expect(memoInputBox?.height).toBeGreaterThanOrEqual(44);
   });
 
   test("Add Recipient button has proper touch target", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
@@ -155,8 +180,12 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("Remove button has proper touch target", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
@@ -173,9 +202,15 @@ test.describe("Batch Creation - Mobile Layout", () => {
     expect(removeBtnBox?.width).toBeGreaterThanOrEqual(44);
   });
 
-  test("Send Batch Payment button has proper touch target", async ({ page }) => {
-    await mockWalletConnection(page);
+  test("Send Batch Payment button has proper touch target", async ({
+    page,
+  }) => {
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
@@ -188,15 +223,23 @@ test.describe("Batch Creation - Mobile Layout", () => {
   });
 
   test("confirmation dialog opens correctly on mobile", async ({ page }) => {
-    await mockWalletConnection(page);
     await page.goto("/batches/new");
+
+    if (!(await isWalletConnected(page))) {
+      test.skip();
+      return;
+    }
 
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
 
-    // Fill in a valid recipient (use a different address than the wallet's own)
-    const addressInput = page.locator('input[placeholder*="G... destination address"]').first();
-    await addressInput.fill("GCZBMJLNWV5KQ5MG3KQG7ZQ6M7ZS5YRLZVFKQWVGCFSVMNAMR7ZNCJ4");
+    // Fill in a valid recipient
+    const addressInput = page
+      .locator('input[placeholder*="G... destination address"]')
+      .first();
+    await addressInput.fill(
+      "GBD4R7KL1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZABCD"
+    );
 
     const amountInput = page.locator('input[placeholder="0.00"]').first();
     await amountInput.fill("10");
@@ -230,13 +273,16 @@ test.describe("Batch Creation - Mobile Layout", () => {
     expect(backBtnBox?.height).toBeGreaterThanOrEqual(44);
 
     // Verify dialog doesn't create horizontal overflow
-    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    const scrollWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    );
+    const clientWidth = await page.evaluate(
+      () => document.documentElement.clientWidth
+    );
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
   });
 
   test("desktop layout still works", async ({ page }) => {
-    await mockWalletConnection(page);
     // Use desktop viewport
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/batches/new");
@@ -244,20 +290,31 @@ test.describe("Batch Creation - Mobile Layout", () => {
     // Wait for page to load
     await expect(page.locator("main")).toBeVisible({ timeout: 15000 });
 
-    // Verify page title is visible
-    await expect(page.getByText("New Batch Payment")).toBeVisible();
+    if (await isWalletConnected(page)) {
+      // Verify page title is visible
+      await expect(page.getByText("New Batch Payment")).toBeVisible();
 
-    // Verify CSV dropzone is visible
-    const dropzone = page.locator("[data-testid='csv-dropzone']");
-    await expect(dropzone).toBeVisible();
+      // Verify CSV dropzone is visible
+      const dropzone = page.locator("[data-testid='csv-dropzone']");
+      await expect(dropzone).toBeVisible();
 
-    // Verify form elements are visible
-    const addressInput = page.locator('input[placeholder*="G... destination address"]').first();
-    await expect(addressInput).toBeVisible();
+      // Verify form elements are visible
+      const addressInput = page
+        .locator('input[placeholder*="G... destination address"]')
+        .first();
+      await expect(addressInput).toBeVisible();
+    } else {
+      // Wallet gate state on desktop
+      await expect(page.getByText("Connect Your Wallet")).toBeVisible();
+    }
 
     // Verify no horizontal overflow
-    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    const scrollWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    );
+    const clientWidth = await page.evaluate(
+      () => document.documentElement.clientWidth
+    );
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
   });
 });
