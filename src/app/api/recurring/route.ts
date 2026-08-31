@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "/bim/prisma";
 import { createRecurrenceSchema, paginationSchema } from "@lib/validation-schemas";
@@ -10,6 +11,7 @@ import {
 } from "@lib/api-response";
 import { logger } from "@lib/logger";
 import { getAuthContext } from "@lib/auth-session";
+import { withRequestLogging } from "@/lib/request-logging";
 import { z } from "zod";
 
 const updateRecurrenceSchema = z.object({
@@ -17,7 +19,7 @@ const updateRecurrenceSchema = z.object({
   paused: z.boolean(),
 });
 
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/recurring", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -36,13 +38,13 @@ export async function GET(request: Request) {
     const { page, limit } = parsed.data;
     const where = { userId: auth.userId };
     const [recurrences, total] = await Promise.all([
-      prisma.recurrence.findMany(
+      prisma.recurrence.findMany({
         where,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
         include: { payments: { take: 5, orderBy: { createdAt: "desc" } } },
-      ),
+      }),
       prisma.recurrence.count({ where }),
     ]);
 
@@ -50,9 +52,9 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/recurring");
   }
-}
+}));
 
-export async function POST(request: Request) {
+export const POST = withMetrics("POST /api/recurring", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/recurring");
   }
-}
+}));
 
 export async function PATCH(request: Request) {
   try {

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
+import { updatePaymentSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
+  validationError,
   notFoundError,
   unauthorizedError,
   handleApiError,
@@ -11,8 +14,9 @@ import { logger } from "@/lib/logger";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { getAuthContext } from "@/lib/auth-session";
+import { withRequestLogging } from "@/lib/request-logging";
 
-export async function GET(
+export const GET = withMetrics("GET /api/payments/[id]", withRequestLogging(async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -25,18 +29,19 @@ export async function GET(
     }
 
     const { id } = await params;
-    // Only the owning user may read the payment (no IDOR across users)
+    // Only the owning user may read the payment (no IDOR across users), and
+    // soft-deleted payments behave like they don't exist (consistent 404).
     const payment = await prisma.payment.findFirst({
-      where: { id, userId: auth.userId },
+      where: { id, userId: auth.userId, deletedAt: null },
     });
     if (!payment) return notFoundError("Payment");
     return successResponse(payment);
   } catch (err) {
     return handleApiError(err, `GET /api/payments/[id]`);
   }
-}
+}));
 
-export async function PATCH(
+export const PATCH = withMetrics("PATCH /api/payments/[id]", withRequestLogging(async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -49,11 +54,18 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await request.json() as { status?: string; description?: string; memo?: string };
+    const rawBody = await request.json();
+    // Validate the whole update body (status enum, description, memo length /
+    // charset) server-side so invalid memos never reach the database or the
+    // webhook payloads.
+    const parsed = updatePaymentSchema.safeParse(rawBody);
+    if (!parsed.success) return validationError(parsed.error);
+    const body = parsed.data;
 
-    // updateMany scopes the write to the authenticated user's records
+    // updateMany scopes the write to the authenticated user's records and
+    // excludes soft-deleted payments (consistent 404, same as GET).
     const updated = await prisma.payment.updateMany({
-      where: { id, userId: auth.userId },
+      where: { id, userId: auth.userId, deletedAt: null },
       data: {
         ...(body.status && { status: body.status as never }),
         ...(body.description !== undefined && { description: body.description }),
@@ -67,7 +79,31 @@ export async function PATCH(
 
     logger.info("Payment updated", { id, status: payment.status });
 
-    if (body.status === "COMPLETED") {
+    if (body.status === "SIGNED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SIGNED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        status: payment.status,
+        signedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "SUBMITTED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        submittedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "CONFIRMED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        confirmedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "COMPLETED") {
       dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
         paymentId: payment.id,
         amount: payment.amount,
@@ -89,9 +125,9 @@ export async function PATCH(
   } catch (err) {
     return handleApiError(err, `PATCH /api/payments/[id]`);
   }
-}
+}));
 
-export async function DELETE(
+export const DELETE = withMetrics("DELETE /api/payments/[id]", withRequestLogging(async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -104,14 +140,17 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    // deleteMany scopes the delete to the authenticated user's records
-    const deleted = await prisma.payment.deleteMany({
-      where: { id, userId: auth.userId },
+    // Soft-delete: mark deletedAt instead of removing the row so audit trails
+    // and analytics survive (issue #50). updateMany scopes the write to the
+    // authenticated user's records (no IDOR across users).
+    const deleted = await prisma.payment.updateMany({
+      where: { id, userId: auth.userId, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
     if (deleted.count === 0) return notFoundError("Payment");
-    logger.info("Payment deleted", { id });
+    logger.info("Payment soft-deleted", { id });
     return successResponse({ deleted: true });
   } catch (err) {
     return handleApiError(err, `DELETE /api/payments/[id]`);
   }
-}
+}));
