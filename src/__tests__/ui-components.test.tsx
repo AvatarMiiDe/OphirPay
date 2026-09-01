@@ -128,6 +128,88 @@ describe("Modal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("restores focus to the trigger element when closed via Escape", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open modal
+          </button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Dialog">
+            Content
+          </Modal>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: /open modal/i });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    // Focus moves into the dialog (the inner tabindex=-1 container)
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").querySelector('[tabindex="-1"]')).toHaveFocus()
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps focus inside the dialog when the onClose identity changes mid-open", async () => {
+    // Regression: the production caller (e.g. WalletButton) recreates onClose
+    // on connection-state changes. The focus/keydown effect must not tear down
+    // and restore focus to the trigger while the dialog remains open.
+    function Harness({ onClose }: { onClose: () => void }) {
+      return <Modal open onClose={onClose} title="Dialog">Content</Modal>;
+    }
+
+    const { rerender } = render(<Harness onClose={() => {}} />);
+    const dialog = screen.getByRole("dialog");
+    const inner = dialog.querySelector('[tabindex="-1"]') as HTMLElement;
+    await waitFor(() => expect(inner).toHaveFocus());
+
+    // Caller re-renders with a brand-new onClose closure — same as when
+    // connection state changes in WalletButton.
+    rerender(<Harness onClose={() => {}} />);
+
+    expect(inner).toHaveFocus();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it("restores focus to the trigger element when closed via the close button", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open modal
+          </button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Dialog">
+            Content
+          </Modal>
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: /open modal/i });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").querySelector('[tabindex="-1"]')).toHaveFocus()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /close dialog/i }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
   it("pushes a history entry so the back button can close it", () => {
     render(<Modal open onClose={() => {}}>Content</Modal>);
     expect(window.history.state?.ophirPayModal).toBe(true);

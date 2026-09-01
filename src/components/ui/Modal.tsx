@@ -71,9 +71,11 @@ export function Modal({
     };
   }, [open]);
 
-  // Focus trap + body scroll lock + focus restore. Keyed on `[open]` only so
-  // parent re-renders (e.g. a new inline `onClose` identity) don't re-run the
-  // trap, which would steal focus from the user while they type in the dialog.
+  // ESC to close + focus trap + body scroll lock + focus restore.
+  // Only depends on `open` — the close handler is read through `onCloseRef` so
+  // callers can pass a fresh `onClose` closure on every render (e.g. one that
+  // captures connection state) without tearing down this effect mid-open,
+  // which would briefly move focus back to the trigger (focus churn).
   useEffect(() => {
     if (!open || !dialogRef.current) return;
 
@@ -86,7 +88,27 @@ export function Modal({
 
     // ESC to close
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+
+      // Cycle Tab within the dialog
+      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+        FOCUSABLE_SELECTOR
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
 
