@@ -4,11 +4,15 @@
 
 export type PaymentStatus =
   | "CREATED"
+  | "SIGNED"
+  | "SUBMITTED"
+  | "CONFIRMED"
   | "PENDING"
   | "PROCESSING"
   | "COMPLETED"
   | "FAILED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "SCHEDULED";
 
 export type BatchStatus =
   | "CREATED"
