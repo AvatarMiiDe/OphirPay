@@ -172,8 +172,31 @@ Batches, recurrences, and payment requests emit their own events
 (`batch.*`, `recurrence.*`, `request.*`). Subscribe to any subset of these
 event types when registering a webhook.
 
-receive every event type
+### Replaying Missed Events
 
+If your endpoint was down during an outage, replay stored events from the
+last 7 days:
+
+```typescript
+const res = await fetch("/api/webhooks/<webhook-id>/replay", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: "Bearer <api-key>",
+    "x-csrf-token": "<csrf-token>",
+  },
+  body: JSON.stringify({
+    since: "2026-08-19T00:00:00Z", // optional, clamped to 7-day window
+    until: "2026-08-26T00:00:00Z", // optional, defaults to now
+    limit: 50,                     // optional, max 100
+  }),
+});
+const { data } = await res.json();
+// { replayBatchId, selected, succeeded, failed, window }
+```
+
+Each replay attempt is recorded as a delivery. View history at
+`GET /api/webhooks/<webhook-id>/deliveries` or in the Webhooks dashboard.
 
 ## Available Contract Functions
 
