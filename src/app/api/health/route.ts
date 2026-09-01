@@ -7,43 +7,49 @@ import { OPHIRPAY_CONTRACT_ID } from "@/lib/contracts";
 import { successResponse, serverError } from "@/lib/api-response";
 import { withRequestLogging } from "@/lib/request-logging";
 
-type CheckStatus = "ok" | "error" | "unchecked" | "disabled";
+// ── Check helpers ──────────────────────────────────────────────
 
+type CheckStatus = "ok" | "error" | "unchecked" | "disabled" | "not_configured";
+
+/** GET a URL and report reachability + latency; null when it errors/times out. */
+async function pingUrl(
+  url: string,
+  timeoutMs: number
+): Promise<{ ok: boolean; latencyMs: number } | null> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return { ok: res.ok, latencyMs: Date.now() - start };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** POST a JSON-RPC body and report reachability + latency; null on failure. */
 async function pingJsonRpc(
   url: string,
   body: unknown,
   timeoutMs: number
 ): Promise<{ ok: boolean; latencyMs: number } | null> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const start = Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     return { ok: res.ok, latencyMs: Date.now() - start };
   } catch {
     return null;
-  }
-}
-
-async function pingUrl(
-  url: string,
-  timeoutMs: number
-): Promise<{ ok: boolean; latencyMs: number } | null> {
-  try {
-    const start = Date.now();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(url, { signal: controller.signal });
+  } finally {
     clearTimeout(timeout);
-    return { ok: res.ok, latencyMs: Date.now() - start };
-  } catch {
-    return null;
   }
 }
 
@@ -144,7 +150,7 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
         uptime: process.uptime(),
       },
       { timestamp: new Date().toISOString() },
-      httpStatus
+      overallStatus === "error" ? 503 : 200
     );
   } catch {
     return serverError("Health check failed");

@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { withMetrics } from "@/lib/metrics-middleware";
 
-import prisma from "@/lib/prisma";
-import {
-  successResponse,
-  handleApiError,
-  badRequestError,
-  notFoundError,
-  unauthorizedError,
-} from "@/lib/api-response";
+import { successResponse, handleApiError, notFoundError, unauthorizedError, badRequestError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
 import { simulateContractCall, invokeContractFunction, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
@@ -82,8 +75,29 @@ export const PATCH = withMetrics("PATCH /api/recurring/[id]", withRequestLogging
     });
     if (result.count === 0) return badRequestError("Recurring payment not found");
 
-    logger.info("Recurring payment cancelled", { id, userId: auth.userId });
-    return successResponse({ cancelled: true });
+    if (!auth.publicKey) {
+      return unauthorizedError(
+        "Wallet authentication required to update recurring payments."
+      );
+    }
+
+    const body = await request.json();
+    if (typeof body.paused !== "boolean") {
+      return badRequestError("Request body must include a 'paused' boolean field.");
+    }
+
+    // Prepare the unsigned contract invocation for the client wallet to
+    // sign and submit (see submitContractInvocation). There is no
+    // server-side result value to return.
+    const result = await invokeContractFunction(
+      DEFAULT_CONTRACT_ID,
+      "set_recurring_paused",
+      auth.publicKey,
+      [nativeToScVal(recurringId, { type: "u64" }),
+        nativeToScVal(body.paused, { type: "bool" })]
+    );
+
+    return successResponse(result);
   } catch (err) {
     return handleApiError(err, "PATCH /api/recurring/[id]");
   }
