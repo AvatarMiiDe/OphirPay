@@ -147,6 +147,14 @@ See [Webhook Signature Verification](webhook-verification.md) for the exact
 canonical form, replay protection, and runnable Node/Python reference
 implementations.
 
+### Rotating your webhook secret
+
+Secrets can be rotated from the Webhooks page (or via `PATCH /api/webhooks?id=...`).
+Rotating revokes the previous secret **immediately** — the next delivery is
+signed with the new secret, so any receiver still verifying with the old value
+will reject it. Before rotating, make sure your endpoint's stored secret is easy
+to update, and save the new secret right away: it is shown only once.
+
 ### Webhook Event Types
 
 Payments emit lifecycle events as they progress through their lifecycle:
@@ -164,8 +172,31 @@ Batches, recurrences, and payment requests emit their own events
 (`batch.*`, `recurrence.*`, `request.*`). Subscribe to any subset of these
 event types when registering a webhook.
 
-receive every event type
+### Replaying Missed Events
 
+If your endpoint was down during an outage, replay stored events from the
+last 7 days:
+
+```typescript
+const res = await fetch("/api/webhooks/<webhook-id>/replay", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: "Bearer <api-key>",
+    "x-csrf-token": "<csrf-token>",
+  },
+  body: JSON.stringify({
+    since: "2026-08-19T00:00:00Z", // optional, clamped to 7-day window
+    until: "2026-08-26T00:00:00Z", // optional, defaults to now
+    limit: 50,                     // optional, max 100
+  }),
+});
+const { data } = await res.json();
+// { replayBatchId, selected, succeeded, failed, window }
+```
+
+Each replay attempt is recorded as a delivery. View history at
+`GET /api/webhooks/<webhook-id>/deliveries` or in the Webhooks dashboard.
 
 ## Available Contract Functions
 
@@ -296,5 +327,6 @@ npx playwright test
 
 - [Open an issue](https://github.com/OphirPay/OphirPay/issues/new?template=bug_report.yml)
 - [Read the architecture guide](./architecture.md)
+- [Read the API endpoint conventions guide](./API_GUIDE.md) — the reference for adding or modifying API endpoints
 - [View the mainnet deployment guide](./deployment-mainnet.md)
 - [Check SUPPORT.md](../.github/SUPPORT.md)

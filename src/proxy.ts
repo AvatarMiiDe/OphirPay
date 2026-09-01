@@ -2,13 +2,8 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-feat/rate-limit-retry-after
-import { InMemoryRateLimitStore, getRetryAfterSeconds } from "@/lib/rate-limit";
-import { rateLimitError } from "@/lib/api-response";
-
 import { InMemoryRateLimitStore } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
-main
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 // Configurable via RATE_LIMIT_RPM env (defaults to 120 requests/min/IP)
@@ -95,12 +90,6 @@ export async function proxy(request: NextRequest) {
 
       // Rate limit exceeded
       if (!result.allowed) {
-feat/rate-limit-retry-after
-        return rateLimitError(
-          "Too many requests. Please try again later.",
-          getRetryAfterSeconds(result),
-          { "X-Request-Id": requestId }
-
         const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
         // Rejected before any route handler runs, so log here (with the same
         // request id returned in the response header below).
@@ -120,7 +109,6 @@ feat/rate-limit-retry-after
               "X-Request-Id": requestId,
             },
           }
-main
         );
       }
     }

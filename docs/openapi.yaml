@@ -11,6 +11,10 @@ info:
     - `X-API-Key: <api-key>`
     
     API keys are generated at `POST /api/keys` and shown only once.
+
+    **Conventions** — see [docs/API_GUIDE.md](./API_GUIDE.md) for the
+    endpoint conventions: file structure, Zod validation, error handling,
+    auth usage, the response envelope, and rate limiting.
   version: 0.1.0
   contact:
     name: OphirPay Team
@@ -243,6 +247,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /api/payments/export:
+    get:
+      tags: [Payments]
+      summary: Export payments as CSV
+      description: |
+        Server-side CSV export of the CURRENT filter results — every row
+        matching `status` / `search` (the same filters as GET /api/payments),
+        not just the page loaded in the browser. Returns a dated CSV
+        attachment that includes all key fields plus memo and transaction hash.
+        The response includes an `X-Export-Truncated` header set to `true`
+        when the result set exceeds the export row cap.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments with this status
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments matching this search term
+      responses:
+        "200":
+          description: CSV attachment with the matching payment rows
+          headers:
+            X-Export-Truncated:
+              description: true when the result set was truncated to the export cap
+              schema:
+                type: string
+                enum: ["true", "false"]
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
@@ -679,6 +726,26 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Webhooks]
+      summary: Rotate a webhook signing secret
+      description: >
+        Generates a new HMAC-SHA256 signing secret and revokes the previous
+        one immediately — the next delivery is signed with the new secret.
+        The new secret is returned exactly once.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Secret rotated (new secret returned once)
+        "400":
+          description: Missing webhook ID or webhook not found
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     delete:
       tags: [Webhooks]
       summary: Delete a webhook
@@ -696,34 +763,65 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/webhooks/{id}/test:
+  /api/webhooks/{id}/replay:
     post:
       tags: [Webhooks]
-      summary: Send a test event to a webhook endpoint
-      description: >
-        Fires a sample, clearly-fake event (marked `test: true`) to the
-        webhook's URL with a valid HMAC signature. No real payment or database
-        record is created. Use this to verify your endpoint's signature
-        verification without waiting for a live event.
+      summary: Replay stored webhook events within a bounded date range
+      description: |
+        Re-delivers stored events from the last 7 days (max 100 per request).
+        Each replay attempt is recorded as a delivery for dashboard visibility.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                since:
+                  type: string
+                  format: date-time
+                  description: Start of replay window (clamped to last 7 days)
+                until:
+                  type: string
+                  format: date-time
+                  description: End of replay window (defaults to now)
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  description: Max events to replay (default 50)
       responses:
         "200":
-          description: Test event sent; delivery result returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TestWebhookResponse"
+          description: Replay summary with delivery counts
         "400":
-          description: Webhook paused
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Webhook not found
+
+  /api/webhooks/{id}/deliveries:
+    get:
+      tags: [Webhooks]
+      summary: List delivery history for a webhook
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Delivery history (original + replay attempts)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ── API Keys ──────────────────────────────────────────────
   /api/keys:
@@ -860,6 +958,43 @@ paths:
       responses:
         "200":
           description: Session revoked
+
+  /api/auth/challenge:
+    get:
+      tags: [Session]
+      summary: Mint a proof-of-ownership challenge for a wallet
+      description: |
+        Returns a short-lived, server-signed challenge plus the exact message
+        the wallet must sign. `POST /api/auth/session` only issues a session
+        cookie when the signature over this message verifies against the
+        public key.
+      parameters:
+        - name: publicKey
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Stellar wallet public key (G...)
+      responses:
+        "200":
+          description: Challenge minted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge, message, expiresIn]
+                properties:
+                  challenge:
+                    type: string
+                    description: Single-use challenge token
+                  message:
+                    type: string
+                    description: Exact message the wallet must sign
+                  expiresIn:
+                    type: integer
+                    description: Challenge lifetime in seconds
+        "400":
+          description: Invalid or missing public key
 
   /api/csrf:
     get:
@@ -1273,6 +1408,24 @@ paths:
         - name: actor
           in: query
           schema: { type: string }
+          description: >
+            Filter by Stellar address (substring match, case-insensitive).
+            Combine with `action`, `since`, and `until`; all filters compose
+            with `page`/`limit` pagination.
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by exact action type (e.g. `payment_recorded`)
+        - name: since
+          in: query
+          schema: { type: integer }
+          description: >
+            Inclusive lower bound on entry timestamp (Unix seconds).
+            Use with `until` to filter by date range.
+        - name: until
+          in: query
+          schema: { type: integer }
+          description: Inclusive upper bound on entry timestamp (Unix seconds)
           description: Filter by exact Stellar actor address
         - name: action
           in: query
@@ -1296,7 +1449,9 @@ paths:
           description: Result ordering by entry id (newest first by default)
       responses:
         "200":
-          description: Paginated audit log entries
+          description: >
+            Paginated audit log entries. Response `meta.total` reflects the
+            filtered result set, so pagination composes with filters.
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -2074,4 +2229,3 @@ components:
       - RPC_UNAVAILABLE
       - DATABASE_UNAVAILABLE
       - CACHE_UNAVAILABLE
-      - EMAIL_UNAVAILABLE

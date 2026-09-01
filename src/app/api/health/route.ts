@@ -7,6 +7,52 @@ import { OPHIRPAY_CONTRACT_ID } from "@/lib/contracts";
 import { successResponse, serverError } from "@/lib/api-response";
 import { withRequestLogging } from "@/lib/request-logging";
 
+// ── Check helpers ──────────────────────────────────────────────
+
+type CheckStatus = "ok" | "error" | "unchecked" | "disabled" | "not_configured";
+
+/** GET a URL and report reachability + latency; null when it errors/times out. */
+async function pingUrl(
+  url: string,
+  timeoutMs: number
+): Promise<{ ok: boolean; latencyMs: number } | null> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return { ok: res.ok, latencyMs: Date.now() - start };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** POST a JSON-RPC body and report reachability + latency; null on failure. */
+async function pingJsonRpc(
+  url: string,
+  body: unknown,
+  timeoutMs: number
+): Promise<{ ok: boolean; latencyMs: number } | null> {
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    return { ok: res.ok, latencyMs: Date.now() - start };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export const GET = withMetrics("GET /api/health", withRequestLogging(async function GET() {
   try {
     // Critical check: database connectivity
@@ -68,9 +114,9 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
     }
 
     // Check Contract-ID presence
-    const contractStatus: "ok" | "error" = 
-      OPHIRPAY_CONTRACT_ID && OPHIRPAY_CONTRACT_ID.startsWith("C") && OPHIRPAY_CONTRACT_ID.length === 56 
-        ? "ok" 
+    const contractStatus: "ok" | "error" =
+      OPHIRPAY_CONTRACT_ID && OPHIRPAY_CONTRACT_ID.startsWith("C") && OPHIRPAY_CONTRACT_ID.length === 56
+        ? "ok"
         : "error";
 
     const optionalChecks = [rpcStatus, horizonStatus, contractStatus, redisStatus].filter(
@@ -79,13 +125,13 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
     const hasOptionalError = optionalChecks.includes("error");
     const isDegraded = dbStatus === "ok" && hasOptionalError;
     const overallStatus = dbStatus === "error" ? "error" : isDegraded ? "degraded" : "ok";
-    const healthy = overallStatus !== "error";
+
+    const httpStatus = overallStatus === "error" ? 503 : 200;
 
     return successResponse(
       {
         status: overallStatus,
         version: "0.1.0",
-        status,
         services: {
           database: { status: dbStatus, latencyMs: dbLatency },
           redis: { status: redisStatus, latencyMs: redisLatency },
@@ -104,7 +150,7 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
         uptime: process.uptime(),
       },
       { timestamp: new Date().toISOString() },
-      httpStatus
+      overallStatus === "error" ? 503 : 200
     );
   } catch {
     return serverError("Health check failed");

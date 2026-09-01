@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MultiWalletProvider, useWallet } from "@/hooks/useMultiWallet";
 import { WalletButton } from "@/components/WalletButton";
-import TreasuryDashboard from "@/app/page";
+import TreasuryDashboard from "@/app/(dashboard)/page";
 import { fetchXlmBalance } from "@/lib/stellar";
 
 // ── Mocks ──────────────────────────────────────────────────────

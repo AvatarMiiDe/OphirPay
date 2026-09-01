@@ -183,10 +183,8 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
       return validationError(parsed.error);
     }
 
-    // Both parse paths produce a createBatchSchema-shaped payload; the omit
-    // variant simply lacks idempotencyKey (which is already set above).
-    const data = parsed.data as CreateBatchInput;
-    const { name, description, recipients: payments } = data;
+    const { name, description, recipients: payments } =
+      parsed.data;
     const { userId } = auth;
 
     // Idempotency key (issue #170): the `Idempotency-Key` header takes
