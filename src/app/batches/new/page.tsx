@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import { CsvBatchImport, type CsvRecipientRow } from "@/components/CsvBatchImport";
+import { parseRecipientsCsvToRows, downloadCsvTemplate } from "@/lib/csv-import";
 import {
   isValidStellarAddress,
   buildBatchPaymentTx,
@@ -80,6 +81,9 @@ export default function NewBatchPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [mode, setMode] = useState<EntryMode>("manual");
   const [csvValid, setCsvValid] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── CSV import wiring ────────────────────────────────────
 
@@ -98,6 +102,70 @@ export default function NewBatchPage() {
 
   const handleCsvValidity = useCallback((valid: boolean) => {
     setCsvValid(valid);
+  }, []);
+
+  // ── CSV dropzone (legacy quick-import entry point) ──────────
+  // Parses with the same shared parser as the CSV tab and feeds the send
+  // flow through the exact same `handleCsvRows` path.
+  const handleCsvFile = useCallback(async (file: File) => {
+    try {
+      const { rows, fileErrors } = await parseRecipientsCsvToRows(file, {
+        selfAddress: wallet.publicKey ?? null,
+      });
+      if (fileErrors.length > 0) {
+        setCsvError(fileErrors.join("\n"));
+        setCsvValid(false);
+        handleCsvValidity(false);
+        return;
+      }
+      const invalidCount = rows.filter((r) => Object.keys(r.errors).length > 0).length;
+      const validRows: CsvRecipientRow[] = rows
+        .filter((r) => Object.keys(r.errors).length === 0)
+        .map((r) => ({
+          address: r.values.address,
+          amount: r.values.amount,
+          memo: r.values.memo || undefined,
+        }));
+      // A dropped file replaces the manual list only when it parses cleanly.
+      if (invalidCount === 0 && validRows.length > 0) {
+        setCsvError(null);
+        setCsvValid(true);
+        handleCsvValidity(true);
+        handleCsvRows(validRows);
+        setMode("csv");
+      } else {
+        setCsvError(
+          `${invalidCount} row(s) contain errors — fix the CSV and re-upload, or use the Upload CSV tab for a detailed preview.`
+        );
+        setCsvValid(false);
+        handleCsvValidity(false);
+      }
+    } catch {
+      setCsvError("Could not read the CSV file. Please check the format.");
+      setCsvValid(false);
+      handleCsvValidity(false);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [handleCsvRows, handleCsvValidity, wallet.publicKey]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) handleCsvFile(file);
+    },
+    [handleCsvFile]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragging(false);
   }, []);
 
   // Switching modes remounts CsvBatchImport (its parsed state is reset), so
@@ -319,7 +387,7 @@ export default function NewBatchPage() {
           </p>
           <Link
             href="/"
-            className="text-sm text-ophir-600 dark:text-ophir-400 hover:underline"
+            className="inline-flex items-center justify-center min-h-[44px] px-2 text-sm text-ophir-600 dark:text-ophir-400 hover:underline"
           >
             ← Back to Dashboard
           </Link>
@@ -510,7 +578,9 @@ export default function NewBatchPage() {
         </p>
       </div>
 
-      {/* CSV Import Dropzone */}
+      {/* CSV Import Dropzone — prefill bridge for manual entry; the dedicated
+          CSV mode renders CsvBatchImport's own dropzone instead. */}
+      {mode === "manual" && (
       <div
         className={`bg-white dark:bg-gray-900 rounded-xl border-2 border-dashed p-4 sm:p-6 mb-4 transition-colors ${
           isDragging
@@ -565,7 +635,10 @@ export default function NewBatchPage() {
             ref={fileInputRef}
             type="file"
             accept=".csv"
-            onChange={handleFileChange}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCsvFile(file);
+            }}
             className="hidden"
             aria-label="Upload CSV file"
           />
@@ -578,6 +651,7 @@ export default function NewBatchPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Wallet info */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 mb-4">
@@ -655,7 +729,7 @@ export default function NewBatchPage() {
               <button
                 onClick={addRecipient}
                 disabled={isSubmitting || recipients.length >= 50}
-                className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors min-h-[44px]"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

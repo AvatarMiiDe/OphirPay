@@ -201,6 +201,61 @@ Key points:
 - Gitleaks scans run on every push and PR via CI
 - Secrets should be rotated every 90 days
 
+## Secrets Scanning in CI
+
+Every **pull request** and every **push to `main`** runs a gitleaks scan
+(`secrets-scan` job in `.github/workflows/ci.yml`) that **fails the build**
+if a committed secret is detected.
+
+### Blocklist policy
+
+- **Tool:** [gitleaks](https://github.com/gitleaks/gitleaks) v8.18.4 (pinned),
+  run with `gitleaks detect --config .gitleaks.toml` over the full git history
+  (`fetch-depth: 0`).
+- **Blocklist:** gitleaks' default rule set, which covers AWS keys, GitHub
+  tokens, Stripe keys, PEM private keys, generic API tokens, and similar
+  credential formats.
+- **Allowlist:** known non-secrets are documented in `.gitleaks.toml` under
+  `[allowlist]`. Every entry is a **demo/test identifier or fixture path**
+  that is intentionally public (demo seed addresses, testnet contract IDs,
+  test snapshots). New allowlist entries must:
+  1. Be justified with an inline comment explaining why the value is not a secret;
+  2. Be reviewed in a PR by a maintainer (never added silently);
+  3. Use the narrowest scope that works (a specific value or path, not a whole directory) whenever possible.
+- **Docs:** rotation and storage procedures live in
+  [docs/SECRETS_ROTATION.md](docs/SECRETS_ROTATION.md).
+
+### Scanner self-test (why the fixture is allowed)
+
+The directory `tests/fixtures/secrets/` is **intentionally excluded** from the
+repo-wide scan and contains:
+
+- `positive/sample-secrets.txt` — fake, publicly documented example
+  credentials (AWS sample key, invalid-format tokens, a non-deployable PEM
+  block). These are **not real secrets**.
+- `clean/clean-sample.txt` — ordinary text with no credential-shaped values.
+
+The `secrets-scan` job runs two additional self-tests on every PR:
+
+1. Scans `positive/` with default gitleaks rules and **asserts a finding**
+   (exit 1) — proving the blocklist actually catches sample secrets.
+2. Scans `clean/` and **asserts no finding** (exit 0) — proving the
+   allowlist does not cause false negatives on ordinary text.
+
+This guarantees the scanner cannot silently break: if gitleaks stops
+detecting secrets, or the allowlist starts swallowing real ones, CI fails.
+
+### Running the scan locally
+
+```bash
+# Full repo scan (must pass before merging)
+gitleaks detect --config .gitleaks.toml --verbose --redact
+
+# Self-test diagnostics
+gitleaks detect --source tests/fixtures/secrets/positive --no-git   # expect a finding (exit 1)
+gitleaks detect --source tests/fixtures/secrets/clean --no-git      # expect clean (exit 0)
+```
+
 ## Contact Information
 
 - **Security Email**: security@ophirpay.com
