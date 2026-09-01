@@ -57,6 +57,7 @@
     "test:visual": "playwright test --config playwright.visual.config.ts",
     "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
     "test:testnet": "node scripts/testnet-integration.mjs",
+    "test:sse:load": "node scripts/sse-load-test.mjs",
     "test:contract:integration": "node scripts/testnet-integration.mjs"
   },
   "dependencies": {
