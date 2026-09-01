@@ -28,7 +28,9 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │       │              │             │                   │            │
 │  ┌────┴──────────────┴─────────────┴───────────────────┴────────┐   │
 │  │              Middleware Pipeline (per-route)                  │   │
-│  │  verifyCsrf → validateBody(Zod) → rateLimit → handler → 200  │   │
+│  │  proxy (rateLimit + X-Request-Id) → verifyCsrf → validate →  │   │
+│  │  handler (withRequestLogging: id · method · path · status ·   │   │
+│  │  durationMs) → 200                                            │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -64,7 +66,8 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │  ┌────┴──────────────┴─────────────┴───────────────────┴────────┐   │
 │  │                    Monitoring & Observability                 │   │
 │  │  Prometheus metrics · Grafana dashboard · Sentry errors       │   │
-│  │  SSE event stream · Webhook delivery · Audit logs             │   │
+│  │  Structured request logs (request id · method · path · status │   │
+│  │  · duration) · SSE event stream · Webhook delivery · Audit    │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -78,7 +81,7 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 | **OphirPayContract** | Core payment logic | `record_payment`, `create_escrow`, `create_stream`, `create_batch`, `request_refund`, `propose_payment`, `create_proposal`, `emergency_pause_all` |
 | **PaymentEventEmitter** | Event broadcasting | `emit_payment`, `pause`, `unpause` |
 
-**Cross-contract communication**: OphirPayContract calls `env.invoke_contract()` on Emitter for `emergency_pause_all`/`emergency_unpause_all`, pausing both contracts atomically.
+**Cross-contract communication**: OphirPayContract calls `env.invoke_contract()` on Emitter for `emergency_pause_all`/`emergency_unpause_all`, pausing both contracts atomically. For a deep-dive of the invocation pattern — the typed argument passing, error propagation, and how to extend it to new contracts — see [CONTRACT_ARCHITECTURE.md](CONTRACT_ARCHITECTURE.md).
 
 ### 2. Data Flow
 
@@ -142,6 +145,7 @@ ophirpay/
 ├── helm/                   # Helm chart
 ├── scripts/                # Deployment, demo, relayer, seeding
 ├── e2e/                    # Playwright E2E tests
+├── tests/visual/           # Playwright visual regression tests + baselines
 ├── monitoring/             # Grafana dashboard JSON
 └── docs/                   # Documentation
 ```
@@ -155,7 +159,7 @@ ophirpay/
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
 | Database | PostgreSQL via Prisma ORM |
 | Wallet | Freighter (Albedo, xBull, Ledger supported) |
-| Testing | Vitest (800), Rust `#[test]` (64), Playwright (97 E2E+API) |
+| Testing | Vitest (834), Rust `#[test]` (64), Playwright (97 E2E+API) |
 | CI/CD | GitHub Actions (21 jobs) |
 | Orchestration | Kubernetes + Helm |
 | Monitoring | Prometheus + Grafana |
