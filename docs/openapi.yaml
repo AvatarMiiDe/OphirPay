@@ -1285,6 +1285,24 @@ paths:
         - name: actor
           in: query
           schema: { type: string }
+          description: >
+            Filter by Stellar address (substring match, case-insensitive).
+            Combine with `action`, `since`, and `until`; all filters compose
+            with `page`/`limit` pagination.
+        - name: action
+          in: query
+          schema: { type: string }
+          description: Filter by exact action type (e.g. `payment_recorded`)
+        - name: since
+          in: query
+          schema: { type: integer }
+          description: >
+            Inclusive lower bound on entry timestamp (Unix seconds).
+            Use with `until` to filter by date range.
+        - name: until
+          in: query
+          schema: { type: integer }
+          description: Inclusive upper bound on entry timestamp (Unix seconds)
           description: Filter by exact Stellar actor address
         - name: action
           in: query
@@ -1308,7 +1326,9 @@ paths:
           description: Result ordering by entry id (newest first by default)
       responses:
         "200":
-          description: Paginated audit log entries
+          description: >
+            Paginated audit log entries. Response `meta.total` reflects the
+            filtered result set, so pagination composes with filters.
         "401":
           $ref: "#/components/responses/Unauthorized"
 
