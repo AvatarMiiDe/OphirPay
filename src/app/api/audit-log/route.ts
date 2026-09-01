@@ -1,93 +1,143 @@
 // SPDX-License-Identifier: MIT
 
 import { withApiAuth } from "@/lib/api-auth";
-import { successResponse, handleApiError, badRequestError } from "@/lib/api-response";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
-import { z } from "zod";
+import { successResponse, handleApiError, validationError } from "@/lib/api-response";
+import prisma from "@/lib/prisma";
 import { withRequestLogging } from "@/lib/request-logging";
+import {
+  auditLogQuerySchema,
+  toAuditLogFilters,
+  iterateAuditLogEntries,
+  type AuditLogEntry,
+} from "@/lib/audit-log";
 
-const auditLogQuerySchema = z.object({
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-  actor: z.string().optional(),
-  action: z.string().optional(),
-  since: z.coerce.number().int().positive().optional(),
-});
-
-export type AuditLogEntry = {
-  id: number;
-  timestamp: number;
-  action: string;
-  actor: string;
-  target_id: number;
-  details: string;
-};
+export type { AuditLogEntry };
 
 /**
  * GET /api/audit-log
  *
- * Returns contract audit log entries. Requires API-key authentication.
- * Queries the OphirPayContract's persistent audit ledger on-chain.
- * Supports pagination and filtering by actor, action, and timestamp.
+ * Returns audit log entries. Requires API-key authentication with the `admin`
+ * scope.
+ *
+ * `source` selects the backing store:
+ *   - `db`       → persisted audit entries (refund lifecycle history, issue
+ *                  #365), queryable by action/target;
+ *   - `contract` → the on-chain immutable audit ledger, filtered server-side
+ *                  with offset pagination (`page` / `limit`) and the combined
+ *                  filters `actor`, `action`, `resource`, `since`, `until`,
+ *                  `order`;
+ *   - `all`      → DB entries plus matching on-chain entries.
+ *
+ * For the on-chain sources, filtering is applied across the full ledger, so
+ * `meta.total` reflects the filtered set, not the raw contract count.
  */
 async function _GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const raw = Object.fromEntries(searchParams.entries());
-    const parsed = auditLogQuerySchema.safeParse(raw);
-    if (!parsed.success) {
-      return badRequestError(
-        parsed.error.issues.map((e) => e.message).join("; ")
+    // Blank query params are treated as absent (Zod .optional() only applies
+    // to undefined).
+    const param = (name: string): string | undefined => {
+      const v = searchParams.get(name);
+      return v == null || v.trim() === "" ? undefined : v;
+    };
+
+    const parsed = auditLogQuerySchema.safeParse({
+      page: param("page"),
+      limit: param("limit"),
+      actor: param("actor"),
+      action: param("action"),
+      resource: param("resource"),
+      since: param("since"),
+      until: param("until"),
+      order: param("order"),
+      source: param("source"),
+    });
+    if (!parsed.success) return validationError(parsed.error);
+
+    const { page, limit, source } = parsed.data;
+    const filters = toAuditLogFilters(parsed.data);
+
+    // Persisted (DB) audit entries — refund lifecycle history with record
+    // ids, queryable by action/target (issue #365).
+    const dbEntries =
+      source === "db" || source === "all"
+        ? await prisma.auditLog.findMany({
+            orderBy: { createdAt: "desc" },
+            skip: (page - 1) * limit,
+            take: limit,
+            where: {
+              ...(filters.action ? { action: filters.action } : {}),
+              ...(filters.actor ? { actor: filters.actor } : {}),
+              ...(filters.resource != null
+                ? { target: String(filters.resource) }
+                : {}),
+            },
+          })
+        : [];
+
+    if (source === "db") {
+      return successResponse(
+        dbEntries.map((e) => ({
+          id: e.id,
+          timestamp: new Date(e.createdAt).getTime(),
+          action: e.action,
+          actor: e.actor ?? "",
+          target_id: e.target ?? "",
+          details:
+            typeof e.details === "string"
+              ? e.details
+              : e.details != null
+                ? JSON.stringify(e.details)
+                : null,
+        })),
+        { page, limit, total: dbEntries.length }
       );
     }
 
-    const { page, limit } = parsed.data;
-
-    // Get total count from contract
-    const countResult = await simulateContractCall(
-      DEFAULT_CONTRACT_ID,
-      "get_audit_log_count",
-      CHAIN_READ_SOURCE
-    );
-
-    if (countResult.status === "SIMULATION_FAILED") {
-      return successResponse([], {
-        page,
-        limit,
-        total: 0,
-      });
+    // On-chain entries: collect the filtered set (bounded by the ledger) to
+    // compute the total for offset pagination, then slice the requested page.
+    const all: AuditLogEntry[] = [];
+    for await (const entry of iterateAuditLogEntries(filters)) {
+      all.push(entry);
     }
+    // DB rows are newest-first too, so for `all` the on-chain slice mirrors it.
+    const start = (page - 1) * limit;
+    const items = all.slice(start, start + limit);
+    const combined =
+      source === "all"
+        ? [
+            ...items.map((e) => ({
+              id: e.id,
+              timestamp: e.timestamp,
+              action: e.action,
+              actor: e.actor,
+              target_id: e.target_id,
+              details: e.details,
+            })),
+            ...dbEntries.map((e) => ({
+              id: e.id,
+              timestamp: new Date(e.createdAt).getTime(),
+              action: e.action,
+              actor: e.actor ?? "",
+              target_id: e.target ?? "",
+              details:
+                typeof e.details === "string"
+                  ? e.details
+                  : e.details != null
+                    ? JSON.stringify(e.details)
+                    : null,
+            })),
+          ]
+        : items;
 
-    const totalCount = Number(countResult.returnValue ?? 0);
-    if (totalCount === 0) {
-      return successResponse([], { page, limit, total: 0 });
-    }
-
-    // Fetch entries from the contract (most recent first, capped at limit)
-    const entries: AuditLogEntry[] = [];
-    const startId = Math.max(1, totalCount - (page - 1) * limit);
-    const endId = Math.max(1, startId - limit + 1);
-
-    for (let id = startId; id >= endId; id--) {
-      try {
-        const entryResult = await simulateContractCall(
-          DEFAULT_CONTRACT_ID,
-          "get_audit_entry",
-          CHAIN_READ_SOURCE
-        );
-        if (entryResult.status !== "SIMULATION_FAILED" && entryResult.returnValue) {
-          const entry = entryResult.returnValue as AuditLogEntry;
-          entries.push(entry);
-        }
-      } catch {
-        // Skip entries we can't read
-      }
-    }
-
-    return successResponse(entries, { page, limit, total: totalCount });
+    return successResponse(combined, {
+      page,
+      limit,
+      total: source === "all" ? all.length + dbEntries.length : all.length,
+    });
   } catch (error) {
     return handleApiError(error);
   }
 }
 
-export const GET = withRequestLogging(withApiAuth(_GET));
+export const GET = withRequestLogging(withApiAuth(_GET, "admin"));
