@@ -459,6 +459,33 @@ curl "$BASE/api/batches/cm0bt0000000000000000001" -H "X-API-Key: $KEY"
 }
 ```
 
+### Bulk-cancel a batch's pending payments — `POST /api/batches/{id}`
+
+Auth: **required**. Cancels all PENDING child payments of the batch in one
+request. Already-submitted (non-PENDING) payments are skipped — never cancelled
+— and reported via `skipped`, so you can clean up a failed batch's leftover
+pending rows in a single call.
+
+```bash
+curl -X POST "$BASE/api/batches/cm0bt0000000000000000001" -H "X-API-Key: $KEY"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "batchId": "cm0bt0000000000000000001",
+    "cancelled": 2,
+    "skipped": 1,
+    "total": 3
+  },
+  "meta": { "timestamp": "2026-08-26T11:22:00.123Z" }
+}
+```
+
+Returns `404 NOT_FOUND` when the batch does not exist or belongs to another
+user.
+
 ## Recurring payments
 
 ### List recurring payments — `GET /api/recurring`
@@ -1547,15 +1574,23 @@ curl -X PATCH "$BASE/api/hooks/cm0hk0000000000000000001" \
 
 ### Query the audit log — `GET /api/audit-log`
 
-Auth: **required**. Filters: `actor` (Stellar address), `action`, `since`
-(unix timestamp).
+Auth: **required**. Offset-paginated (page 1-based, `limit` 1–100) with
+combined, server-side filters: `actor` (exact Stellar address), `action`
+(exact action type), `resource` (the affected entity id / `target_id`), a
+`since`/`until` date range (Unix seconds or ISO 8601), and `order` (`asc` /
+`desc`, newest first by default). Filters are AND-combined, so the `total` in
+`meta` reflects the filtered set.
 
 ```bash
 curl -G "$BASE/api/audit-log" \
   -H "X-API-Key: $KEY" \
   --data-urlencode "page=1" \
   --data-urlencode "limit=20" \
-  --data-urlencode "action=payment_recorded"
+  --data-urlencode "action=payment_recorded" \
+  --data-urlencode "actor=GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U" \
+  --data-urlencode "resource=42" \
+  --data-urlencode "since=2026-07-27T00:00:00Z" \
+  --data-urlencode "until=2026-08-27T00:00:00Z"
 ```
 
 ```json
@@ -1571,8 +1606,28 @@ curl -G "$BASE/api/audit-log" \
       "details": "Payment 42: 25.5 XLM to GDHJ3K2LQ7F5XQZPX6YWNMYKXWQXVZKBJZQFYX3F6KRLV4WDXHJMB2UY"
     }
   ],
-  "meta": { "page": 1, "limit": 20, "total": 1042, "timestamp": "2026-08-26T10:15:30.123Z" }
+  "meta": { "page": 1, "limit": 20, "total": 12, "timestamp": "2026-08-26T10:15:30.123Z" }
 }
+```
+
+### Export the audit log to CSV — `GET /api/audit-log/export`
+
+Auth: **required**. Streams a dated CSV attachment applying the **same**
+`actor` / `action` / `resource` / `since` / `until` / `order` filters as the
+list endpoint. Rows are streamed chunk-by-chunk from the contract, so the
+full result set is never loaded into memory.
+
+```bash
+curl -G "$BASE/api/audit-log/export" \
+  -H "X-API-Key: $KEY" \
+  --data-urlencode "action=payment_recorded" \
+  -o ophirpay-audit-log-2026-08-26.csv
+```
+
+```text
+ID,Timestamp (Unix),Action,Actor,Target ID,Details
+1042,1785168000,payment_recorded,GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U,42,Payment 42: 25.5 XLM to GDHJ3K2LQ7F5XQZPX6YWNMYKXWQXVZKBJZQFYX3F6KRLV4WDXHJMB2UY
+1041,1785167900,escrow_created,GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U,3,Escrow 3 created
 ```
 
 ### Subscribe to the live audit-log stream — `GET /api/audit-log/sse`
@@ -1973,6 +2028,7 @@ ophirpay_webhooks_failed_total 2
 | `/api/payments/export` | GET | ✅ | Payments |
 | `/api/batches` | GET, POST | ✅ | Batches |
 | `/api/batches/{id}` | GET | ✅ | Batches |
+| `/api/batches/{id}` | POST | ✅ | Bulk-cancel pending payments (Issue #158) |
 | `/api/recurring` | GET, POST | ✅ | Recurring payments |
 | `/api/recurring/{id}` | GET | ✅ | Recurring payments |
 | `/api/requests` | GET, POST | ✅ | Payment requests |

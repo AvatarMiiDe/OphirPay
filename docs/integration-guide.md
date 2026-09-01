@@ -139,6 +139,12 @@ const ok = signature.length === expected.length &&
 
 Always compare with a constant-time comparison (`timingSafeEqual`) and
 reject requests missing a valid signature.
+feat/webhook-test-event
+> **Tip — verify without a real payment.** You don't need a live payment to
+> test your endpoint. In the dashboard, open a webhook and click **Send test
+> event**. OphirPay fires a sample `payment.completed` payload (with a valid
+> HMAC signature) that is clearly marked `"test": true` on both the envelope
+> and the `data` object. No real payment or database record is created.
 
 ### Webhook Event Types
 
@@ -156,7 +162,9 @@ Payments emit lifecycle events as they progress through their lifecycle:
 Batches, recurrences, and payment requests emit their own events
 (`batch.*`, `recurrence.*`, `request.*`). Subscribe to any subset of these
 event types when registering a webhook.
+
 receive every event type
+
 
 ## Available Contract Functions
 
@@ -210,6 +218,45 @@ receive every event type
 | `transfer_ownership` | Two-step transfer with 24h timelock |
 | `accept_ownership` | Accept pending ownership |
 | `set_fee_config` | Configure platform fees per operation |
+
+## Rate Limiting
+
+API requests are rate limited per client IP to protect the service. When a
+client exceeds the limit, the API responds with HTTP `429 Too Many Requests`.
+
+### Response Shape
+
+The 429 response uses the standard error envelope:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Please try again later."
+  },
+  "timestamp": "2026-08-26T00:00:00.000Z"
+}
+```
+
+### Headers
+
+| Header | Description |
+|---|---|
+| `Retry-After` | Seconds (integer) until the current window resets. Clients should wait this long before retrying. |
+| `X-RateLimit-Limit` | Maximum requests allowed in the current window. |
+| `X-RateLimit-Remaining` | Requests remaining in the current window. |
+| `X-RateLimit-Reset` | Unix timestamp (seconds) when the window resets. |
+
+The limit is configurable via the `RATE_LIMIT_RPM` environment variable
+(default: 120 requests per minute per IP). Health (`/api/health`) and metrics
+(`/api/metrics`) endpoints are excluded from rate limiting.
+
+### Backing Off
+
+Respect the `Retry-After` header: wait at least the indicated number of seconds
+before retrying. Repeatedly ignoring it will keep returning `429`. For bursty
+workloads, implement exponential backoff starting from the `Retry-After` value.
 
 ## Environment Variables
 
