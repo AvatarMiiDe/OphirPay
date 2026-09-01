@@ -57,6 +57,7 @@
     "test:visual": "playwright test --config playwright.visual.config.ts",
     "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",
     "test:testnet": "node scripts/testnet-integration.mjs",
+    "test:sse:load": "node scripts/sse-load-test.mjs",
     "test:contract:integration": "node scripts/testnet-integration.mjs"
   },
   "dependencies": {
@@ -84,6 +85,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
+    "fast-check": "^3.23.2",
     "eslint": "^9.26.0",
     "eslint-config-next": "^16.3.0",
     "jsdom": "^29.1.1",

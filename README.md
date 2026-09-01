@@ -367,6 +367,10 @@ Visit **`/events`** in the app to see the live feed with connection status indic
 
 OphirPay deploys **two Soroban contracts**. The main `OphirPayContract` handles all payment logic and publishes native on-chain events, while the `PaymentEventEmitter` stores payment-event records that the app's SSE stream queries — keeping payment logic and event emission separate for cleaner architecture and independent queryability. The contracts are also wired for cross-contract orchestration: `emergency_pause_all` / `emergency_unpause_all` atomically propagate the circuit breaker to the emitter.
 
+> 📖 **Deep dive**: see [docs/CONTRACT_ARCHITECTURE.md](docs/CONTRACT_ARCHITECTURE.md) for how
+> OphirPay invokes the Emitter via `env.invoke_contract`, why the concerns are
+> split, and how to extend the pattern to new contracts.
+
 ### 🔗 Inter-Contract Flow
 
 ```
@@ -878,7 +882,7 @@ OphirPay is designed with defense-in-depth across the contract, API, and web lay
 - **Session security** — HMAC-SHA256 signed session cookies with expiry, `HttpOnly; SameSite=Lax`, fail-closed on DB errors
 - **API keys** — SHA-256 hashed at rest, indexed prefix lookup, expiry support, `lastUsed` tracking
 - **SSRF guard for webhooks** — blocks loopback/link-local/private IPs and hostnames, with DNS-rebinding re-validation at delivery time
-- **HMAC-signed webhook payloads** — receivers verify `X-OphirPay-Signature` (HMAC-SHA256)
+- **HMAC-signed webhook payloads** — receivers verify `X-OphirPay-Signature` (HMAC-SHA256); see [Webhook Signature Verification](docs/webhook-verification.md) for the canonical form, replay protection, and Node/Python reference implementations
 - **Input validation** — Zod schemas on all mutation routes; Stellar address regex, amount bounds, memo length limits
 - **Rate limiting** — per-IP sliding window (120 RPM default, Redis backend for multi-instance)
 - **Security headers** — CSP with Stellar-only connect-src, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, Referrer-Policy
