@@ -12,6 +12,12 @@ import {
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
 import { withRequestLogging } from "@/lib/request-logging";
+import { z } from "zod";
+
+const updateRecurrenceSchema = z.object({
+  id: z.string().min(1),
+  paused: z.boolean(),
+});
 
 export const GET = withMetrics("GET /api/recurring", withRequestLogging(async function GET(request: Request) {
   try {
@@ -90,3 +96,40 @@ export const POST = withMetrics("POST /api/recurring", withRequestLogging(async 
     return handleApiError(err, "POST /api/recurring");
   }
 }));
+
+export async function PATCH(request: Request) {
+  try {
+    const auth = await getAuthContext(request);
+    if (!auth) {
+      return unauthorizedError(
+        "Authentication required. Connect your wallet or provide an API key."
+      );
+    }
+
+    const body = await request.json();
+    const parsed = updateRecurrenceSchema.safeParse(body);
+    if (!parsed.success) return validationError(parsed.error);
+
+    const { id, paused } = parsed.data;
+    const existing = await prisma.recurrence.findFirst({
+      where: { id, userId: auth.userId },
+    });
+
+    if (!existing) {
+      return new Response(JSON.stringify({ error: "Recurrence not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const recurrence = await prisma.recurrence.update({
+      where: { id },
+      data: { isActive: !paused },
+    });
+
+    logger.info("Recurring payment updated", { id: recurrence.id, paused });
+    return successResponse(recurrence);
+  } catch (err) {
+    return handleApiError(err, "PATCH /api/recurring");
+  }
+}

@@ -10,7 +10,7 @@ import {
   unauthorizedError,
 } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
-import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
+import { simulateContractCall, invokeContractFunction, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 import { verifyCsrf } from "@/lib/csrf";
 import { logger } from "@/lib/logger";

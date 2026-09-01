@@ -9,6 +9,12 @@ import { isValidStellarAddress } from "@/lib/stellar";
  */
 export const MAX_BATCH_RECIPIENTS = 100;
 
+/**
+ * Maximum length of a payment memo in UTF-8 bytes (28), matching the
+ * on-chain `memoField` rules enforced by the batch API.
+ */
+export const MEMO_MAX_BYTES = 28;
+
 // ── CSV parsing ───────────────────────────────────────────────
 
 /**
@@ -268,8 +274,9 @@ export async function parseRecipientsCsv(file: File): Promise<{
       continue;
     }
 
-    // Memo validation mirrors the server-side memoField rules (max 28 UTF-8
-    // bytes, printable text only) so invalid memos are caught at import time
+    // Memo validation mirrors the server-side memoField rules (max
+    // MEMO_MAX_BYTES UTF-8 bytes, printable text only) so invalid memos are
+    // caught at import time
     // instead of being rejected later by the batch API.
     if (memo) {
       if (MEMO_CONTROL_CHARS.test(memo)) {
@@ -279,7 +286,7 @@ export async function parseRecipientsCsv(file: File): Promise<{
         });
         continue;
       }
-      if (new TextEncoder().encode(memo).length > 28) {
+      if (new TextEncoder().encode(memo).length > MEMO_MAX_BYTES) {
         errors.push({
           row,
           message: `Memo at row ${row} must be 28 bytes or fewer.`,
