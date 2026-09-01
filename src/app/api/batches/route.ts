@@ -154,7 +154,8 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
       return validationError(parsed.error);
     }
 
-    const { name, description, recipients: payments } = parsed.data;
+    const { name, description, recipients: payments } =
+      parsed.data;
     const { userId } = auth;
 
     // Idempotency key (issue #170): the `Idempotency-Key` header takes

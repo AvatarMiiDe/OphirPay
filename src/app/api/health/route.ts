@@ -114,9 +114,9 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
     }
 
     // Check Contract-ID presence
-    const contractStatus: "ok" | "error" = 
-      OPHIRPAY_CONTRACT_ID && OPHIRPAY_CONTRACT_ID.startsWith("C") && OPHIRPAY_CONTRACT_ID.length === 56 
-        ? "ok" 
+    const contractStatus: "ok" | "error" =
+      OPHIRPAY_CONTRACT_ID && OPHIRPAY_CONTRACT_ID.startsWith("C") && OPHIRPAY_CONTRACT_ID.length === 56
+        ? "ok"
         : "error";
 
     const optionalChecks = [rpcStatus, horizonStatus, contractStatus, redisStatus].filter(
@@ -125,7 +125,8 @@ export const GET = withMetrics("GET /api/health", withRequestLogging(async funct
     const hasOptionalError = optionalChecks.includes("error");
     const isDegraded = dbStatus === "ok" && hasOptionalError;
     const overallStatus = dbStatus === "error" ? "error" : isDegraded ? "degraded" : "ok";
-    const healthy = overallStatus !== "error";
+
+    const httpStatus = overallStatus === "error" ? 503 : 200;
 
     return successResponse(
       {

@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { usePageTitle } from "@/hooks/usePageTitle";
-import { PAGE_TITLES } from "@/lib/page-titles";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn, formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
@@ -22,7 +20,77 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import { useTableKeyboardNavigation } from "@/hooks/useTableKeyboardNavigation";
+import {
+  applyPaymentSort,
+  getNextSort,
+  getPaymentStatus,
+  getSortParamUpdates,
+  parsePaymentSort,
+  type PaymentSort,
+  type PaymentSortKey,
+} from "@/lib/payments-sort";
+
+// ── Sortable column header ─────────────────────────────────────
+
+function SortArrow({ dir }: { dir: "asc" | "desc" }) {
+  return dir === "asc" ? (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+    </svg>
+  ) : (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+    </svg>
+  );
+}
+
+function SortNeutralIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+    </svg>
+  );
+}
+
+interface SortableThProps {
+  label: string;
+  sortKey: PaymentSortKey;
+  sort: PaymentSort;
+  onSort: (key: PaymentSortKey) => void;
+  children?: ReactNode;
+}
+
+function SortableTh({ label, sortKey, sort, onSort, children }: SortableThProps) {
+  const active = sort.key === sortKey;
+  const ariaSort = active ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
+  return (
+    <th scope="col" aria-sort={ariaSort} className="py-3 px-4">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${label}`}
+        title={`Sort by ${label}`}
+        className={cn(
+          "inline-flex items-center gap-1 font-medium group/btn transition-colors",
+          active
+            ? "text-ophir-600 dark:text-ophir-400"
+            : "hover:text-gray-700 dark:hover:text-gray-200"
+        )}
+      >
+        {children}
+        <span
+          className={cn(
+            active ? "text-ophir-500 dark:text-ophir-400" : "text-gray-300 dark:text-gray-600 group-hover/btn:text-gray-400 dark:group-hover/btn:text-gray-500"
+          )}
+        >
+          {active ? <SortArrow dir={sort.dir} /> : <SortNeutralIcon />}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -33,6 +101,14 @@ interface OnChainData {
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
 const DEFAULT_PAGE_SIZE = 25;
+
+// Fetch the complete on-chain dataset rather than a recent slice. Sorting and
+// pagination run client-side, so operating on a partial slice would silently
+// exclude older records — a sorted view could report the wrong minimum amount
+// or omit valid payments entirely. `fetchOnChainPayments` fetches ids
+// `total - limit + 1 .. total`; an unbounded limit reads every record (and
+// stays capped by the contract's own count).
+const FETCH_ALL_RECORDS = Number.MAX_SAFE_INTEGER;
 
 export default function PaymentsPage() {
   usePageTitle(PAGE_TITLES.PAYMENTS);
@@ -75,7 +151,7 @@ function PaymentsClient() {
       // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
       refetchOnWindowFocus: false,
     },
-    () => fetchOnChainPayments(50),
+    () => fetchOnChainPayments(FETCH_ALL_RECORDS),
   );
 
   const payments = useMemo(() => data?.payments ?? [], [data]);
@@ -112,10 +188,22 @@ function PaymentsClient() {
     ? pageSizeParam
     : DEFAULT_PAGE_SIZE;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  // Column sorting — state lives in the URL (`sort` + `dir`) so sorted views
+  // are shareable and compose with the search filter and pagination.
+  const sort = parsePaymentSort(searchParams);
+  const sorted = useMemo(() => applyPaymentSort(filtered, sort), [filtered, sort]);
+
+  const toggleSort = (key: PaymentSortKey) =>
+    updateQuery({
+      ...getSortParamUpdates(getNextSort(sort, key)),
+      // Re-sorting changes the row order — jump back to the first page.
+      page: null,
+    });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
-  const paginated = filtered.slice(startIndex, startIndex + pageSize);
+  const paginated = sorted.slice(startIndex, startIndex + pageSize);
 
   // Roving-tabindex keyboard navigation: the active row is in the tab order
   // and ArrowUp/Down/Home/End move between rows (also from row actions).
@@ -334,9 +422,15 @@ function PaymentsClient() {
             <thead>
               <tr className="text-left text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
                 <th scope="col" className="py-3 px-4 font-medium">Payment</th>
-                <th scope="col" className="py-3 px-4 font-medium">Amount</th>
-                <th scope="col" className="py-3 px-4 font-medium">Status</th>
-                <th scope="col" className="py-3 px-4 font-medium">Date</th>
+                <SortableTh label="amount" sortKey="amount" sort={sort} onSort={toggleSort}>
+                  Amount
+                </SortableTh>
+                <SortableTh label="status" sortKey="status" sort={sort} onSort={toggleSort}>
+                  Status
+                </SortableTh>
+                <SortableTh label="date" sortKey="date" sort={sort} onSort={toggleSort}>
+                  Date
+                </SortableTh>
                 <th scope="col" className="py-3 px-4 font-medium">Tx Hash</th>
               </tr>
             </thead>
@@ -397,7 +491,7 @@ function PaymentsClient() {
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        {payment.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED"}
+                        {getPaymentStatus(payment)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs">
