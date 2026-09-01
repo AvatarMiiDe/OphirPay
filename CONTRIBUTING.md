@@ -74,6 +74,7 @@ npm run test:watch    # Watch mode
 npm run coverage      # Coverage report
 npm run typecheck     # TypeScript check
 npm run lint          # ESLint
+npm run test:openapi  # OpenAPI spec ↔ implementation conformance (drift)
 ```
 
 ## Changelog
