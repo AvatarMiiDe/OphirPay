@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 import { withMetrics } from "@/lib/metrics-middleware";
 
-import { successResponse, handleApiError, notFoundError, unauthorizedError, badRequestError } from "/lib/api-response";
-import { getAuthContext } from "/lib/auth-session";
-import { simulateContractCall, invokeContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@lib/contracts";
+import { successResponse, handleApiError, notFoundError, unauthorizedError, badRequestError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
+import { simulateContractCall, invokeContractFunction, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 import { withRequestLogging } from "@/lib/request-logging";
 
@@ -75,19 +75,19 @@ export async function PATCH(
       return badRequestError("Request body must include a 'paused' boolean field.");
     }
 
-    const result = await invokeContractCall(
+    if (!auth.publicKey) {
+      return badRequestError("Wallet public key is required for on-chain operations.");
+    }
+
+    const result = await invokeContractFunction(
       DEFAULT_CONTRACT_ID,
       "set_recurring_paused",
-      auth,
+      auth.publicKey,
       [nativeToScVal(recurringId, { type: "u64" }),
         nativeToScVal(body.paused, { type: "bool" })]
     );
 
-    if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
-      return handleApiError(new Error("Failed to update recurring payment"), "PATCH /api/recurring/[id]");
-    }
-
-    return successResponse(result.returnValue);
+    return successResponse(result);
   } catch (err) {
     return handleApiError(err, "PATCH /api/recurring/[id]");
   }

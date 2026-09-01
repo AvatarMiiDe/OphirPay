@@ -154,7 +154,7 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
       return validationError(parsed.error);
     }
 
-    const { name, description, recipients: payments, idempotencyKey } =
+    const { name, description, recipients: payments } =
       parsed.data;
     const { userId } = auth;
 

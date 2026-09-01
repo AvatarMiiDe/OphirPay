@@ -6,7 +6,7 @@
 
 export const APP = {
   NAME:"OphirPay",
-  VERION:"0.1.0",
+  VERSION:"0.1.0",
   DESCRIPTION:"The Open-Source Payment Orchestration Layer for Stellar",
   REPO:"https://github.com/OphirPay/OphirPay",
 } as const;
