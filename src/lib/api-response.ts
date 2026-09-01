@@ -21,6 +21,8 @@ interface ApiSuccess<T> {
     nextCursor?: string | null;
     /** Whether more rows exist after this page. */
     hasMore?: boolean;
+    /** Indicates an idempotent resume (batch re-submission). */
+    resumed?: boolean;
   };
 }
 

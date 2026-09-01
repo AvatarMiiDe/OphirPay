@@ -69,6 +69,7 @@ export const createBatchSchema = z.object({
   description: z.string().max(500).optional(),
   recipients: z.array(batchRecipientSchema).min(1).max(100),
   sourceAccountId: z.string().min(1),
+  idempotencyKey: z.string().min(1).max(255).optional(),
 });
 
 // ── Multisig Schemas ──────────────────────────────────────────

@@ -505,6 +505,13 @@ paths:
     post:
       tags: [Batches]
       summary: Create a batch payment
+      description: >-
+        Creates a new batch of payments. When an `idempotencyKey` is supplied, the
+        server deduplicates: if the same key has already been used for this user
+        the endpoint either returns the existing batch (status CREATED, FAILED
+        or PARTIALLY_COMPLETED — allows retrying pending items) or rejects with
+        409 CONFLICT when the previous batch is already COMPLETED or PROCESSING.
+        A server-generated key is used when the caller omits it.
       security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
       requestBody:
         required: true
@@ -513,12 +520,24 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateBatchRequest"
       responses:
+        "200":
+          description: Existing batch returned (idempotent resume)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchResponse"
         "201":
           description: Batch created with child payments
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Batch already completed or processing (duplicate idempotency key)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/batches/{id}:
     get:
@@ -1413,6 +1432,15 @@ components:
                 maxLength: 28
         sourceAccountId:
           type: string
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: >-
+            Client-generated key used to deduplicate batch submissions. When
+            supplied, re-posting the same key returns the existing batch (if
+            still pending) or 409 CONFLICT (if already completed/processing).
+            A server-generated UUIDv4 is used when omitted.
 
     CreateRecurrenceRequest:
       type: object

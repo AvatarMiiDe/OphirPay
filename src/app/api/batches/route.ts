@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { createBatchSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
@@ -7,6 +8,7 @@ import {
   validationError,
   badRequestError,
   unauthorizedError,
+  conflictError,
   handleApiError,
 } from "@/lib/api-response";
 import { withRequestLogging } from "@/lib/request-logging";
@@ -113,11 +115,47 @@ export const POST = withRequestLogging(async function POST(request: Request) {
       return validationError(parsed.error);
     }
 
-    const { name, description, recipients: payments } = parsed.data;
+    const { name, description, recipients: payments, idempotencyKey } =
+      parsed.data;
     const { userId } = auth;
 
+    // ── Idempotency guard ───────────────────────────────────────
+    // When the client supplies an idempotency key, look for an existing
+    // batch owned by the same user with that key.  If found we either
+    // reject (batch fully completed) or resume (return existing batch
+    // so the caller can retry only the pending child payments).
+    if (idempotencyKey) {
+      const existing = await prisma.batch.findUnique({
+        where: { userId_idempotencyKey: { userId, idempotencyKey } },
+        include: { payments: true },
+      });
+
+      if (existing) {
+        // Fully completed / already processing → reject to avoid duplicates.
+        if (
+          existing.status === "COMPLETED" ||
+          existing.status === "PROCESSING"
+        ) {
+          return conflictError(
+            `Batch already ${existing.status.toLowerCase()} (idempotencyKey: ${idempotencyKey})`
+          );
+        }
+
+        // CREATED / PARTIALLY_COMPLETED / FAILED → resume: return the
+        // existing batch so the caller can inspect and retry only the
+        // payments still in CREATED status.
+        return successResponse(existing, {
+          resumed: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Generate a server-side key when the caller did not supply one.
+    const effectiveKey = idempotencyKey ?? crypto.randomUUID();
+
     const batch = await prisma.batch.create({
-      data: { name, description, userId },
+      data: { name, description, userId, idempotencyKey: effectiveKey },
     });
 
     // Create child payments — status is CREATED (not COMPLETED)

@@ -141,17 +141,19 @@ enum PaymentStatus {
 // ── Batch Payments ────────────────────────────────────────────
 
 model Batch {
-  id          String    @id @default(cuid())
-  userId      String
-  name        String
-  description String?
-  status      BatchStatus @default(CREATED)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  userId          String
+  name            String
+  description     String?
+  status          BatchStatus @default(CREATED)
+  idempotencyKey  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id])
-  payments    Payment[]
+  user            User      @relation(fields: [userId], references: [id])
+  payments        Payment[]
 
+  @@unique([userId, idempotencyKey], name: "UserId_idempotencyKey_unique")
   @@index([userId])
   @@index([status])
 }
