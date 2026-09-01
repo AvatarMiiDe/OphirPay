@@ -7,7 +7,7 @@ import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
+import { cn, formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
 import {
   fetchOnChainPayments,
   type OnChainPayment,
@@ -21,6 +21,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { Pagination } from "@/components/ui/Pagination";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApiQuery } from "@/hooks/useApiQuery";
+import { useTableKeyboardNavigation } from "@/hooks/useTableKeyboardNavigation";
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -114,6 +115,11 @@ function PaymentsClient() {
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
   const paginated = filtered.slice(startIndex, startIndex + pageSize);
+
+  // Roving-tabindex keyboard navigation: the active row is in the tab order
+  // and ArrowUp/Down/Home/End move between rows (also from row actions).
+  const { activeIndex, getRowProps, onRowsKeyDown, tbodyRef } =
+    useTableKeyboardNavigation(paginated.length);
 
   const updateQuery = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -300,11 +306,11 @@ function PaymentsClient() {
           <table className="w-full text-sm" aria-busy={loading}>
             <thead>
               <tr className="text-left text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
-                <th className="py-3 px-4 font-medium">Payment</th>
-                <th className="py-3 px-4 font-medium">Amount</th>
-                <th className="py-3 px-4 font-medium">Status</th>
-                <th className="py-3 px-4 font-medium">Date</th>
-                <th className="py-3 px-4 font-medium">Tx Hash</th>
+                <th scope="col" className="py-3 px-4 font-medium">Payment</th>
+                <th scope="col" className="py-3 px-4 font-medium">Amount</th>
+                <th scope="col" className="py-3 px-4 font-medium">Status</th>
+                <th scope="col" className="py-3 px-4 font-medium">Date</th>
+                <th scope="col" className="py-3 px-4 font-medium">Tx Hash</th>
               </tr>
             </thead>
             <tbody>
@@ -340,10 +346,17 @@ function PaymentsClient() {
               )}
 
               {!loading &&
-                paginated.map((payment) => (
+                paginated.map((payment, index) => (
                   <tr
                     key={payment.id}
-                    className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                    data-row-index={index}
+                    {...getRowProps(index)}
+                    className={cn(
+                      "border-b border-gray-100 dark:border-gray-800/50 transition-colors",
+                      index === activeIndex
+                        ? "bg-ophir-50/70 dark:bg-ophir-950/40 hover:bg-ophir-100/70 dark:hover:bg-ophir-900/40"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                    )}
                   >
                     <td className="py-3 px-4">
                       <p className="font-medium text-gray-900 dark:text-white">#{payment.id}</p>
