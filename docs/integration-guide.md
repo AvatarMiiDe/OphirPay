@@ -147,6 +147,14 @@ See [Webhook Signature Verification](webhook-verification.md) for the exact
 canonical form, replay protection, and runnable Node/Python reference
 implementations.
 
+### Rotating your webhook secret
+
+Secrets can be rotated from the Webhooks page (or via `PATCH /api/webhooks?id=...`).
+Rotating revokes the previous secret **immediately** — the next delivery is
+signed with the new secret, so any receiver still verifying with the old value
+will reject it. Before rotating, make sure your endpoint's stored secret is easy
+to update, and save the new secret right away: it is shown only once.
+
 ### Webhook Event Types
 
 Payments emit lifecycle events as they progress through their lifecycle:
