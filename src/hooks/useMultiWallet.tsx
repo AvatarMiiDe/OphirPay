@@ -246,6 +246,37 @@ export function MultiWalletProvider({ children }: { children: React.ReactNode })
 
 // ── Hook ──────────────────────────────────────────────────────
 
+/**
+ * Access the authenticated multi-wallet state and controls (Freighter, Albedo,
+ * xBull). Must be rendered inside a `MultiWalletProvider` — throwing otherwise.
+ *
+ * @example
+ * Connect a wallet, read the active account, and refresh its balance:
+ *
+ * ```tsx
+ * function WalletBar() {
+ *   const { wallet, connect, disconnect, fetchBalance, isConnecting } =
+ *     useWallet();
+ *
+ *   if (!wallet.connected) {
+ *     return (
+ *       <button onClick={() => connect("freighter")} disabled={isConnecting}>
+ *         Connect Wallet
+ *       </button>
+ *     );
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       <span>{shortenAddress(wallet.publicKey!, 6)}</span>
+ *       <span>{wallet.balance} XLM</span>
+ *       <button onClick={fetchBalance}>Refresh</button>
+ *       <button onClick={disconnect}>Disconnect</button>
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
 export function useWallet() {
   const context = useContext(WalletContext);
   if (!context) {
