@@ -688,6 +688,35 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send a test event to a webhook endpoint
+      description: >
+        Fires a sample, clearly-fake event (marked `test: true`) to the
+        webhook's URL with a valid HMAC signature. No real payment or database
+        record is created. Use this to verify your endpoint's signature
+        verification without waiting for a live event.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Test event sent; delivery result returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestWebhookResponse"
+        "400":
+          description: Webhook paused
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Webhook not found
+
   # ── API Keys ──────────────────────────────────────────────
   /api/keys:
     get:
@@ -1377,11 +1406,20 @@ paths:
     get:
       tags: [Health]
       summary: Service health check
+      description: >-
+        Reports per-check status for the database (critical), Stellar RPC and
+        Horizon reachability, Redis (when configured), and configured contract
+        IDs. Returns 200 with status `ok` or `degraded` (only optional checks
+        failing) and 503 with status `down` when the database is unreachable.
       responses:
         "200":
-          description: All services healthy
+          description: Healthy or degraded (optional checks failing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
         "503":
-          description: One or more services unhealthy
+          description: Critical dependency (database) unavailable
           content:
             application/json:
               schema:
@@ -1661,6 +1699,28 @@ components:
           type: boolean
           default: true
 
+    TestWebhookResponse:
+      type: object
+      properties:
+        delivered:
+          type: boolean
+          description: Whether the endpoint returned a 2xx response
+        status:
+          type: string
+          enum: [delivered, failed]
+        event:
+          type: string
+          description: The simulated event type (e.g. payment.completed)
+        test:
+          type: boolean
+          description: Always true — this was a test event
+        durationMs:
+          type: integer
+          description: Round-trip delivery time in milliseconds
+        sentAt:
+          type: string
+          format: date-time
+
     HealthResponse:
       type: object
       properties:
@@ -1669,6 +1729,7 @@ components:
           type: object
           properties:
             version: { type: string }
+            status: { type: string, enum: [ok, degraded, down] }
             services:
               type: object
               properties:
@@ -1687,11 +1748,36 @@ components:
                   properties:
                     network: { type: string }
                     rpcUrl: { type: string }
+                    horizonUrl: { type: string }
                     rpc:
                       type: object
                       properties:
                         status: { type: string, enum: [ok, error, unchecked] }
                         latencyMs: { type: [integer, 'null'] }
+                    horizon:
+                      type: object
+                      properties:
+                        status: { type: string, enum: [ok, error, unchecked] }
+                        latencyMs: { type: [integer, 'null'] }
+                    contracts:
+                      type: object
+                      properties:
+                        status: { type: string, enum: [ok, error] }
+                        ophirpay:
+                          type: object
+                          properties:
+                            id: { type: [string, 'null'] }
+                            status: { type: string, enum: [ok, error, not_configured] }
+                        emitter:
+                          type: object
+                          properties:
+                            id: { type: [string, 'null'] }
+                            status: { type: string, enum: [ok, error, not_configured] }
+                        chainReadSource:
+                          type: object
+                          properties:
+                            id: { type: [string, 'null'] }
+                            status: { type: string, enum: [ok, error, not_configured] }
             uptime: { type: number }
         meta:
           type: object

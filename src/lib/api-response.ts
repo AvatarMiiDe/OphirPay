@@ -135,6 +135,24 @@ export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
 }
 
+
+export function rateLimitError(
+  message = "Too many requests",
+  retryAfterSeconds?: number,
+  extraHeaders?: Record<string, string>
+) {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
+  if (retryAfterSeconds !== undefined) {
+    headers["Retry-After"] = String(Math.max(0, Math.floor(retryAfterSeconds)));
+  }
+  return NextResponse.json(
+    {
+      success: false,
+      error: { code: ERROR_CODES.RATE_LIMITED, message },
+      timestamp: new Date().toISOString(),
+    } satisfies ApiError,
+    { status: 429, headers }
+  );
 export function forbiddenError(
   message = "Forbidden",
   details?: unknown

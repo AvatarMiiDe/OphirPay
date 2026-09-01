@@ -3,30 +3,42 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock dependencies
-vi.mock("@/lib/prisma", () => ({
-  default: {
-    payment: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      createMany: vi.fn(),
-      updateMany: vi.fn(),
-      deleteMany: vi.fn(),
-    },
-    batch: {
-      findMany: vi.fn(),
-      findUnique: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-    },
-    paymentRequest: {
-      findMany: vi.fn(),
-      create: vi.fn(),
-    },
-  },
-}));
+vi.mock("@/lib/prisma", () => {
+  const payment = {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+    createMany: vi.fn(),
+    updateMany: vi.fn(),
+    deleteMany: vi.fn(),
+  };
+  const batch = {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    count: vi.fn(),
+    create: vi.fn(),
+  };
+  const paymentRequest = {
+    findMany: vi.fn(),
+    create: vi.fn(),
+  };
+  const prisma = {
+    payment,
+    batch,
+    paymentRequest,
+    // POST /api/batches creates the batch and its child payments inside a
+    // transaction (prisma.$transaction). Hand the callback the same mock
+    // object so tx.batch.* / tx.payment.* hit the same stubbed fns the test
+    // drives.
+    $transaction: vi.fn((cb: (tx: unknown) => unknown, ..._rest: unknown[]) =>
+      cb(prisma)
+    ),
+  };
+  return { default: prisma };
+});
 
 vi.mock("@/lib/auth-session", () => ({
   getAuthContext: vi.fn(),
