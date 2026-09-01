@@ -688,6 +688,35 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send a test event to a webhook endpoint
+      description: >
+        Fires a sample, clearly-fake event (marked `test: true`) to the
+        webhook's URL with a valid HMAC signature. No real payment or database
+        record is created. Use this to verify your endpoint's signature
+        verification without waiting for a live event.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Test event sent; delivery result returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestWebhookResponse"
+        "400":
+          description: Webhook paused
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Webhook not found
+
   # ── API Keys ──────────────────────────────────────────────
   /api/keys:
     get:
@@ -1640,6 +1669,28 @@ components:
         isActive:
           type: boolean
           default: true
+
+    TestWebhookResponse:
+      type: object
+      properties:
+        delivered:
+          type: boolean
+          description: Whether the endpoint returned a 2xx response
+        status:
+          type: string
+          enum: [delivered, failed]
+        event:
+          type: string
+          description: The simulated event type (e.g. payment.completed)
+        test:
+          type: boolean
+          description: Always true — this was a test event
+        durationMs:
+          type: integer
+          description: Round-trip delivery time in milliseconds
+        sentAt:
+          type: string
+          format: date-time
 
     HealthResponse:
       type: object
