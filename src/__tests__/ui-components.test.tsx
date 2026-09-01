@@ -221,6 +221,101 @@ describe("Modal", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("moves focus to the first interactive element when opened", () => {
+    render(
+      <Modal open onClose={() => {}}>
+        <button>First Action</button>
+        <button>Second Action</button>
+      </Modal>
+    );
+    expect(screen.getByRole("button", { name: /first action/i })).toHaveFocus();
+  });
+
+  it("cycles focus with Tab and Shift+Tab within the dialog", () => {
+    render(
+      <Modal open onClose={() => {}}>
+        <button>First</button>
+        <button>Middle</button>
+        <button>Last</button>
+      </Modal>
+    );
+    const first = screen.getByRole("button", { name: "First" });
+    const middle = screen.getByRole("button", { name: "Middle" });
+    const last = screen.getByRole("button", { name: "Last" });
+
+    // Shift+Tab from the first element wraps to the last
+    first.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+
+    // Tab from the last element wraps to the first
+    last.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(first).toHaveFocus();
+
+    // Elements between the boundaries receive focus as usual
+    expect(middle).toBeInTheDocument();
+  });
+
+  it("redirects focus back into the dialog if it escapes", () => {
+    render(
+      <>
+        <button>Outside</button>
+        <Modal open onClose={() => {}}>
+          <button>Inside</button>
+        </Modal>
+      </>
+    );
+    const inside = screen.getByRole("button", { name: "Inside" });
+    screen.getByRole("button", { name: "Outside" }).focus();
+    expect(inside).toHaveFocus();
+  });
+
+  it("restores focus to the trigger element when closed", () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Open modal</button>
+          <Modal open={open} onClose={() => setOpen(false)}>
+            <button>Inside</button>
+          </Modal>
+        </>
+      );
+    }
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: /open modal/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "Inside" })).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps focus in the dialog when the parent re-renders", () => {
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      const [value, setValue] = useState(0);
+      return (
+        <>
+          <button onClick={() => setOpen(false)}>Close</button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Amount">
+            <input
+              aria-label="Amount input"
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+            />
+          </Modal>
+        </>
+      );
+    }
+    render(<Harness />);
+    const input = screen.getByLabelText("Amount input");
+    input.focus();
+    fireEvent.change(input, { target: { value: 5 } });
+    expect(input).toHaveFocus();
+  });
 });
 
 describe("Toast system", () => {

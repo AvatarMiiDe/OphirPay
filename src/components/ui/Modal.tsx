@@ -5,6 +5,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { trapFocus } from "@/lib/focus-trap";
 
 interface ModalProps {
   open: boolean;
@@ -21,9 +22,6 @@ const sizeClasses = {
   md: "max-w-lg",
   lg: "max-w-2xl",
 };
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
 /**
  * Accessible modal dialog — ESC to close, backdrop click to close,
@@ -79,10 +77,16 @@ export function Modal({
   // captures connection state) without tearing down this effect mid-open,
   // which would briefly move focus back to the trigger (focus churn).
   useEffect(() => {
-    if (!open) return;
+    if (!open || !dialogRef.current) return;
 
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
+    // Moves focus to the first interactive element and restores it to the
+    // trigger element when released.
+    const releaseTrap = trapFocus(dialogRef.current);
+
+    // ESC to close
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onCloseRef.current();
@@ -108,17 +112,10 @@ export function Modal({
     };
     document.addEventListener("keydown", onKeyDown);
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    // Move focus into the dialog
-    requestAnimationFrame(() => dialogRef.current?.focus());
-
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
-      // Restore focus to the element that opened the dialog
-      previouslyFocused?.focus();
+      releaseTrap();
     };
   }, [open]);
 
