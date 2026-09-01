@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: MIT
 
 import { logger } from "@/lib/logger";
-import { incMetric } from "@/lib/metrics-counters";
+import {
+  incDeliveryAttempt,
+  incDeliveryFinalOutcome,
+  incMetric,
+} from "@/lib/metrics-counters";
 import { isSafeWebhookUrlAtDelivery } from "@/lib/webhook-url-guard";
 import crypto from "crypto";
 
-interface WebhookPayload {
+export interface WebhookPayload {
   event: string;
   timestamp: string;
   data: Record<string, unknown>;
+  /** Present and true only for integrator test events — never real payments. */
+  test?: boolean;
 }
 
 /**
@@ -53,6 +59,9 @@ export async function deliverWebhook(
   maxRetries = 3
 ): Promise<{ success: boolean; statusCode?: number }> {
   const { body, signature } = buildSignedPayload(payload, secret);
+  const totalAttempts = Number.isFinite(maxRetries)
+    ? Math.max(1, Math.floor(maxRetries))
+    : 1;
 
   // Re-validate the destination at delivery time to mitigate DNS rebinding.
   if (!(await isSafeWebhookUrlAtDelivery(url))) {
@@ -68,6 +77,9 @@ export async function deliverWebhook(
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
       // `redirect: "manual"` closes the SSRF redirect bypass: without it the
       // default fetch behavior follows 3xx hops to internal addresses (e.g.
       // http://169.254.169.254) even after the initial URL passed the guard.
@@ -97,10 +109,12 @@ export async function deliverWebhook(
       logger.warn("Webhook delivery failed", { url, status: response.status, attempt });
     } catch (err) {
       logger.warn("Webhook delivery error", { url, error: String(err), attempt });
+    } finally {
+      clearTimeout(timeout);
     }
 
     // Exponential backoff: 1s, 2s, 4s
-    if (attempt < maxRetries) {
+    if (attempt < totalAttempts) {
       await new Promise((r) => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
     }
   }

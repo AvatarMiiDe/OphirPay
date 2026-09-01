@@ -21,6 +21,7 @@ import {
   SPONSOR_MIN_STARTING_BALANCE,
 } from "@/lib/stellar";
 import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
 import { recordPaymentOnChain } from "@/lib/contracts";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
@@ -28,6 +29,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, getAssetInfo, type AssetInfo } from "@/lib/assets";
+import { simulatePayment } from "@/lib/transaction-simulator";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -262,8 +264,9 @@ function SendPageClient() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    if (memo.length > 28) {
-      setValidationError("Memo must be 28 characters or fewer.");
+    const memoError = validateMemo(memo);
+    if (memoError) {
+      setValidationError(memoError);
       return false;
     }
     if (
@@ -301,6 +304,25 @@ function SendPageClient() {
     setStep("building");
 
     try {
+      // Simulate before requesting a wallet signature. A failed simulation is
+      // actionable feedback and must never reach the signing prompt.
+      const simulation = await simulatePayment({
+        sourcePublicKey: wallet.publicKey,
+        destination: destination.trim(),
+        amount,
+        assetCode: selectedAsset.code,
+        assetIssuer: selectedAsset.issuer,
+      });
+      if (!simulation.success) {
+        setValidationError(`Transaction simulation failed: ${simulation.error ?? "Unknown error"}`);
+        setStep("idle");
+        return;
+      }
+      setFeeEstimate((current) => ({
+        baseFee: simulation.fee,
+        congestion: current?.congestion ?? "low",
+      }));
+
       // 1. Build the transaction
       let xdr: string;
 

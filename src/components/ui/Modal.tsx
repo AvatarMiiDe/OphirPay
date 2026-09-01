@@ -5,6 +5,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { trapFocus } from "@/lib/focus-trap";
 
 interface ModalProps {
   open: boolean;
@@ -21,9 +22,6 @@ const sizeClasses = {
   md: "max-w-lg",
   lg: "max-w-2xl",
 };
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
 /**
  * Accessible modal dialog — ESC to close, backdrop click to close,
@@ -73,50 +71,31 @@ export function Modal({
     };
   }, [open]);
 
-  // ESC to close + focus trap + body scroll lock + focus restore
+  // Focus trap + body scroll lock + focus restore. Keyed on `[open]` only so
+  // parent re-renders (e.g. a new inline `onClose` identity) don't re-run the
+  // trap, which would steal focus from the user while they type in the dialog.
   useEffect(() => {
-    if (!open) return;
-
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !dialogRef.current) return;
-
-      // Cycle Tab within the dialog
-      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
-        FOCUSABLE_SELECTOR
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
+    if (!open || !dialogRef.current) return;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    // Move focus into the dialog
-    requestAnimationFrame(() => dialogRef.current?.focus());
+    // Moves focus to the first interactive element and restores it to the
+    // trigger element when released.
+    const releaseTrap = trapFocus(dialogRef.current);
+
+    // ESC to close
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
-      // Restore focus to the element that opened the dialog
-      previouslyFocused?.focus();
+      releaseTrap();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Guard against SSR — createPortal needs the client-side `document`
   if (!open || typeof document === "undefined") return null;
