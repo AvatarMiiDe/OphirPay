@@ -59,3 +59,18 @@ export function getRecentAddresses(limit = 5): AddressEntry[] {
     .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
     .slice(0, limit);
 }
+
+/**
+ * Return the subset of `entries` whose public key is not already present in
+ * `existingAddresses`. Used to merge address-book selections into a batch
+ * recipient list without duplicating manually added or CSV-imported rows.
+ * Existing addresses are trimmed before comparison so whitespace differences
+ * don't produce false duplicates.
+ */
+export function mergeAddressBookSelections(
+  entries: AddressEntry[],
+  existingAddresses: string[]
+): AddressEntry[] {
+  const existing = new Set(existingAddresses.map((a) => a.trim()));
+  return entries.filter((e) => !existing.has(e.publicKey));
+}
