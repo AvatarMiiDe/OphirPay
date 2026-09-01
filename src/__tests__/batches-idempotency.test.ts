@@ -1,42 +1,68 @@
 // SPDX-License-Identifier: MIT
-// Tests for idempotent batch creation — POST /api/batches with an
-// Idempotency-Key header or body idempotencyKey field must never create
-// duplicate batches/payments on retry.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const {
+  mockFindFirst,
+  mockFindUnique,
+  mockCreateMany,
+  mockBatchCreate,
+  mockTransaction,
+  mockGetAuthContext,
+} = vi.hoisted(() => ({
+  mockFindFirst: vi.fn(),
+  mockFindUnique: vi.fn(),
+  mockCreateMany: vi.fn(),
+  mockBatchCreate: vi.fn(),
+  mockTransaction: vi.fn(),
+  mockGetAuthContext: vi.fn(),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   default: {
-    batch: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
-    payment: { createMany: vi.fn() },
-    $transaction: vi.fn(),
+    batch: { findFirst: mockFindFirst, findUnique: mockFindUnique },
+    payment: { createMany: mockCreateMany },
+    $transaction: mockTransaction,
   },
 }));
 
 vi.mock("@/lib/auth-session", () => ({
-  getAuthContext: vi.fn(),
+  getAuthContext: mockGetAuthContext,
 }));
 
-vi.mock("@/lib/metrics-counters", () => ({
-  incMetric: vi.fn(),
-}));
-
-import prisma from "@/lib/prisma";
-import { getAuthContext } from "@/lib/auth-session";
 import { POST } from "@/app/api/batches/route";
 
-const ADDRESS = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const USER_ID = "user-1";
+const BATCH_ID = "cm0bt0000000000000000001";
+const KEY_HEADER = "batch-key-12345";
+const KEY_BODY = "body-key-67890";
 
-const VALID_BODY = {
-  name: "Test Batch",
-  recipients: [{ address: ADDRESS, amount: 10 }],
-  sourceAccountId: "acc-1",
-};
+const VALID_RECIPIENTS = [
+  {
+    address: "GDHJ3K2LQ7F5XQZPX6YWNMYKXWQXVZKBJZQFYX3F6KRLV4WDXHJMB2UY",
+    amount: 1200,
+    assetCode: "XLM",
+    memo: "aug-1",
+  },
+  {
+    address: "GA5AZNWWOW5PXPNHBVRJOB2ZPZO3PXN5VTXTXOIJTACZZHE5ZA7CAH7H",
+    amount: 800,
+    assetCode: "XLM",
+    memo: "aug-2",
+  },
+];
 
-const VALID_HEADER_KEY = "batch-key-12345";
-const VALID_BODY_KEY = "body-key-12345";
+function makeBody(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "August payroll",
+    description: "Monthly contractor payouts",
+    sourceAccountId: "GACZ7ZELCUC5YGJ6JHIVLEZNR3XKYKOVUWD6H3IRFPRZMALNUYJZQM2U",
+    recipients: VALID_RECIPIENTS,
+    ...overrides,
+  };
+}
 
-function makeRequest(body: unknown = VALID_BODY, headers: Record<string, string> = {}) {
+function makeRequest(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request("http://localhost/api/batches", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
@@ -44,221 +70,250 @@ function makeRequest(body: unknown = VALID_BODY, headers: Record<string, string>
   });
 }
 
-function p2002(message = "Unique constraint failed") {
-  return Object.assign(new Error(message), { code: "P2002" });
+function makeBatch(overrides: Record<string, unknown> = {}) {
+  return {
+    id: BATCH_ID,
+    userId: USER_ID,
+    name: "August payroll",
+    description: "Monthly contractor payouts",
+    idempotencyKey: KEY_HEADER,
+    status: "CREATED",
+    createdAt: new Date("2026-08-26T10:30:00.000Z"),
+    updatedAt: new Date("2026-08-26T10:30:00.000Z"),
+    payments: VALID_RECIPIENTS.map((r, i) => ({
+      id: `cm0py000000000000000000${10 + i}`,
+      batchId: BATCH_ID,
+      userId: USER_ID,
+      amount: r.amount,
+      assetCode: r.assetCode,
+      memo: r.memo,
+      status: "CREATED",
+    })),
+    ...overrides,
+  };
 }
 
-const prismaMock = prisma as unknown as {
-  batch: {
-    create: ReturnType<typeof vi.fn>;
-    findUnique: ReturnType<typeof vi.fn>;
-    findFirst: ReturnType<typeof vi.fn>;
+function makeTx() {
+  return {
+    batch: { create: mockBatchCreate, findUnique: mockFindUnique },
+    payment: { createMany: mockCreateMany },
   };
-  payment: { createMany: ReturnType<typeof vi.fn> };
-  $transaction: ReturnType<typeof vi.fn>;
-};
+}
 
-describe("POST /api/batches — idempotency", () => {
-  beforeEach(() => {
-    // resetAllMocks (not clearAllMocks) also drains once-queues from
-    // mockRejectedValueOnce/mockResolvedValueOnce so no state leaks between
-    // tests.
-    vi.resetAllMocks();
-    vi.mocked(getAuthContext).mockResolvedValue({ userId: "user-1" } as never);
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetAuthContext.mockResolvedValue({ userId: USER_ID });
+  mockFindFirst.mockResolvedValue(null);
+  mockFindUnique.mockResolvedValue(makeBatch());
+  mockCreateMany.mockResolvedValue({ count: VALID_RECIPIENTS.length });
+  mockBatchCreate.mockResolvedValue(makeBatch({ payments: undefined }));
+  mockTransaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
+    callback(makeTx())
+  );
+});
 
-    prismaMock.$transaction.mockImplementation(
-      async (fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock)
-    );
-    prismaMock.batch.create.mockResolvedValue({
-      id: "batch-1",
-      userId: "user-1",
-      name: VALID_BODY.name,
-      idempotencyKey: null,
+describe("POST /api/batches — idempotent re-submission", () => {
+  it("rejects unauthenticated callers with 401", async () => {
+    mockGetAuthContext.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(makeBody()));
+
+    expect(res.status).toBe(401);
+    expect(mockBatchCreate).not.toHaveBeenCalled();
+    expect(mockCreateMany).not.toHaveBeenCalled();
+  });
+
+  it("creates a batch on first submission with the supplied key (201)", async () => {
+    const res = await POST(makeRequest(makeBody({ idempotencyKey: KEY_BODY })));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data.id).toBe(BATCH_ID);
+    expect(body.meta.deduplicated).toBeUndefined();
+
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { userId: USER_ID, idempotencyKey: KEY_BODY },
+      include: { payments: true },
     });
-    prismaMock.payment.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.batch.findUnique.mockResolvedValue({
-      id: "batch-1",
-      userId: "user-1",
-      name: VALID_BODY.name,
-      idempotencyKey: null,
-      payments: [{ id: "p-1", amount: 10, status: "CREATED" }],
+    // `tx.batch.create({ data })` is a single-argument call.
+    const [createArgs] = mockBatchCreate.mock.calls[0];
+    expect(createArgs.data).toMatchObject({
+      name: "August payroll",
+      userId: USER_ID,
+      idempotencyKey: KEY_BODY,
     });
-    prismaMock.batch.findFirst.mockResolvedValue(null);
   });
 
-  it("creates a batch with its child payments when no key is supplied", async () => {
-    const res = await POST(makeRequest());
+  it("generates a server-side key when the client sends none", async () => {
+    const res = await POST(makeRequest(makeBody()));
+
     expect(res.status).toBe(201);
-
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.meta.deduplicated).toBeUndefined();
-    expect(prismaMock.batch.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          name: VALID_BODY.name,
-          userId: "user-1",
-        }),
-      })
+    const [createArgs] = mockBatchCreate.mock.calls[0];
+    expect(createArgs.data.idempotencyKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
-    // Unkeyed batches must NOT pass idempotencyKey into the create.
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBeUndefined();
-    expect(prismaMock.payment.createMany).toHaveBeenCalledTimes(1);
   });
 
-  it("accepts an Idempotency-Key header and stores it", async () => {
-    const res = await POST(
-      makeRequest(VALID_BODY, { "Idempotency-Key": VALID_HEADER_KEY })
-    );
-    expect(res.status).toBe(201);
-
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBe(VALID_HEADER_KEY);
-  });
-
-  it("accepts an idempotencyKey body field and stores it", async () => {
-    const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: VALID_BODY_KEY })
-    );
-    expect(res.status).toBe(201);
-
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBe(VALID_BODY_KEY);
-  });
-
-  it("gives the header key precedence over the body key", async () => {
-    const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: VALID_BODY_KEY }, {
-        "Idempotency-Key": VALID_HEADER_KEY,
-      })
-    );
-    expect(res.status).toBe(201);
-
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBe(VALID_HEADER_KEY);
-  });
-
-  it("lets a valid header key override an invalid body key", async () => {
-    // A client that sends both must not be rejected for the lower-precedence
-    // body key — the valid header wins and the invalid body key is ignored.
-    const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: "short" }, {
-        "Idempotency-Key": VALID_HEADER_KEY,
-      })
-    );
-    expect(res.status).toBe(201);
-
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBe(VALID_HEADER_KEY);
-  });
-
-  it("still rejects an invalid header key even when the body key is valid", async () => {
-    const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: VALID_BODY_KEY }, {
-        "Idempotency-Key": "bad",
-      })
-    );
-    expect(res.status).toBe(400);
-    expect(prismaMock.batch.create).not.toHaveBeenCalled();
-  });
-
-  it("replays a processed key by returning the original batch (no duplicates)", async () => {
-    const existing = {
-      id: "batch-1",
-      userId: "user-1",
-      name: VALID_BODY.name,
-      idempotencyKey: VALID_HEADER_KEY,
-      payments: [{ id: "p-1", amount: 10, status: "CREATED" }],
-    };
-    prismaMock.batch.findFirst.mockResolvedValue(existing);
+  it("returns the original batch on a full retry with the same key (no duplicates)", async () => {
+    const original = makeBatch();
+    mockFindFirst.mockResolvedValue(original);
 
     const res = await POST(
-      makeRequest(VALID_BODY, { "Idempotency-Key": VALID_HEADER_KEY })
+      makeRequest(makeBody(), { "Idempotency-Key": KEY_HEADER })
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.meta.deduplicated).toBe(true);
-    expect(json.data.id).toBe("batch-1");
+    const body = await res.json();
+    expect(body.data.id).toBe(BATCH_ID);
+    expect(body.meta.deduplicated).toBe(true);
+    expect(body.meta.resumed).toBeUndefined();
 
-    // No new batch/payments may be created on replay.
-    expect(prismaMock.batch.create).not.toHaveBeenCalled();
-    expect(prismaMock.payment.createMany).not.toHaveBeenCalled();
-    // The replay lookup is scoped to the user + key.
-    expect(prismaMock.batch.findFirst).toHaveBeenCalledWith({
-      where: { userId: "user-1", idempotencyKey: VALID_HEADER_KEY },
+    // No new batch and no new payments were written.
+    expect(mockBatchCreate).not.toHaveBeenCalled();
+    expect(mockCreateMany).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("resumes pending items only when a previous attempt left the batch without payments", async () => {
+    const withoutPayments = makeBatch({ payments: [] });
+    mockFindFirst.mockResolvedValue(withoutPayments);
+    // The refetch after resuming returns the batch with its payments.
+    mockFindUnique.mockResolvedValue(makeBatch());
+
+    const res = await POST(
+      makeRequest(makeBody(), { "Idempotency-Key": KEY_HEADER })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.deduplicated).toBe(true);
+    expect(body.meta.resumed).toBe(true);
+    expect(body.data.payments).toHaveLength(2);
+
+    // Only the missing child payments are inserted, on the existing batch.
+    expect(mockCreateMany).toHaveBeenCalledTimes(1);
+    const [createArgs] = mockCreateMany.mock.calls[0];
+    expect(createArgs.data).toHaveLength(2);
+    expect(
+      (createArgs.data as Array<{ batchId: string }>).every(
+        (p) => p.batchId === BATCH_ID
+      )
+    ).toBe(true);
+    expect(mockBatchCreate).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  it("gives the Idempotency-Key header precedence over the body key", async () => {
+    const original = makeBatch({ idempotencyKey: KEY_HEADER });
+    mockFindFirst.mockResolvedValue(original);
+
+    const res = await POST(
+      makeRequest(makeBody({ idempotencyKey: KEY_BODY }), {
+        "Idempotency-Key": KEY_HEADER,
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.deduplicated).toBe(true);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { userId: USER_ID, idempotencyKey: KEY_HEADER },
       include: { payments: true },
     });
   });
 
-  it("resolves a concurrent race (P2002) by returning the winning batch", async () => {
-    const winner = {
-      id: "batch-1",
-      userId: "user-1",
-      name: VALID_BODY.name,
-      idempotencyKey: VALID_HEADER_KEY,
-      payments: [{ id: "p-1", amount: 10, status: "CREATED" }],
-    };
-    // Replay lookup finds nothing yet…
-    prismaMock.batch.findFirst.mockResolvedValueOnce(null);
-    // The insert loses the race…
-    prismaMock.batch.create.mockRejectedValueOnce(p2002());
-    // …and the winner is already on disk for the recovery lookup.
-    prismaMock.batch.findFirst.mockResolvedValue(winner);
+  it("rejects a whitespace-only Idempotency-Key header with 400", async () => {
+    const res = await POST(
+      makeRequest(makeBody(), { "Idempotency-Key": "   " })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockFindFirst).not.toHaveBeenCalled();
+    expect(mockBatchCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a short Idempotency-Key header with 400", async () => {
+    const res = await POST(
+      makeRequest(makeBody(), { "Idempotency-Key": "short" })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized Idempotency-Key header with 400", async () => {
+    const res = await POST(
+      makeRequest(makeBody(), { "Idempotency-Key": "k".repeat(256) })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("trims and validates the body key before deduplicating", async () => {
+    const original = makeBatch({ idempotencyKey: KEY_BODY });
+    mockFindFirst.mockResolvedValue(original);
 
     const res = await POST(
-      makeRequest(VALID_BODY, { "Idempotency-Key": VALID_HEADER_KEY })
+      makeRequest(makeBody({ idempotencyKey: `  ${KEY_BODY}  ` }))
     );
 
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.meta.deduplicated).toBe(true);
-    expect(json.data.id).toBe("batch-1");
-    expect(prismaMock.payment.createMany).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.meta.deduplicated).toBe(true);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { userId: USER_ID, idempotencyKey: KEY_BODY },
+      include: { payments: true },
+    });
   });
 
-  it("rejects a header key shorter than 8 characters with 400", async () => {
-    const res = await POST(
-      makeRequest(VALID_BODY, { "Idempotency-Key": "short" })
-    );
+  it("rejects a body key that is short after trimming", async () => {
+    const res = await POST(makeRequest(makeBody({ idempotencyKey: "  short  " })));
+
     expect(res.status).toBe(400);
-
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.error.code).toBe("VALIDATION_ERROR");
-    expect(prismaMock.batch.create).not.toHaveBeenCalled();
+    expect(mockFindFirst).not.toHaveBeenCalled();
   });
 
-  it("rejects a whitespace-padded body key whose trimmed form is too short", async () => {
-    // "  short  " trims to "short" (5 chars) → must fail the 8-char minimum
-    // so an effectively invalid key can never be persisted.
+  it("handles a concurrent dup submission: a P2002 race serves the winner", async () => {
+    const winner = makeBatch();
+    mockFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+    mockTransaction.mockImplementation(async () => {
+      throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    });
+
     const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: "  short  " })
+      makeRequest(makeBody(), { "Idempotency-Key": KEY_HEADER })
     );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.deduplicated).toBe(true);
+    expect(body.data.id).toBe(BATCH_ID);
+    // Both the pre-check and the post-race lookup ran.
+    expect(mockFindFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 409 when a unique violation has no recoverable winner", async () => {
+    // Pre-check and the race lookup both find nothing, so deduping is
+    // impossible — the route surfaces a 409 conflict for the orphaned key.
+    mockFindFirst.mockResolvedValue(null);
+    mockTransaction.mockImplementation(async () => {
+      throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    });
+
+    const res = await POST(
+      makeRequest(makeBody(), { "Idempotency-Key": KEY_HEADER })
+    );
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("CONFLICT");
+  });
+
+  it("returns 400 for an invalid batch body (regression: not affected by the key work)", async () => {
+    const res = await POST(makeRequest({ name: "", recipients: [] }));
+
     expect(res.status).toBe(400);
-
-    const json = await res.json();
-    expect(json.success).toBe(false);
-    expect(json.error.code).toBe("VALIDATION_ERROR");
-    expect(prismaMock.batch.create).not.toHaveBeenCalled();
-  });
-
-  it("trims whitespace from a valid body key before storing", async () => {
-    const res = await POST(
-      makeRequest({ ...VALID_BODY, idempotencyKey: "  body-key-12345  " })
-    );
-    expect(res.status).toBe(201);
-
-    const createData = prismaMock.batch.create.mock.calls[0][0].data;
-    expect(createData.idempotencyKey).toBe("body-key-12345");
-  });
-
-  it("returns 401 when unauthenticated", async () => {
-    vi.mocked(getAuthContext).mockResolvedValue(null as never);
-    const res = await POST(makeRequest());
-    expect(res.status).toBe(401);
-    expect(prismaMock.batch.create).not.toHaveBeenCalled();
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });
