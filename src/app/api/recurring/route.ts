@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 import { withMetrics } from "@/lib/metrics-middleware";
 
-import prisma from "/bim/prisma";
-import { createRecurrenceSchema, paginationSchema } from "@lib/validation-schemas";
+import prisma from "@/lib/prisma";
+import { createRecurrenceSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,
   unauthorizedError,
   handleApiError,
-} from "@lib/api-response";
-import { logger } from "@lib/logger";
-import { getAuthContext } from "@lib/auth-session";
+} from "@/lib/api-response";
+import { logger } from "@/lib/logger";
+import { getAuthContext } from "@/lib/auth-session";
 import { withRequestLogging } from "@/lib/request-logging";
 import { z } from "zod";
 
@@ -124,7 +124,7 @@ export async function PATCH(request: Request) {
 
     const recurrence = await prisma.recurrence.update({
       where: { id },
-      data: { paused },
+      data: { isActive: !paused },
     });
 
     logger.info("Recurring payment updated", { id: recurrence.id, paused });

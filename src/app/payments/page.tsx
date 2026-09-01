@@ -340,7 +340,7 @@ function PaymentsClient() {
                 <th scope="col" className="py-3 px-4 font-medium">Tx Hash</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tbodyRef} onKeyDown={onRowsKeyDown}>
               {loading &&
                 // Skeleton rows pulse in place so the table keeps its height
                 // (no layout shift) while the on-chain read is in flight.

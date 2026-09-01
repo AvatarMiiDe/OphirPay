@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 import { withMetrics } from "@/lib/metrics-middleware";
 
-import { successResponse, handleApiError, notFoundError, unauthorizedError, badRequestError } from "/lib/api-response";
-import { getAuthContext } from "/lib/auth-session";
-import { simulateContractCall, invokeContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@lib/contracts";
+import { successResponse, handleApiError, notFoundError, unauthorizedError, badRequestError } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth-session";
+import { simulateContractCall, invokeContractFunction, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { nativeToScVal } from "@stellar/stellar-sdk";
 import { withRequestLogging } from "@/lib/request-logging";
 
@@ -70,24 +70,29 @@ export async function PATCH(
       return notFoundError("Invalid recurring payment ID");
     }
 
+    if (!auth.publicKey) {
+      return unauthorizedError(
+        "Wallet authentication required to update recurring payments."
+      );
+    }
+
     const body = await request.json();
     if (typeof body.paused !== "boolean") {
       return badRequestError("Request body must include a 'paused' boolean field.");
     }
 
-    const result = await invokeContractCall(
+    // Prepare the unsigned contract invocation for the client wallet to
+    // sign and submit (see submitContractInvocation). There is no
+    // server-side result value to return.
+    const result = await invokeContractFunction(
       DEFAULT_CONTRACT_ID,
       "set_recurring_paused",
-      auth,
+      auth.publicKey,
       [nativeToScVal(recurringId, { type: "u64" }),
         nativeToScVal(body.paused, { type: "bool" })]
     );
 
-    if (result.status === "SIMULATION_FAILED" || !result.returnValue) {
-      return handleApiError(new Error("Failed to update recurring payment"), "PATCH /api/recurring/[id]");
-    }
-
-    return successResponse(result.returnValue);
+    return successResponse(result);
   } catch (err) {
     return handleApiError(err, "PATCH /api/recurring/[id]");
   }
