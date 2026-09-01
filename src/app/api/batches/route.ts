@@ -98,7 +98,19 @@ export const GET = withMetrics("GET /api/batches", withRequestLogging(async func
   }
 }));
 
-// ── POST /api/batches — Create a new batch ──────────────────
+// ── POST /api/batches — Create a new batch (idempotent) ──────
+
+const IDEMPOTENCY_HEADER = "Idempotency-Key";
+
+/** True when `err` is a Prisma unique-constraint violation (P2002). */
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
 
 /**
  * True for a Prisma P2002 (unique constraint) error. Detected by code rather
@@ -149,7 +161,24 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
 
     const body = await request.json();
 
-    const parsed = createBatchSchema.safeParse(body);
+    // The Idempotency-Key header takes precedence over the body field, so it
+    // is resolved BEFORE body validation: a valid header must win even when
+    // the lower-precedence body key is invalid (otherwise a client that
+    // sends both would be rejected for a key it never intended to use). When
+    // a header is present the body key is ignored entirely.
+    const headerKey = request.headers.get(IDEMPOTENCY_HEADER);
+    let idempotencyKey: string | null = null;
+    let parsed;
+    if (headerKey) {
+      const parsedKey = idempotencyKeySchema.safeParse(headerKey);
+      if (!parsedKey.success) {
+        return validationError(parsedKey.error);
+      }
+      idempotencyKey = parsedKey.data;
+      parsed = createBatchSchema.omit({ idempotencyKey: true }).safeParse(body);
+    } else {
+      parsed = createBatchSchema.safeParse(body);
+    }
     if (!parsed.success) {
       return validationError(parsed.error);
     }
@@ -258,9 +287,32 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
       throw err;
     }
 
-    incMetric("batches_processed_total");
+      incMetric("batches_processed_total");
 
-    return successResponse(result, { timestamp: new Date().toISOString() }, 201);
+      return successResponse(
+        result,
+        { timestamp: new Date().toISOString() },
+        201
+      );
+    } catch (err) {
+      // Concurrent duplicate: another request with the same key won the race
+      // and the DB unique constraint rejected our insert. Return the winner
+      // as a deduplicated replay rather than surfacing a 409 to the client.
+      if (isUniqueConstraintError(err) && idempotencyKey) {
+        const winner = await prisma.batch.findFirst({
+          where: { userId, idempotencyKey },
+          include: { payments: true },
+        });
+        if (winner) {
+          return successResponse(
+            winner,
+            { timestamp: new Date().toISOString(), deduplicated: true },
+            200
+          );
+        }
+      }
+      throw err;
+    }
   } catch (err) {
     return handleApiError(err, "POST /api/batches");
   }
