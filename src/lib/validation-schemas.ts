@@ -110,6 +110,20 @@ export const paymentExportParamsSchema = z.object({
 
 // ── Batch Schemas ─────────────────────────────────────────────
 
+/**
+ * Idempotency key shared by POST /api/batches (header or body field).
+ *
+ * The value is trimmed BEFORE validation so the validated value is exactly
+ * the value that gets persisted — a body key like `"  short  "` is rejected
+ * (its trimmed form is 5 chars) and `"  my-key-123  "` is stored as
+ * `"my-key-123"`, keeping header and body keys consistent.
+ */
+export const idempotencyKeySchema = z
+  .string("Idempotency key must be a string")
+  .trim()
+  .min(8, "Idempotency key must be at least 8 characters")
+  .max(255, "Idempotency key must be at most 255 characters");
+
 export const batchRecipientSchema = z.object({
   address: stellarAddress,
   amount: z.number().positive("Amount must be greater than zero"),
@@ -117,11 +131,24 @@ export const batchRecipientSchema = z.object({
   memo: memoField,
 });
 
+/**
+ * Idempotency key used to deduplicate batch submissions (issue #170).
+ * Accepts either the `Idempotency-Key` header or an optional `idempotencyKey`
+ * body field. `.trim()` runs before the length checks so a wrapped key is
+ * normalized consistently and a whitespace-only value is rejected.
+ */
+export const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(8, "Idempotency key must be at least 8 characters")
+  .max(255, "Idempotency key must be at most 255 characters");
+
 export const createBatchSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   recipients: z.array(batchRecipientSchema).min(1).max(100),
   sourceAccountId: z.string().min(1),
+  idempotencyKey: idempotencyKeySchema.optional(),
 });
 
 // ── Multisig Schemas ──────────────────────────────────────────
@@ -186,8 +213,18 @@ export const createRecurringSchema = z.object({
 
 export const createWebhookSchema = z.object({
   url: z.string().url("Invalid webhook URL"),
-  events: z.array(z.string()).min(1, "At least one event is required"),
+  events: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
+});
+
+export const webhookReplaySchema = z.object({
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const webhookDeliveriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 // ── API Key Schemas ───────────────────────────────────────────
@@ -229,12 +266,24 @@ export const createRecurrenceSchema = createRecurringSchema;
 
 // ── Refund Schemas ────────────────────────────────────────────
 
+/**
+ * Coded refund reasons (0–5), shared by the analytics bucketing in
+ * GET /api/refunds?analytics=true and the POST validation below.
+ */
+export const REFUND_REASON_CODES = [0, 1, 2, 3, 4, 5] as const;
+export type RefundReasonCode = (typeof REFUND_REASON_CODES)[number];
+
 export const requestRefundSchema = z.object({
   paymentId: z.number().int().positive(),
   amount: z.number().positive(),
   asset: z.string().min(1),
   reason: z.string().max(500),
-  reasonCode: z.number().int().min(0).max(5),
+  reasonCode: z
+    .number()
+    .int()
+    .refine((v) => (REFUND_REASON_CODES as readonly number[]).includes(v), {
+      message: "reasonCode must be one of the supported codes: 0-5",
+    }),
 });
 
 /**

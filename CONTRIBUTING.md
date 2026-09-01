@@ -22,6 +22,10 @@ Thank you for your interest in contributing! OphirPay is an open-source payment 
 - **Commits**: Follow [Conventional Commits](https://www.conventionalcommits.org)
 - **Before submitting**: Run `npm run ci` (typecheck → lint → test → build)
 
+### Adding or changing an API endpoint
+
+Before adding or modifying an API endpoint, read the [API Endpoint Guide](docs/API_GUIDE.md). It documents the mandatory conventions: file structure, Zod validation, the error-handling pattern, auth middleware usage, the response envelope, rate-limit integration, a copy-pasteable worked example, and a pre-merge checklist.
+
 ## 15-Job CI/CD Pipeline
 
 Every PR triggers 15 independent CI/CD checks across quality, testing, security, and DevOps:
@@ -70,7 +74,27 @@ npm run test:watch    # Watch mode
 npm run coverage      # Coverage report
 npm run typecheck     # TypeScript check
 npm run lint          # ESLint
+npm run test:openapi  # OpenAPI spec ↔ implementation conformance (drift)
 ```
+
+## Changelog
+
+Every user-facing change must be recorded in [`CHANGELOG.md`](CHANGELOG.md).
+The file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) with
+[Semantic Versioning](https://semver.org/).
+
+- Read the [Changelog Maintenance Guide](docs/CHANGELOG_GUIDE.md) before adding
+  or updating an entry — it documents the category conventions (Added / Changed /
+  Fixed / Removed / Security) with examples and the release flow.
+- Add entries under the existing `## [Unreleased]` section in the same PR as the
+  change. Do not create a new `[Unreleased]` heading per PR.
+- Internal changes (refactors with no observable behavior change, test-only
+  changes, CI plumbing) do not need an entry.
+- Reviewers will ask for an entry on any user-facing change; treat a missing
+  entry as a review-blocking item.
+
+See the [release flow](docs/CHANGELOG_GUIDE.md#6-release-flow) in the guide for
+how versions are chosen and releases are cut.
 
 ## Smart Contracts
 
