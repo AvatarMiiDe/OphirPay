@@ -3,6 +3,11 @@
 
 
 import { useState } from "react";
+import Link from "next/link";
+
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
+
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -29,6 +34,7 @@ interface CreateWebhookBody {
 }
 
 export default function WebhooksPage() {
+  usePageTitle(PAGE_TITLES.WEBHOOKS);
   const toast = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
@@ -67,10 +73,7 @@ export default function WebhooksPage() {
       setFormError("Webhook URL is required.");
       return;
     }
-    if (formEvents.length === 0) {
-      setFormError("Select at least one event type.");
-      return;
-    }
+    
 
     setSubmitting(true);
     try {
@@ -193,14 +196,18 @@ export default function WebhooksPage() {
                         </p>
                         <CopyButton value={wh.url} />
                       </div>
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {events.map((evt) => (
-                          <Badge key={evt} variant="info">
-                            {WEBHOOK_EVENT_LABELS[evt] ?? evt}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-400">
+                       <div className="flex flex-wrap gap-1.5 mb-2">
+                        {events.length === 0 ? (
+                          <Badge variant="info">All events</Badge>
+                        ) : (
+                          events.map((evt) => (
+                            <Badge key={evt} variant="info">
+                              {WEBHOOK_EVENT_LABELS[evt] ?? evt}
+                            </Badge>
+                          ))
+                        )}
+                       </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-400">
                         <span>
                           Created{" "}
                           {new Date(wh.createdAt).toLocaleDateString(undefined, {
@@ -219,15 +226,21 @@ export default function WebhooksPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDelete(wh.id)}
-                        disabled={deleting === wh.id}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50"
-                      >
-                        {deleting === wh.id ? "Deleting..." : "Delete"}
-                      </button>
-                    </div>
+                     <div className="flex items-center gap-2 shrink-0">
+                       <Link
+                         href={`/webhooks/${wh.id}`}
+                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"
+                       >
+                         View
+                       </Link>
+                       <button
+                         onClick={() => handleDelete(wh.id)}
+                         disabled={deleting === wh.id}
+                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50"
+                       >
+                         {deleting === wh.id ? "Deleting..." : "Delete"}
+                       </button>
+                     </div>
                   </div>
                 </div>
               );
@@ -370,27 +383,31 @@ export default function WebhooksPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Event Types
               </label>
-              <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2">
                 {ALL_WEBHOOK_EVENTS.map((evt) => (
-                  <button
+                  <label
                     key={evt}
-                    type="button"
-                    onClick={() => toggleEvent(evt)}
-                    className={`text-left px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                       formEvents.includes(evt)
                         ? "bg-ophir-50 dark:bg-ophir-950/30 border-ophir-300 dark:border-ophir-700 text-ophir-700 dark:text-ophir-300 ring-1 ring-ophir-500"
                         : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"
                     }`}
                   >
+                    <input
+                      type="checkbox"
+                      checked={formEvents.includes(evt)}
+                      onChange={() => toggleEvent(evt)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-ophir-600 focus:ring-ophir-500"
+                    />
                     {WEBHOOK_EVENT_LABELS[evt]}
-                  </button>
+                  </label>
                 ))}
               </div>
-              {formEvents.length > 0 && (
-                <p className="text-xs text-gray-400 mt-2">
-                  {formEvents.length} event{formEvents.length !== 1 ? "s" : ""} selected
-                </p>
-              )}
+              <p className="text-xs text-gray-400 mt-2">
+                {formEvents.length > 0
+                  ? `${formEvents.length} event${formEvents.length !== 1 ? "s" : ""} selected`
+                  : "No events selected — this webhook will receive all events."}
+              </p>
             </div>
 
             {formError && (
