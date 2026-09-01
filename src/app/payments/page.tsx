@@ -480,10 +480,18 @@ function PaymentsClient() {
                     )}
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900 dark:text-white">#{payment.id}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">
-                        {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
-                      </p>
+                      <Link
+                        href={`/payments/${payment.id}`}
+                        className="block group/link"
+                        title={`View payment #${payment.id} details`}
+                      >
+                        <p className="font-medium text-gray-900 dark:text-white group-hover/link:text-ophir-600 dark:group-hover/link:text-ophir-400 transition-colors">
+                          #{payment.id}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 group-hover/link:text-gray-500 dark:group-hover/link:text-gray-400 transition-colors">
+                          {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
+                        </p>
+                      </Link>
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-gray-300 font-mono">
                       {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
