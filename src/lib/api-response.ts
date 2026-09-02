@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handlePrismaError } from "@/lib/prisma-errors";
 import { logger } from "@/lib/logger";
+import { getCurrentRequestId } from "@/lib/request-logging";
 import { ERROR_CODES } from "@/lib/error-codes";
 
 // ── Standard Response Types ────────────────────────────────────
@@ -16,13 +17,14 @@ interface ApiSuccess<T> {
     limit?: number;
     total?: number;
     timestamp?: string;
-    // Keyset (cursor) pagination metadata
+    /** Opaque cursor for the next page (keyset pagination). */
     nextCursor?: string | null;
+    /** Whether more rows exist after this page. */
     hasMore?: boolean;
-    // Offset pagination navigation metadata
-    totalPages?: number;
-    hasNext?: boolean;
-    hasPrev?: boolean;
+    /** True when a request was replayed with an already-seen idempotency key. */
+    deduplicated?: boolean;
+    /** True when a replayed batch resumed its missing child payments. */
+    resumed?: boolean;
   };
 }
 
@@ -133,8 +135,31 @@ export function unauthorizedError(message = "Unauthorized") {
   return errorResponse(ERROR_CODES.UNAUTHORIZED, message, 401);
 }
 
-export function rateLimitError(message = "Too many requests") {
-  return errorResponse(ERROR_CODES.RATE_LIMITED, message, 429);
+
+export function rateLimitError(
+  message = "Too many requests",
+  retryAfterSeconds?: number,
+  extraHeaders?: Record<string, string>
+) {
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
+  if (retryAfterSeconds !== undefined) {
+    headers["Retry-After"] = String(Math.max(0, Math.floor(retryAfterSeconds)));
+  }
+  return NextResponse.json(
+    {
+      success: false,
+      error: { code: ERROR_CODES.RATE_LIMITED, message },
+      timestamp: new Date().toISOString(),
+    } satisfies ApiError,
+    { status: 429, headers }
+  );
+}
+
+export function forbiddenError(
+  message = "Forbidden",
+  details?: unknown
+) {
+  return errorResponse(ERROR_CODES.INSUFFICIENT_SCOPE, message, 403, details);
 }
 
 export function conflictError(message: string) {
@@ -155,8 +180,11 @@ export function badRequestError(message: string) {
  * • Generic errors → 500 (masked in production for security)
  */
 export function handleApiError(err: unknown, context?: string): NextResponse {
-  // Log the real error for debugging
+  // Log the real error for debugging — the request id (set by the request
+  // logging middleware) lets operators correlate the log with the
+  // X-Request-Id returned to the client.
   logger.error(context ?? "API error", {
+    requestId: getCurrentRequestId(),
     error: err instanceof Error ? err.message : String(err),
     stack: err instanceof Error ? err.stack : undefined,
   });

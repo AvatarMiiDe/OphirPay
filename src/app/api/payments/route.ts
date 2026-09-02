@@ -1,45 +1,31 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
-import { Prisma } from "@prisma/client";
+import crypto from "crypto";
 import prisma from "@/lib/prisma";
-import { createPaymentSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,
+  badRequestError,
   unauthorizedError,
   badRequestError,
   handleApiError,
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
+import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
+import { buildPaymentWhere } from "@/lib/payment-filters";
 import {
-  encodeCursor,
+  buildCursorWhere,
+  computeNextCursor,
   decodeCursor,
-  computePagination,
+  prismaPagination,
 } from "@/lib/pagination-utils";
 
-/**
- * GET /api/payments — list the authenticated user's payments.
- *
- * Two pagination modes:
- *
- * 1. Keyset (default) — `limit` + opaque `cursor` (base64url token). Rows are
- *    ordered `createdAt DESC, id DESC` and the next page continues from the
- *    last row of the previous page, so deep pages stay O(limit) and ordering
- *    is stable under concurrent inserts (no skipped/duplicated rows).
- *    Response meta: `{ limit, nextCursor, hasMore }`. Set `includeTotal=true`
- *    to also get `total` (an expensive COUNT — opt in only when needed).
- *
- * 2. Offset (legacy) — `page` + `limit` with a COUNT for `total`. Kept for
- *    backwards compatibility with clients of the documented offset contract
- *    (see docs/openapi.yaml).
- *
- * `cursor` and `page` are mutually exclusive.
- */
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/payments", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -49,86 +35,54 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const cursorRaw = searchParams.get("cursor");
-    const pageRaw = searchParams.get("page");
-
-    // `searchParams.get()` returns null for absent params; pass undefined so
-    // the schema defaults apply instead of Zod rejecting null (zod v4).
+    const explicitPage = searchParams.get("page");
+    // `?? undefined` matters: searchParams.get() returns null for absent
+    // params, and the schema's defaults/optionals only apply to undefined.
     const parsed = paginationSchema.safeParse({
-      page: pageRaw ?? undefined,
+      page: explicitPage ?? undefined,
       limit: searchParams.get("limit") ?? undefined,
+      cursor: searchParams.get("cursor") ?? undefined,
       status: searchParams.get("status") ?? undefined,
       search: searchParams.get("search") ?? undefined,
     });
 
     if (!parsed.success) return validationError(parsed.error);
 
-    const { page, limit, status, search } = parsed.data;
+    const { page, limit, status, search, cursor: rawCursor } = parsed.data;
 
-    if (cursorRaw && pageRaw) {
-      return badRequestError(
-        "Provide either `cursor` (keyset) or `page` (offset), not both."
-      );
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted`
+    // is the explicit admin/debug opt-in to see them — it never crosses user
+    // boundaries, the result is still scoped to the authenticated user.
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+
+    // Always scope to the authenticated user — never expose other users' data.
+    // `status` and `search` (memo ILIKE + exact tx-hash, Issue #157) use the
+    // shared helper so the list route and CSV export stay in lockstep.
+    const baseWhere = buildPaymentWhere(auth.userId, { status, search });
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted` is
+    // the explicit admin/debug opt-in to see them.
+    if (!includeDeleted) baseWhere.deletedAt = null;
+
+    // Keyset (cursor) pagination is the default for plain list requests — it
+    // never deep-skips, so later pages stay fast as the table grows. Offset
+    // pagination via an explicit `page` param is kept for legacy consumers.
+    const cursor = rawCursor ? decodeCursor(rawCursor) : null;
+    if (rawCursor && !cursor) {
+      return badRequestError("Invalid cursor");
     }
 
-    // Cursor is opaque and validated: decode + schema-check, reject garbage.
-    const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
-    if (cursorRaw && !cursor) {
-      return badRequestError("Invalid pagination cursor.");
-    }
+    const useCursor = cursor !== null || explicitPage === null;
+    const where = buildCursorWhere(baseWhere, cursor);
 
-    // Always scope to the authenticated user — never expose other users' data
-    const baseConditions: Prisma.PaymentWhereInput[] = [
-      { userId: auth.userId },
-    ];
-    if (status) baseConditions.push({ status });
-    if (search) {
-      baseConditions.push({
-        OR: [
-          { description: { contains: search } },
-          { memo: { contains: search } },
-          { transactionHash: { contains: search } },
-        ],
-      });
-    }
-    const baseWhere: Prisma.PaymentWhereInput = { AND: baseConditions };
-
-    // ── Offset mode (legacy `page` param) ─────────────────────────
-    if (pageRaw) {
-      const [payments, total] = await Promise.all([
-        prisma.payment.findMany({
-          where: baseWhere,
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.payment.count({ where: baseWhere }),
-      ]);
-
-      logger.request("GET", `/api/payments?page=${page}&limit=${limit}`, 200, 0);
-
-      // computePagination already yields { page, limit, total, ... } for the
-      // legacy offset contract — spread it to keep a single source of truth.
-      return successResponse(payments, computePagination(page, limit, total));
-    }
-
-    // ── Keyset mode (default) ─────────────────────────────────────
-    // Continue from the anchor row: strictly older createdAt, or same
-    // createdAt with a smaller id — the (createdAt, id) tiebreak makes the
-    // ordering total and stable under concurrent inserts.
-    const keysetConditions = [...baseConditions];
-    if (cursor) {
-      keysetConditions.push({
-        OR: [
-          { createdAt: { lt: new Date(cursor.createdAt) } },
-          {
-            createdAt: new Date(cursor.createdAt),
-            id: { lt: cursor.id },
-          },
-        ],
-      });
-    }
-    const keysetWhere: Prisma.PaymentWhereInput = { AND: keysetConditions };
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        // Fetch one extra row to learn whether another page exists.
+        ...(useCursor ? { take: limit + 1 } : prismaPagination(page, limit)),
+      }),
+      prisma.payment.count({ where: baseWhere }),
+    ]);
 
     // Fetch one extra row to cheaply determine whether another page exists.
     const rows = await prisma.payment.findMany({
@@ -137,42 +91,24 @@ export async function GET(request: Request) {
       take: limit + 1,
     });
 
-    const hasMore = rows.length > limit;
-    const payments = hasMore ? rows.slice(0, limit) : rows;
-    const last = payments[payments.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-        : null;
+    const visible = useCursor ? payments.slice(0, limit) : payments;
+    const pageInfo = useCursor
+      ? computeNextCursor(payments, limit)
+      : { nextCursor: null, hasMore: page * limit < total };
 
-    // COUNT is O(matching rows) — opt in explicitly rather than paying for it
-    // on every page (large accounts were timing out on the unconditional count).
-    const includeTotal =
-      searchParams.get("includeTotal") === "true" ||
-      searchParams.get("includeTotal") === "1";
-    const total = includeTotal
-      ? await prisma.payment.count({ where: baseWhere })
-      : undefined;
-
-    logger.request(
-      "GET",
-      `/api/payments?limit=${limit}${cursor ? "&cursor=..." : ""}`,
-      200,
-      0
-    );
-
-    return successResponse(payments, {
+    return successResponse(visible, {
+      page,
       limit,
-      nextCursor,
-      hasMore,
-      ...(includeTotal ? { total } : {}),
+      total,
+      nextCursor: pageInfo.nextCursor,
+      hasMore: pageInfo.hasMore,
     });
   } catch (err) {
-    return handleApiError(err, "GET /api/payments");
+    return handleApiError(err, `GET /api/payments/[id]`);
   }
-}
+}));
 
-export async function POST(request: Request) {
+export const POST = withMetrics("POST /api/payments", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -181,17 +117,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const parsed = createPaymentSchema.safeParse(body);
-    if (!parsed.success) return validationError(parsed.error);
+    const parsed = await validateIdParam(params);
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
 
-    const payment = await prisma.payment.create({
+    const body = await request.json() as { status?: string; description?: string; memo?: string };
+
+    // updateMany scopes the write to the authenticated user's records
+    const updated = await prisma.payment.updateMany({
+      where: { id, userId: auth.userId },
       data: {
         amount: parsed.data.amount,
         assetCode: parsed.data.assetCode,
         assetIssuer: parsed.data.assetIssuer,
         description: parsed.data.description,
         memo: parsed.data.memo,
+        // Server-generated idempotency key — every attempt (original or
+        // retried) carries its own key, so attempts are never confused.
+        idempotencyKey: crypto.randomUUID(),
         status: "CREATED",
         // The authenticated user owns the record; sourceAccountId is a
         // Stellar account reference, NOT the User FK (previously this
@@ -200,25 +143,57 @@ export async function POST(request: Request) {
         sourceAccountId: parsed.data.sourceAccountId,
       },
     });
+    if (updated.count === 0) return notFoundError("Payment");
 
-    logger.info("Payment created", { id: payment.id, amount: payment.amount });
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) return notFoundError("Payment");
 
-    dispatchWebhookEventAsync(
-      WEBHOOK_EVENTS.PAYMENT_CREATED,
-      {
+    logger.info("Payment updated", { id, status: payment.status });
+
+    if (body.status === "SIGNED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SIGNED, {
         paymentId: payment.id,
         amount: payment.amount,
         assetCode: payment.assetCode,
         status: payment.status,
-        createdAt: payment.createdAt.toISOString(),
-      },
-      auth.userId
-    );
+        signedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "SUBMITTED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        submittedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "CONFIRMED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        confirmedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "COMPLETED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        completedAt: payment.completedAt?.toISOString() ?? new Date().toISOString(),
+      });
+    } else if (body.status === "FAILED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_FAILED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        errorMessage: payment.errorMessage,
+        failedAt: new Date().toISOString(),
+      });
+    }
 
-    incMetric("payments_created_total");
-
-    return successResponse(payment, undefined, 201);
+    return successResponse(payment);
   } catch (err) {
-    return handleApiError(err, "POST /api/payments");
+    return handleApiError(err, `PATCH /api/payments/[id]`);
   }
-}
+}));
