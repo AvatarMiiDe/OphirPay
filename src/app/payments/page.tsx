@@ -1,15 +1,13 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-
-import { Suspense, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { cn, formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
-import {
-  fetchOnChainPayments,
-  type OnChainPayment,
-} from "@/lib/contracts";
+import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
+import { fetchOnChainPayments, type OnChainPayment } from "@/lib/contracts";
 import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -18,79 +16,12 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Pagination } from "@/components/ui/Pagination";
+import { CurrencyToggle } from "@/components/ui/CurrencyToggle";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import {
-  applyPaymentSort,
-  getNextSort,
-  getPaymentStatus,
-  getSortParamUpdates,
-  parsePaymentSort,
-  type PaymentSort,
-  type PaymentSortKey,
-} from "@/lib/payments-sort";
-
-// ── Sortable column header ─────────────────────────────────────
-
-function SortArrow({ dir }: { dir: "asc" | "desc" }) {
-  return dir === "asc" ? (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-    </svg>
-  ) : (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-    </svg>
-  );
-}
-
-function SortNeutralIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-    </svg>
-  );
-}
-
-interface SortableThProps {
-  label: string;
-  sortKey: PaymentSortKey;
-  sort: PaymentSort;
-  onSort: (key: PaymentSortKey) => void;
-  children?: ReactNode;
-}
-
-function SortableTh({ label, sortKey, sort, onSort, children }: SortableThProps) {
-  const active = sort.key === sortKey;
-  const ariaSort = active ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
-  return (
-    <th scope="col" aria-sort={ariaSort} className="py-3 px-4">
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        aria-label={`Sort by ${label}`}
-        title={`Sort by ${label}`}
-        className={cn(
-          "inline-flex items-center gap-1 font-medium group/btn transition-colors",
-          active
-            ? "text-ophir-600 dark:text-ophir-400"
-            : "hover:text-gray-700 dark:hover:text-gray-200"
-        )}
-      >
-        {children}
-        <span
-          className={cn(
-            active ? "text-ophir-500 dark:text-ophir-400" : "text-gray-300 dark:text-gray-600 group-hover/btn:text-gray-400 dark:group-hover/btn:text-gray-500"
-          )}
-        >
-          {active ? <SortArrow dir={sort.dir} /> : <SortNeutralIcon />}
-        </span>
-      </button>
-    </th>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────
+import { useCurrencyDisplay } from "@/hooks/useCurrencyDisplay";
+import { useXlmPrice } from "@/hooks/usePrice";
+import { convertXlmToUsd, formatFiatAmount } from "@/lib/price";
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -151,7 +82,7 @@ function PaymentsClient() {
       // On-chain reads are N+1 RPC simulations — don't refetch on tab focus
       refetchOnWindowFocus: false,
     },
-    () => fetchOnChainPayments(FETCH_ALL_RECORDS),
+    () => fetchOnChainPayments(50)
   );
 
   const payments = useMemo(() => data?.payments ?? [], [data]);
@@ -178,13 +109,11 @@ function PaymentsClient() {
 
   // Client-side pagination — page and page size are persisted in the URL
   // search params so filtered/paginated views are shareable.
-  const pageParam = parseInt(searchParams.get("page") ?? "", 10);
+  const pageParam = Number.parseInt(searchParams.get("page") ?? "", 10);
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
 
-  const pageSizeParam = parseInt(searchParams.get("pageSize") ?? "", 10);
-  const pageSize = (ALLOWED_PAGE_SIZES as readonly number[]).includes(
-    pageSizeParam
-  )
+  const pageSizeParam = Number.parseInt(searchParams.get("pageSize") ?? "", 10);
+  const pageSize = (ALLOWED_PAGE_SIZES as readonly number[]).includes(pageSizeParam)
     ? pageSizeParam
     : DEFAULT_PAGE_SIZE;
 
@@ -220,14 +149,7 @@ function PaymentsClient() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  // Mirror the debounced query into the URL so searches are shareable/bookmarked.
-  useEffect(() => {
-    updateQuery({ q: debouncedSearch || null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync the query term
-  }, [debouncedSearch]);
-
-  const goToPage = (target: number) =>
-    updateQuery({ page: target <= 1 ? null : String(target) });
+  const goToPage = (target: number) => updateQuery({ page: target <= 1 ? null : String(target) });
 
   const changePageSize = (size: number) =>
     updateQuery({
@@ -235,8 +157,35 @@ function PaymentsClient() {
       page: null,
     });
 
-  const updateFilter = (key: string, value: string) =>
-    updateQuery({ [key]: value || null, page: null });
+  const { currency, setCurrency } = useCurrencyDisplay();
+  const { price: xlmPrice, isUnavailable: isPriceUnavailable } = useXlmPrice();
+
+  const renderPaymentAmount = (payment: OnChainPayment) => {
+    const xlmAmount = payment.amountStroops / XLM_STROOPS;
+    if (currency !== "USD") {
+      return formatAmount(xlmAmount, "XLM");
+    }
+    if (xlmPrice !== null) {
+      return (
+        <div>
+          <span className="font-medium text-gray-900 dark:text-white">
+            {formatFiatAmount(convertXlmToUsd(xlmAmount, xlmPrice), { showApprox: true })}
+          </span>
+          <span className="block text-[11px] text-gray-400 dark:text-gray-500">
+            {formatAmount(xlmAmount, "XLM")}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div>
+        <span>{formatAmount(xlmAmount, "XLM")}</span>
+        <span className="block text-[11px] text-amber-600 dark:text-amber-400 font-sans">
+          (USD unavailable)
+        </span>
+      </div>
+    );
+  };
 
   const handleExport = async () => {
     // Prefer the server-side export (GET /api/payments/export): it applies the
@@ -260,7 +209,7 @@ function PaymentsClient() {
         link.download = `ophirpay-payments-${new Date().toISOString().split("T")[0]}.csv`;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        link.remove();
         URL.revokeObjectURL(url);
         return;
       }
@@ -286,25 +235,43 @@ function PaymentsClient() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Payments
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payments</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             Payment records stored on-chain by the OphirPay Soroban contract
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <CurrencyToggle
+            value={currency}
+            onChange={setCurrency}
+            showPrice={currency === "USD"}
+            price={xlmPrice}
+            isUnavailable={isPriceUnavailable}
+          />
           <button
+            type="button"
             onClick={handleExport}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             title="Export CSV"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+              />
             </svg>
             CSV
           </button>
           <button
+            type="button"
             onClick={() => load()}
             disabled={loading}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
@@ -317,7 +284,11 @@ function PaymentsClient() {
               stroke="currentColor"
               className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"
+              />
             </svg>
             Refresh
           </button>
@@ -325,7 +296,14 @@ function PaymentsClient() {
             href="/send"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors shadow-lg shadow-ophir-500/25 active:scale-95"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-4 h-4"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             Send
@@ -333,37 +311,29 @@ function PaymentsClient() {
         </div>
       </div>
 
-      {/* Search bar — hidden when there is nothing to search yet */}
-      {payments.length > 0 && (
-        <div className="relative max-w-sm">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by address, hash, or ID..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent"
+      {/* Search bar */}
+      <div className="relative max-w-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
           />
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-end gap-3" aria-label="Payment filters">
-        <label className="text-xs text-gray-500 dark:text-gray-400">
-          Status
-          <select aria-label="Filter by status" value={statusFilter} onChange={(e) => updateFilter("status", e.target.value)} className="mt-1 block rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
-            <option value="">All statuses</option><option value="RECORDED">Recorded</option><option value="CANCELLED">Cancelled</option>
-          </select>
-        </label>
-        <label className="text-xs text-gray-500 dark:text-gray-400">
-          Asset
-          <select aria-label="Filter by asset" value={assetFilter} onChange={(e) => updateFilter("asset", e.target.value)} className="mt-1 block rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
-            <option value="">All assets</option><option value="XLM">XLM</option><option value="USDC">USDC</option>
-          </select>
-        </label>
-        <label className="text-xs text-gray-500 dark:text-gray-400">From<input aria-label="Filter from date" type="date" value={dateFrom} onChange={(e) => updateFilter("dateFrom", e.target.value)} className="mt-1 block rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm" /></label>
-        <label className="text-xs text-gray-500 dark:text-gray-400">To<input aria-label="Filter to date" type="date" value={dateTo} onChange={(e) => updateFilter("dateTo", e.target.value)} className="mt-1 block rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm" /></label>
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by address, hash, or ID..."
+          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent"
+        />
       </div>
 
       {/* Chain record count */}
@@ -385,7 +355,11 @@ function PaymentsClient() {
           <p className="text-sm text-red-700 dark:text-red-400">
             Failed to load on-chain payments: {error}
           </p>
-          <button onClick={() => load()} className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline">
+          <button
+            type="button"
+            onClick={() => load()}
+            className="mt-2 text-sm text-red-600 dark:text-red-400 underline hover:no-underline"
+          >
             Try again
           </button>
         </div>
@@ -421,17 +395,13 @@ function PaymentsClient() {
           <table className="w-full text-sm" aria-busy={loading}>
             <thead>
               <tr className="text-left text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50">
-                <th scope="col" className="py-3 px-4 font-medium">Payment</th>
-                <SortableTh label="amount" sortKey="amount" sort={sort} onSort={toggleSort}>
-                  Amount
-                </SortableTh>
-                <SortableTh label="status" sortKey="status" sort={sort} onSort={toggleSort}>
-                  Status
-                </SortableTh>
-                <SortableTh label="date" sortKey="date" sort={sort} onSort={toggleSort}>
-                  Date
-                </SortableTh>
-                <th scope="col" className="py-3 px-4 font-medium">Tx Hash</th>
+                <th className="py-3 px-4 font-medium">Payment</th>
+                <th className="py-3 px-4 font-medium">
+                  Amount {currency === "USD" ? "(USD)" : "(XLM)"}
+                </th>
+                <th className="py-3 px-4 font-medium">Status</th>
+                <th className="py-3 px-4 font-medium">Date</th>
+                <th className="py-3 px-4 font-medium">Tx Hash</th>
               </tr>
             </thead>
             <tbody ref={tbodyRef} onKeyDown={onRowsKeyDown}>
@@ -441,7 +411,6 @@ function PaymentsClient() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr
                     key={i}
-                    aria-hidden="true"
                     className="border-b border-gray-100 dark:border-gray-800/50"
                   >
                     <td className="py-3 px-4" colSpan={5}>
@@ -460,7 +429,9 @@ function PaymentsClient() {
                 <tr>
                   <td colSpan={5} className="py-12 text-center">
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {search ? "No payments match your search." : "No on-chain payments yet — send one from the Send page."}
+                      {search
+                        ? "No payments match your search."
+                        : "No on-chain payments yet — send one from the Send page."}
                     </p>
                   </td>
                 </tr>
@@ -480,13 +451,21 @@ function PaymentsClient() {
                     )}
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900 dark:text-white">#{payment.id}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">
-                        {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
-                      </p>
+                      <Link
+                        href={`/payments/${payment.id}`}
+                        className="block group/link"
+                        title={`View payment #${payment.id} details`}
+                      >
+                        <p className="font-medium text-gray-900 dark:text-white group-hover/link:text-ophir-600 dark:group-hover/link:text-ophir-400 transition-colors">
+                          #{payment.id}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 group-hover/link:text-gray-500 dark:group-hover/link:text-gray-400 transition-colors">
+                          {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
+                        </p>
+                      </Link>
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-gray-300 font-mono">
-                      {formatAmount(payment.amountStroops / XLM_STROOPS, "XLM")}
+                      {renderPaymentAmount(payment)}
                     </td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
@@ -528,11 +507,9 @@ function PaymentsClient() {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Showing{" "}
                 <span className="font-medium">
-                  {startIndex + 1}–
-                  {Math.min(startIndex + pageSize, filtered.length)}
+                  {startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)}
                 </span>{" "}
-                of <span className="font-medium">{filtered.length}</span> on-chain
-                records
+                of <span className="font-medium">{filtered.length}</span> on-chain records
               </p>
               <select
                 aria-label="Page size"

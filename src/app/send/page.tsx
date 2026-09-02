@@ -813,15 +813,24 @@ function SendPageClient() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Destination Address
           </label>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={destination}
-            onChange={(e) => setDestination(e.target.value)}
+            onChange={setDestination}
             disabled={isSubmitting}
             placeholder="G..."
             data-testid="destination-input"
             className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            Start typing to autocomplete from your{" "}
+            <Link
+              href="/address-book"
+              className="text-ophir-600 dark:text-ophir-400 hover:underline"
+            >
+              address book
+            </Link>
+            .
+          </p>
         </div>
 
         {/* Source Asset Selector */}

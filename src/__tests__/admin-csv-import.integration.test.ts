@@ -7,7 +7,13 @@ import { AUDIT_ACTIONS } from "@/lib/audit";
 import { createSessionToken, getAuthContext } from "@/lib/auth-session";
 import { POST as postBatch } from "@/app/api/batches/route";
 import * as csvImportModule from "@/lib/csv-import";
-import type { CsvImportRow } from "@/lib/csv-import";
+
+interface CsvFileLike {
+  name: string;
+  type: string;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
 
 /**
  * The test expects a PostgreSQL instance on localhost:5432, e.g.
@@ -125,7 +131,7 @@ G${"B".repeat(55)},50,
 
   it("imports CSV data and inserts rows into the database via admin batch creation", async () => {
     // Parse and validate the CSV file
-    const { rows, fileErrors } = await csvImport.parseRecipientsCsvToRows(csvFile(sampleCsv));
+    const { rows, fileErrors } = await (csvImport as { parseRecipientsCsvToRows: (file: CsvFileLike) => Promise<{ rows: Array<{ values: Record<string, string>; errors: Record<string, unknown> }>; fileErrors: string[] }> }).parseRecipientsCsvToRows(csvFile(sampleCsv));
 
     expect(fileErrors).toEqual([]);
     expect(rows).toHaveLength(2);
@@ -194,14 +200,6 @@ G${"B".repeat(55)},50,
     // Verify the audit action type constant is correctly defined
     expect(AUDIT_ACTIONS.BATCH_CREATE).toBe("batch:create");
     expect(typeof AUDIT_ACTIONS.BATCH_CREATE).toBe("string");
-
-    // In a full integration test with the running server,
-    // the POST /api/batches handler would call:
-    // recordAudit(AUDIT_ACTIONS.BATCH_CREATE, {
-    //   actor: authContext.publicKey || "system",
-    //   target: batches[0].id,
-    //   details: { csvRows: 2, source: "admin_import" },
-    // });
 
     // For this unit-level verification, we confirm the audit action
     // type is available and used consistently across the codebase.

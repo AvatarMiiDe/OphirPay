@@ -64,6 +64,7 @@ describe("GET /api/payments", () => {
     expect(mockFindMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
+        deletedAt: null,
         status: "COMPLETED",
         // Issue #157: memo is ILIKE (case-insensitive contains), the
         // transaction hash is an exact match.

@@ -132,6 +132,8 @@ Most blockchain payment tools are either developer-facing SDKs or complex enterp
 | **In-app notification center** (bell, unread count, live SSE updates, session persistence) | ✅ | ❌ |
 
 > All features above have dashboard UI pages. See [roadmap](#-roadmap) for details.
+>
+> 📄 **Batch payments CSV import** — see [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) for the exact CSV format, validation rules, and error messages.
 
 | **Full CI/CD + 970 tests (806 app + 67 contracts + 97 e2e)** | ✅ | ⚠️ |
 
@@ -745,6 +747,10 @@ We welcome contributions! Here's how to get started:
 3. **Commit** your changes: `git commit -m 'feat: add amazing feature'`
 4. **Push** to your fork: `git push origin feat/amazing-feature`
 5. **Open** a Pull Request against `main`
+
+> 🛠️ **Setup trouble?** See the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+> for fixes to common issues (Freighter detection, Rust/wasm32 target,
+> Prisma migrations, WASM builds, Node version, port conflicts).
 
 ### Development Scripts
 

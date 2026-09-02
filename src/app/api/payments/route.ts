@@ -3,7 +3,6 @@ import { withMetrics } from "@/lib/metrics-middleware";
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
-import { createPaymentSchema, paginationSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,
@@ -99,7 +98,7 @@ export const GET = withMetrics("GET /api/payments", withRequestLogging(async fun
       hasMore: pageInfo.hasMore,
     });
   } catch (err) {
-    return handleApiError(err, "GET /api/payments");
+    return handleApiError(err, `GET /api/payments/[id]`);
   }
 }));
 
@@ -112,11 +111,15 @@ export const POST = withMetrics("POST /api/payments", withRequestLogging(async f
       );
     }
 
-    const body = await request.json();
-    const parsed = createPaymentSchema.safeParse(body);
-    if (!parsed.success) return validationError(parsed.error);
+    const parsed = await validateIdParam(params);
+    if (!parsed.success) return parsed.response;
+    const { id } = parsed;
 
-    const payment = await prisma.payment.create({
+    const body = await request.json() as { status?: string; description?: string; memo?: string };
+
+    // updateMany scopes the write to the authenticated user's records
+    const updated = await prisma.payment.updateMany({
+      where: { id, userId: auth.userId },
       data: {
         amount: parsed.data.amount,
         assetCode: parsed.data.assetCode,
@@ -134,25 +137,57 @@ export const POST = withMetrics("POST /api/payments", withRequestLogging(async f
         sourceAccountId: parsed.data.sourceAccountId,
       },
     });
+    if (updated.count === 0) return notFoundError("Payment");
 
-    logger.info("Payment created", { id: payment.id, amount: payment.amount });
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) return notFoundError("Payment");
 
-    dispatchWebhookEventAsync(
-      WEBHOOK_EVENTS.PAYMENT_CREATED,
-      {
+    logger.info("Payment updated", { id, status: payment.status });
+
+    if (body.status === "SIGNED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SIGNED, {
         paymentId: payment.id,
         amount: payment.amount,
         assetCode: payment.assetCode,
         status: payment.status,
-        createdAt: payment.createdAt.toISOString(),
-      },
-      auth.userId
-    );
+        signedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "SUBMITTED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_SUBMITTED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        submittedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "CONFIRMED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_CONFIRMED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        confirmedAt: new Date().toISOString(),
+      });
+    } else if (body.status === "COMPLETED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_COMPLETED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        transactionHash: payment.transactionHash,
+        completedAt: payment.completedAt?.toISOString() ?? new Date().toISOString(),
+      });
+    } else if (body.status === "FAILED") {
+      dispatchWebhookEventAsync(WEBHOOK_EVENTS.PAYMENT_FAILED, {
+        paymentId: payment.id,
+        amount: payment.amount,
+        assetCode: payment.assetCode,
+        errorMessage: payment.errorMessage,
+        failedAt: new Date().toISOString(),
+      });
+    }
 
-    incMetric("payments_created_total");
-
-    return successResponse(payment, undefined, 201);
+    return successResponse(payment);
   } catch (err) {
-    return handleApiError(err, "POST /api/payments");
+    return handleApiError(err, `PATCH /api/payments/[id]`);
   }
 }));
