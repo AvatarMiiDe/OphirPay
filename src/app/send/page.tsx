@@ -1200,6 +1200,25 @@ function SendPageClient() {
             placeholder="e.g. Payment for services"
             className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            A Stellar memo is an optional note (up to 28 bytes) attached to the
+            transaction. Some exchanges and services require a memo or
+            destination tag to credit payments — include it if the recipient
+            asked for one.
+            {memo && (
+              <span className="block mt-1">
+                {(() => {
+                  const byteLen = new TextEncoder().encode(memo.trim()).byteLength;
+                  const isNearLimit = byteLen > 20;
+                  return (
+                    <span className={isNearLimit ? "text-amber-500 dark:text-amber-400" : ""}>
+                      {byteLen}/28 bytes
+                    </span>
+                  );
+                })()}
+              </span>
+            )}
+          </p>
         </div>
 
         {/* Sponsored account creation */}
