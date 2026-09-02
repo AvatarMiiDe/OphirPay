@@ -110,6 +110,20 @@ export const paymentExportParamsSchema = z.object({
 
 // ── Batch Schemas ─────────────────────────────────────────────
 
+/**
+ * Idempotency key shared by POST /api/batches (header or body field).
+ *
+ * The value is trimmed BEFORE validation so the validated value is exactly
+ * the value that gets persisted — a body key like `"  short  "` is rejected
+ * (its trimmed form is 5 chars) and `"  my-key-123  "` is stored as
+ * `"my-key-123"`, keeping header and body keys consistent.
+ */
+export const idempotencyKeySchema = z
+  .string("Idempotency key must be a string")
+  .trim()
+  .min(8, "Idempotency key must be at least 8 characters")
+  .max(255, "Idempotency key must be at most 255 characters");
+
 export const batchRecipientSchema = z.object({
   address: stellarAddress,
   amount: z.number().positive("Amount must be greater than zero"),
@@ -201,6 +215,16 @@ export const createWebhookSchema = z.object({
   url: z.string().url("Invalid webhook URL"),
   events: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
+});
+
+export const webhookReplaySchema = z.object({
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const webhookDeliveriesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
 // ── API Key Schemas ───────────────────────────────────────────

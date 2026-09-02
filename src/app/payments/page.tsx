@@ -11,6 +11,7 @@ import { fetchOnChainPayments, type OnChainPayment } from "@/lib/contracts";
 import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { EmptyState } from "@/components/EmptyState";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -31,6 +32,14 @@ interface OnChainData {
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50] as const;
 const DEFAULT_PAGE_SIZE = 25;
+
+// Fetch the complete on-chain dataset rather than a recent slice. Sorting and
+// pagination run client-side, so operating on a partial slice would silently
+// exclude older records — a sorted view could report the wrong minimum amount
+// or omit valid payments entirely. `fetchOnChainPayments` fetches ids
+// `total - limit + 1 .. total`; an unbounded limit reads every record (and
+// stays capped by the contract's own count).
+const FETCH_ALL_RECORDS = Number.MAX_SAFE_INTEGER;
 
 export default function PaymentsPage() {
   usePageTitle(PAGE_TITLES.PAYMENTS);
@@ -56,7 +65,9 @@ function PaymentsClient() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [search, setSearch] = useState("");
+  // Pre-populate the search box from `?q=` so filtered views are shareable
+  // (Issue #157: the search param lives in the URL).
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const debouncedSearch = useDebounce(search, 300);
 
   const {
@@ -78,18 +89,23 @@ function PaymentsClient() {
   const total = data?.total ?? 0;
   const error = fetchError ? fetchError.message : null;
 
+  const statusFilter = searchParams.get("status") ?? "";
+  const dateFrom = searchParams.get("dateFrom") ?? "";
+  const dateTo = searchParams.get("dateTo") ?? "";
+  const assetFilter = searchParams.get("asset") ?? "";
+
   // Client-side search/filter
   const filtered = useMemo(() => {
-    if (!debouncedSearch) return payments;
     const q = debouncedSearch.toLowerCase();
     return payments.filter(
       (p) =>
-        p.payer.toLowerCase().includes(q) ||
-        p.payee.toLowerCase().includes(q) ||
-        p.txHash.toLowerCase().includes(q) ||
-        String(p.id).includes(q)
+        (!q || p.payer.toLowerCase().includes(q) || p.payee.toLowerCase().includes(q) || p.txHash.toLowerCase().includes(q) || String(p.id).includes(q)) &&
+        (!statusFilter || (p.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED") === statusFilter) &&
+        (!dateFrom || (p.timestamp !== undefined && p.timestamp >= Math.floor(new Date(`${dateFrom}T00:00:00`).getTime() / 1000))) &&
+        (!dateTo || (p.timestamp !== undefined && p.timestamp <= Math.floor(new Date(`${dateTo}T23:59:59.999`).getTime() / 1000))) &&
+        (!assetFilter || (p.assetCode ?? "XLM") === assetFilter)
     );
-  }, [payments, debouncedSearch]);
+  }, [payments, debouncedSearch, statusFilter, dateFrom, dateTo, assetFilter]);
 
   // Client-side pagination — page and page size are persisted in the URL
   // search params so filtered/paginated views are shareable.
@@ -101,10 +117,27 @@ function PaymentsClient() {
     ? pageSizeParam
     : DEFAULT_PAGE_SIZE;
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  // Column sorting — state lives in the URL (`sort` + `dir`) so sorted views
+  // are shareable and compose with the search filter and pagination.
+  const sort = parsePaymentSort(searchParams);
+  const sorted = useMemo(() => applyPaymentSort(filtered, sort), [filtered, sort]);
+
+  const toggleSort = (key: PaymentSortKey) =>
+    updateQuery({
+      ...getSortParamUpdates(getNextSort(sort, key)),
+      // Re-sorting changes the row order — jump back to the first page.
+      page: null,
+    });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
-  const paginated = filtered.slice(startIndex, startIndex + pageSize);
+  const paginated = sorted.slice(startIndex, startIndex + pageSize);
+
+  // Roving-tabindex keyboard navigation: the active row is in the tab order
+  // and ArrowUp/Down/Home/End move between rows (also from row actions).
+  const { activeIndex, getRowProps, onRowsKeyDown, tbodyRef } =
+    useTableKeyboardNavigation(paginated.length);
 
   const updateQuery = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -184,7 +217,6 @@ function PaymentsClient() {
       // Network failure or missing session — fall through to the client-side
       // export below.
     }
-
     exportToCsv(filtered, [
       { key: "id", header: "Payment ID" },
       { key: "payer", header: "Payer" },
@@ -333,7 +365,31 @@ function PaymentsClient() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Empty state / Table */}
+      {!loading && !error && payments.length === 0 && !search ? (
+        <EmptyState
+          icon={
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-8 h-8 text-gray-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
+              />
+            </svg>
+          }
+          title="No Payments Yet"
+          description="Payments recorded on-chain by the OphirPay Soroban contract will appear here. Send your first payment to get started."
+          actionLabel="Create First Payment"
+          onAction={() => router.push("/send")}
+        />
+      ) : (
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm" aria-busy={loading}>
@@ -348,7 +404,7 @@ function PaymentsClient() {
                 <th className="py-3 px-4 font-medium">Tx Hash</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tbodyRef} onKeyDown={onRowsKeyDown}>
               {loading &&
                 // Skeleton rows pulse in place so the table keeps its height
                 // (no layout shift) while the on-chain read is in flight.
@@ -382,16 +438,31 @@ function PaymentsClient() {
               )}
 
               {!loading &&
-                paginated.map((payment) => (
+                paginated.map((payment, index) => (
                   <tr
                     key={payment.id}
-                    className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                    data-row-index={index}
+                    {...getRowProps(index)}
+                    className={cn(
+                      "border-b border-gray-100 dark:border-gray-800/50 transition-colors",
+                      index === activeIndex
+                        ? "bg-ophir-50/70 dark:bg-ophir-950/40 hover:bg-ophir-100/70 dark:hover:bg-ophir-900/40"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                    )}
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900 dark:text-white">#{payment.id}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">
-                        {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
-                      </p>
+                      <Link
+                        href={`/payments/${payment.id}`}
+                        className="block group/link"
+                        title={`View payment #${payment.id} details`}
+                      >
+                        <p className="font-medium text-gray-900 dark:text-white group-hover/link:text-ophir-600 dark:group-hover/link:text-ophir-400 transition-colors">
+                          #{payment.id}
+                        </p>
+                        <p className="text-xs text-gray-400 font-mono mt-0.5 group-hover/link:text-gray-500 dark:group-hover/link:text-gray-400 transition-colors">
+                          {shortenAddress(payment.payer, 6)} → {shortenAddress(payment.payee, 6)}
+                        </p>
+                      </Link>
                     </td>
                     <td className="py-3 px-4 text-gray-700 dark:text-gray-300 font-mono">
                       {renderPaymentAmount(payment)}
@@ -399,7 +470,7 @@ function PaymentsClient() {
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        {payment.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED"}
+                        {getPaymentStatus(payment)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs">
@@ -465,6 +536,7 @@ function PaymentsClient() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

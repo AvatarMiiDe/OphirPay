@@ -29,6 +29,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, getAssetInfo, type AssetInfo } from "@/lib/assets";
+import { nextRunAt, FREQUENCY_OPTIONS, FREQUENCY_LABELS, frequencyLabel, type Frequency } from "@/lib/recurrence";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -94,6 +95,11 @@ function SendPageClient() {
     "unknown" | "checking" | "funded" | "unfunded"
   >("unknown");
 
+  // Recurring-payment mode: instead of a one-time on-chain send, the form
+  // records a DB Recurrence schedule (issue #172).
+  const [mode, setMode] = useState<"one-time" | "recurring">("one-time");
+  const [frequency, setFrequency] = useState<Frequency>("DAILY");
+
   // Path payment estimate state
   const [pathEstimate, setPathEstimate] = useState<PathPaymentEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
@@ -115,6 +121,22 @@ function SendPageClient() {
     { id: string }
   >("/api/payments", {
     invalidateKeys: [["dashboard", "payments"], ["payments", "onchain"], ["events", "onchain"]],
+  });
+
+  // Records a DB Recurrence schedule when the user picks the recurring mode.
+  const createRecurrenceMutation = useApiMutation<
+    {
+      name: string;
+      frequency: string;
+      amount: number;
+      assetCode: string;
+      destAddress: string;
+      description?: string;
+      sourceAccountId: string;
+    },
+    { id: string; nextRunAt: string }
+  >("/api/recurring", {
+    invalidateKeys: [["recurring"]],
   });
 
   // Fetch live fee estimate on mount
@@ -268,17 +290,17 @@ function SendPageClient() {
       setValidationError(memoError);
       return false;
     }
-    if (
-      recipientStatus === "unfunded" &&
+    if (recipientStatus === "unfunded" &&
       !sponsorCreate &&
-      selectedAsset.type === "native"
+      selectedAsset.type === "native" &&
+      mode === "one-time"
     ) {
       setValidationError(
         "This recipient account does not exist yet. Enable “Fund new account (sponsor)” to create it in the same transaction, or use an existing address."
       );
       return false;
     }
-    if (isCrossAsset) {
+    if (isCrossAsset && mode === "one-time") {
       if (isEstimating) {
         setValidationError("Calculating exchange rate path... Please wait.");
         return false;
@@ -303,6 +325,38 @@ function SendPageClient() {
     setStep("building");
 
     try {
+      // Recurring mode — record a DB Recurrence schedule instead of executing
+      // a one-time on-chain payment (issue #172).
+      if (mode === "recurring") {
+        const nextRun = nextRunAt(new Date(), frequency);
+        await createRecurrenceMutation.mutateAsync({
+          name: memo.trim() || `Recurring ${frequency.toLowerCase()} payment`,
+          frequency,
+          amount: parseFloat(amount),
+          assetCode: selectedAsset.code,
+          destAddress: destination.trim(),
+          description: memo.trim() || undefined,
+          sourceAccountId: wallet.publicKey,
+        });
+
+        setStep("done");
+        setResult({
+          type: "success",
+          txHash: "",
+          amount,
+          sourceAsset: selectedAsset,
+          destination: destination.trim(),
+          isCrossAsset: false,
+        });
+
+        fetchBalance();
+        toast.success(
+          "Recurring payment scheduled",
+          `${formatAmount(parseFloat(amount), selectedAsset.code)} ${frequencyLabel(frequency)} → ${shortenAddress(destination.trim(), 6)} · next run ${nextRun.toLocaleDateString()}`
+        );
+        return;
+      }
+
       // 1. Build the transaction
       let xdr: string;
 
@@ -427,6 +481,8 @@ function SendPageClient() {
     setPathEstimate(null);
     setPathError(null);
     setValidationError(null);
+    setMode("one-time");
+    setFrequency("DAILY");
   };
 
   // ── Not connected state ──────────────────────────────────
@@ -678,7 +734,7 @@ function SendPageClient() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Send Payment
           </h1>
-          {isCrossAsset && (
+          {isCrossAsset && mode === "one-time" && (
             <span
               data-testid="cross-asset-badge"
               className="px-2.5 py-1 rounded-full text-xs font-semibold bg-ophir-100 text-ophir-800 dark:bg-ophir-950/50 dark:text-ophir-300 border border-ophir-200 dark:border-ophir-800"
@@ -688,9 +744,11 @@ function SendPageClient() {
           )}
         </div>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          {isCrossAsset
-            ? `Cross-asset transfer: Pay in ${selectedAsset.code}, recipient receives ${destAsset.code}`
-            : `Send ${selectedAsset.code} on the Stellar Testnet`}
+          {mode === "recurring"
+            ? `Schedule a recurring ${selectedAsset.code} payment on Stellar`
+            : isCrossAsset
+              ? `Cross-asset transfer: Pay in ${selectedAsset.code}, recipient receives ${destAsset.code}`
+              : `Send ${selectedAsset.code} on the Stellar Testnet`}
         </p>
       </div>
 
@@ -716,20 +774,63 @@ function SendPageClient() {
 
       {/* Form */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+        {/* Payment type toggle */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl" role="tablist" aria-label="Payment type">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "one-time"}
+            onClick={() => setMode("one-time")}
+            disabled={isSubmitting}
+            data-testid="mode-one-time"
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+              mode === "one-time"
+                ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            }`}
+          >
+            One-time
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "recurring"}
+            onClick={() => setMode("recurring")}
+            disabled={isSubmitting}
+            data-testid="mode-recurring"
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+              mode === "recurring"
+                ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            }`}
+          >
+            Recurring
+          </button>
+        </div>
+
         {/* Destination */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Destination Address
           </label>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={destination}
-            onChange={(e) => setDestination(e.target.value)}
+            onChange={setDestination}
             disabled={isSubmitting}
             placeholder="G..."
             data-testid="destination-input"
             className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            Start typing to autocomplete from your{" "}
+            <Link
+              href="/address-book"
+              className="text-ophir-600 dark:text-ophir-400 hover:underline"
+            >
+              address book
+            </Link>
+            .
+          </p>
         </div>
 
         {/* Source Asset Selector */}
@@ -746,28 +847,70 @@ function SendPageClient() {
         </div>
 
         {/* Destination Asset Selector */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Recipient Receives (Destination Asset)
+        {mode === "one-time" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Recipient Receives (Destination Asset)
+              </label>
+              {isCrossAsset && (
+                <button
+                  type="button"
+                  onClick={() => setDestAsset(selectedAsset)}
+                  className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+                >
+                  Match Source ({selectedAsset.code})
+                </button>
+              )}
+            </div>
+            <AssetSelector
+              publicKey={destination && isValidStellarAddress(destination) ? destination : null}
+              selectedAsset={destAsset}
+              onSelect={setDestAsset}
+              disabled={isSubmitting}
+            />
+          </div>
+        )}
+
+        {/* Recurring frequency picker + next-run preview */}
+        {mode === "recurring" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Frequency
             </label>
-            {isCrossAsset && (
-              <button
-                type="button"
-                onClick={() => setDestAsset(selectedAsset)}
-                className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as Frequency)}
+              disabled={isSubmitting}
+              data-testid="frequency-input"
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {FREQUENCY_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {FREQUENCY_LABELS[f]}
+                </option>
+              ))}
+            </select>
+            {amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 && (
+              <div
+                data-testid="next-run-preview"
+                className="mt-2 p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800"
               >
-                Match Source ({selectedAsset.code})
-              </button>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  First run scheduled for{" "}
+                  <span className="font-medium text-ophir-700 dark:text-ophir-300">
+                    {nextRunAt(new Date(), frequency).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                  , then {frequencyLabel(frequency).toLowerCase()}.
+                </p>
+              </div>
             )}
           </div>
-          <AssetSelector
-            publicKey={destination && isValidStellarAddress(destination) ? destination : null}
-            selectedAsset={destAsset}
-            onSelect={setDestAsset}
-            disabled={isSubmitting}
-          />
-        </div>
+        )}
 
         {/* Amount */}
         <div>
@@ -809,7 +952,7 @@ function SendPageClient() {
         </div>
 
         {/* Cross-Asset Rate Preview Card */}
-        {isCrossAsset && (
+        {isCrossAsset && mode === "one-time" && (
           <div
             data-testid="rate-preview-card"
             className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 space-y-2.5"
@@ -890,7 +1033,7 @@ function SendPageClient() {
         </div>
 
         {/* Sponsored account creation */}
-        {recipientStatus === "unfunded" && selectedAsset.type === "native" && (
+        {mode === "one-time" && recipientStatus === "unfunded" && selectedAsset.type === "native" && (
           <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800">
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -926,7 +1069,7 @@ function SendPageClient() {
         {/* Submit */}
         <button
           onClick={handleSend}
-          disabled={isSubmitting || (isCrossAsset && (!pathEstimate || Boolean(pathError)))}
+          disabled={isSubmitting || (mode === "one-time" && isCrossAsset && (!pathEstimate || Boolean(pathError)))}
           data-testid="send-btn"
           className="w-full py-3 rounded-lg bg-gradient-to-r from-ophir-600 to-stellar-dark text-white font-medium text-sm hover:from-ophir-700 hover:to-stellar disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-ophir-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
         >
@@ -952,13 +1095,15 @@ function SendPageClient() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              {step === "building"
-                ? "Building transaction..."
-                : step === "signing"
-                  ? "Waiting for signature..."
-                  : step === "recording"
-                    ? "Recording on-chain (sign to confirm)..."
-                    : "Submitting to Stellar..."}
+              {mode === "recurring"
+                ? "Scheduling recurring payment..."
+                : step === "building"
+                  ? "Building transaction..."
+                  : step === "signing"
+                    ? "Waiting for signature..."
+                    : step === "recording"
+                      ? "Recording on-chain (sign to confirm)..."
+                      : "Submitting to Stellar..."}
             </>
           ) : (
             <>
@@ -976,11 +1121,13 @@ function SendPageClient() {
                   d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
                 />
               </svg>
-              {isCrossAsset
-                ? pathError
-                  ? "No Path Available"
-                  : `Send ${amount || "0"} ${selectedAsset.code} → ~${pathEstimate?.destinationAmount || "0"} ${destAsset.code}`
-                : `Send ${selectedAsset.code}`}
+              {mode === "recurring"
+                ? "Schedule Recurring"
+                : isCrossAsset
+                  ? pathError
+                    ? "No Path Available"
+                    : `Send ${amount || "0"} ${selectedAsset.code} → ~${pathEstimate?.destinationAmount || "0"} ${destAsset.code}`
+                  : `Send ${selectedAsset.code}`}
             </>
           )}
         </button>
