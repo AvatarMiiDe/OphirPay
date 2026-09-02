@@ -6,6 +6,7 @@ export const ROUTES = {
   SEND: "/send",
   PAYMENTS: "/payments",
   BATCHES: "/batches",
+  BATCH_DETAIL: "/batches/[id]",
   NEW_BATCH: "/batches/new",
   RECURRING: "/recurring",
   REQUESTS: "/requests",
