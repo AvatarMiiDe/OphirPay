@@ -96,9 +96,6 @@ export async function POST(
 
       await recordWebhookDelivery(webhook.id, stored.id, result.success ? "SUCCESS" : "FAILED", {
         responseCode: result.statusCode,
-        latencyMs: result.latencyMs,
-        attempts: result.attempts,
-        errorMessage: result.errorMessage,
         isReplay: true,
         replayBatchId,
       });
