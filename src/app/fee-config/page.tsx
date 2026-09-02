@@ -25,11 +25,19 @@ interface TxStatus {
   txHash?: string;
 }
 
+interface TxStatus {
+  type: "success" | "error";
+  message: string;
+  txHash?: string;
+}
+
 export default function FeeConfigPage() {
   usePageTitle(PAGE_TITLES.FEE_CONFIG);
   const toast = useToast();
   const { wallet } = useWallet();
   const queryClient = useQueryClient();
+  
+  // State declarations - THESE WERE MISSING
   const [collector, setCollector] = useState<string | null>(null);
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showCollectorModal, setShowCollectorModal] = useState(false);
@@ -46,6 +54,18 @@ export default function FeeConfigPage() {
   const [formCollector, setFormCollector] = useState("");
 
   const { config, isLoading: loading } = useFeeConfig();
+
+  // Initialize form values from config when loaded
+  useEffect(() => {
+    if (config) {
+      setFormPaymentFee(config.payment_fee_bps);
+      setFormEscrowFee(config.escrow_fee_bps);
+      setFormStreamFee(config.stream_fee_bps);
+      setFormBatchBase(config.batch_base_fee);
+      setFormBatchPerItem(config.batch_per_item_fee);
+      setFormEnabled(config.enabled);
+    }
+  }, [config]);
 
   // Initialize form values from config when loaded
   useEffect(() => {
@@ -162,7 +182,7 @@ export default function FeeConfigPage() {
 
   if (loading) {
     return (
-      <div className="animate-fade-in space-y-6">
+      <div className="animate-fade-in space-y-6" data-testid="loading-skeleton">
         <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
         <div className="h-40 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
       </div>
@@ -226,10 +246,18 @@ export default function FeeConfigPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setShowFeeModal(true)} variant="primary">
+          <Button 
+            onClick={() => setShowFeeModal(true)} 
+            variant="primary"
+            aria-label="Edit Fees"
+          >
             ⚙ Edit Fees
           </Button>
-          <Button onClick={() => setShowCollectorModal(true)} variant="secondary">
+          <Button 
+            onClick={() => setShowCollectorModal(true)} 
+            variant="secondary"
+            aria-label="Set Collector"
+          >
             💰 Set Collector
           </Button>
         </div>

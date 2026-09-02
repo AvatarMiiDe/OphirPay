@@ -175,7 +175,7 @@ The file is accessible at:
 - **Production**: https://ophirpay.vercel.app/.well-known/security.txt
 - **Repository**: https://github.com/OphirPay/OphirPay/blob/main/.well-known/security.txt
 
-## Security Best Practices
+## CSRF Protection Policy
 
 ### For Users
 
@@ -195,16 +195,17 @@ The file is accessible at:
 - Use environment variables for all sensitive configuration
 - Follow the contract security guidance below for any contract change
 
-## Bug Bounty Program
+1. **Token Generation**: Clients request a CSRF token from `GET /api/csrf`.
+   The server generates a cryptographically secure random token (256 bits),
+   sets it as an `HttpOnly` cookie, and returns the token in the response body.
 
-OphirPay offers rewards for responsibly disclosed vulnerabilities:
+2. **Token Storage**: The client stores the token in memory (not localStorage
+   or sessionStorage) and sends it as the `x-csrf-token` header on all
+   mutating requests.
 
-| Severity | Reward | Examples |
-|---|---|---|
-| **Critical** (9.0-10.0) | Up to $5,000 | Fund drainage, unauthorized admin takeover, key extraction |
-| **High** (7.0-8.9) | Up to $2,000 | Reentrancy, signature bypass, privilege escalation |
-| **Medium** (4.0-6.9) | Up to $500 | CSRF on sensitive endpoints, information disclosure, DoS |
-| **Low** (0.1-3.9) | Swag + recognition | Minor issues, defense-in-depth improvements |
+3. **Token Validation**: On mutating requests, the server compares the
+   `x-csrf-token` header against the CSRF cookie value using constant-time
+   comparison to prevent timing attacks.
 
 ### Rules
 
@@ -215,7 +216,9 @@ OphirPay offers rewards for responsibly disclosed vulnerabilities:
 5. Provide a clear proof-of-concept with steps to reproduce
 6. Report vulnerabilities in good faith
 
-### Process
+- **Production (HTTPS)**: Cookie named `__Host-csrf` with `Secure` attribute
+- **Development (HTTP)**: Cookie named `csrf` without `Secure` attribute
+  (browsers reject `__Host-` cookies without Secure on non-localhost HTTP)
 
 1. Report via one of the [private channels](#how-to-report) above
 2. We acknowledge within 48 hours
@@ -226,7 +229,9 @@ OphirPay offers rewards for responsibly disclosed vulnerabilities:
 > Payouts are in XLM or USDC on Stellar. We follow
 > [CVSS v3.1](https://www.first.org/cvss/v3.1/specification-document) scoring.
 
-## Security Headers
+```typescript
+// Method 1: Manual enforcement
+import { verifyCsrf } from "@/lib/csrf";
 
 OphirPay implements the following security headers:
 - `X-Content-Type-Options: nosniff`
@@ -235,7 +240,8 @@ OphirPay implements the following security headers:
 - `X-XSS-Protection: 1; mode=block`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 
-## Smart Contract Security
+// Method 2: Higher-order function wrapper
+import { withCsrf } from "@/lib/csrf";
 
 - All contract functions use proper access control
 - Cross-contract calls are validated and propagate failures atomically (see

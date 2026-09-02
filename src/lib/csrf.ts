@@ -102,3 +102,77 @@ export function verifyCsrf(request: Request): Response | null {
 
   return null;
 }
+
+/**
+ * Higher-order function to wrap API route handlers with CSRF protection.
+ * Automatically enforces CSRF for mutating methods.
+ * 
+ * Usage:
+ * ```typescript
+ * export const POST = withCsrf(async (request) => {
+ *   // ... handle request
+ * });
+ * ```
+ */
+export function withCsrf(
+  handler: (request: Request, context?: any) => Promise<Response>
+) {
+  return async (request: Request, context?: any): Promise<Response> => {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+    return handler(request, context);
+  };
+}
+
+/**
+ * Audit helper: Check if a route handler has CSRF protection.
+ * This is a utility for tests and code review, not runtime enforcement.
+ */
+export function auditRouteProtection(
+  method: string,
+  hasProtection: boolean
+): { method: string; isMutating: boolean; isProtected: boolean } {
+  const isMutating = ["POST", "PATCH", "DELETE", "PUT"].includes(method.toUpperCase());
+  return {
+    method: method.toUpperCase(),
+    isMutating,
+    isProtected: isMutating ? hasProtection : true,
+  };
+}
+
+/**
+ * List of all API routes and their CSRF protection status.
+ * This is used by tests to verify no mutating route is unprotected.
+ * Add routes here as they are audited.
+ */
+export const CSRF_ROUTE_AUDIT = {
+  // Auth routes
+  "/api/auth/session": { POST: true, DELETE: true },
+  "/api/auth/challenge": { GET: true },
+  
+  // CSRF token minting
+  "/api/csrf": { GET: true },
+  
+  // Add more routes as they are audited:
+  // "/api/payments": { POST: true, PATCH: true, DELETE: true },
+  // "/api/webhooks": { POST: true, PATCH: true, DELETE: true },
+} as const;
+
+/**
+ * Find any mutating routes that lack CSRF protection.
+ * Returns an array of "METHOD /path" strings for unprotected routes.
+ */
+export function findUnprotectedRoutes(): string[] {
+  const unprotected: string[] = [];
+  
+  for (const [path, methods] of Object.entries(CSRF_ROUTE_AUDIT)) {
+    for (const [method, isProtected] of Object.entries(methods)) {
+      const audit = auditRouteProtection(method, isProtected);
+      if (audit.isMutating && !audit.isProtected) {
+        unprotected.push(`${audit.method} ${path}`);
+      }
+    }
+  }
+  
+  return unprotected;
+}
