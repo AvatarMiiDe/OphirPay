@@ -36,7 +36,7 @@ function redactValue(value: unknown): unknown {
     const obj = value as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(obj)) {
-      if (SENSITIVE_FIELDS.has(key)) {
+      if (SENSITIVE_FIELDS.has(key) || SENSITIVE_FIELDS.has(key.toLowerCase())) {
         out[key] = "[REDACTED]";
       } else {
         out[key] = redactValue(entry);

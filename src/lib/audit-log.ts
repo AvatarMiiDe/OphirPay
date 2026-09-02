@@ -89,6 +89,9 @@ export const auditLogQuerySchema = z
     since: yearSuffixCheck.optional(),
     until: yearSuffixCheck.optional(),
     order: z.enum(["asc", "desc"]).default("desc"),
+    // Backing store for GET /api/audit-log (issue #365): "db" serves the
+    // persisted audit trail, "contract" the on-chain ledger, "all" both.
+    source: z.enum(["contract", "db", "all"]).optional().default("contract"),
   })
   .superRefine((val, ctx) => {
     if (

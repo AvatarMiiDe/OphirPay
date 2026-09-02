@@ -124,6 +124,29 @@ function buildMetrics(): string {
     'ophirpay_info{version="1.0.0"} 1'
   );
 
+  // ── Live gauges: process memory + open SSE connections ──────
+  // Sampled on scrape so load tests can assert memory stays bounded and
+  // that SSE connections are released after clients disconnect.
+  const mem = process.memoryUsage();
+  lines.push(
+    "",
+    "# HELP ophirpay_process_resident_set_bytes Process resident set size in bytes",
+    "# TYPE ophirpay_process_resident_set_bytes gauge",
+    `ophirpay_process_resident_set_bytes ${mem.rss}`,
+    "",
+    "# HELP ophirpay_process_heap_used_bytes Process heap used in bytes",
+    "# TYPE ophirpay_process_heap_used_bytes gauge",
+    `ophirpay_process_heap_used_bytes ${mem.heapUsed}`,
+    "",
+    "# HELP ophirpay_process_heap_total_bytes Process heap total in bytes",
+    "# TYPE ophirpay_process_heap_total_bytes gauge",
+    `ophirpay_process_heap_total_bytes ${mem.heapTotal}`,
+    "",
+    "# HELP ophirpay_sse_open_connections Currently open SSE event-stream connections",
+    "# TYPE ophirpay_sse_open_connections gauge",
+    `ophirpay_sse_open_connections ${c.sse_open_connections}`
+  );
+
   return lines.join("\n") + "\n";
 }
 

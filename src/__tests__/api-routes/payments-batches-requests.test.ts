@@ -17,6 +17,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     batch: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
@@ -25,6 +26,12 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    auditLog: {
+      create: vi.fn(),
+    },
+    $transaction: vi.fn(async (cb: ((tx: unknown) => Promise<unknown>) | Promise<unknown>[]) =>
+      typeof cb === "function" ? cb(prisma) : Promise.all(cb)
+    ),
   },
 }));
 
