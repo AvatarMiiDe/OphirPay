@@ -135,6 +135,11 @@ export const POST = withMetrics("POST /api/payments", withRequestLogging(async f
         // wrote a Stellar address into userId, breaking the relation).
         userId: auth.userId,
         sourceAccountId: parsed.data.sourceAccountId,
+        // Persist the destination Stellar address (not modeled as its own
+        // column) so payment-detail receipts can render the recipient.
+        metadata: parsed.data.destAddress
+          ? JSON.stringify({ destAddress: parsed.data.destAddress })
+          : undefined,
       },
     });
     if (updated.count === 0) return notFoundError("Payment");
