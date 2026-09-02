@@ -1,13 +1,14 @@
 "use client";
 // SPDX-License-Identifier: MIT
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState, useOptimistic } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { formatAmount, shortenAddress, timeAgo } from "@/lib/utils";
 import { fetchOnChainPayments, type OnChainPayment } from "@/lib/contracts";
+import { useToast } from "@/components/ui/Toast";
 import { getStellarExplorerUrl, XLM_STROOPS } from "@/lib/stellar";
 import { exportToCsv } from "@/lib/csv";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -89,6 +90,47 @@ function PaymentsClient() {
   const total = data?.total ?? 0;
   const error = fetchError ? fetchError.message : null;
 
+  // ── Optimistic status updates ─────────────────────────────────
+  const toast = useToast();
+  const [optimisticStatuses, setOptimisticStatuses] = useOptimistic(
+    {} as Record<number, "RECORDED" | "CANCELLED">,
+    (current, update: { id: number; status: "RECORDED" | "CANCELLED" }) => ({
+      ...current,
+      [update.id]: update.status,
+    })
+  );
+
+  const getStatus = useCallback(
+    (payment: OnChainPayment): "RECORDED" | "CANCELLED" =>
+      optimisticStatuses[payment.id] ??
+      (payment.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED"),
+    [optimisticStatuses]
+  );
+
+  const handleCancel = useCallback(
+    async (payment: OnChainPayment) => {
+      // Optimistically mark as CANCELLED
+      setOptimisticStatuses({ id: payment.id, status: "CANCELLED" });
+
+      try {
+        const res = await fetch("/api/payments/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ txHash: payment.txHash }),
+        });
+        if (!res.ok) throw new Error("Failed to cancel payment");
+        // Reconcile: refetch from server to confirm the state
+        await load();
+        toast.success("Payment cancelled");
+      } catch {
+        // Roll back: revert to original status
+        setOptimisticStatuses({ id: payment.id, status: "RECORDED" });
+        toast.error("Failed to cancel payment", "The payment status has been reverted.");
+      }
+    },
+    [setOptimisticStatuses, load, toast]
+  );
+
   const statusFilter = searchParams.get("status") ?? "";
   const dateFrom = searchParams.get("dateFrom") ?? "";
   const dateTo = searchParams.get("dateTo") ?? "";
@@ -100,12 +142,12 @@ function PaymentsClient() {
     return payments.filter(
       (p) =>
         (!q || p.payer.toLowerCase().includes(q) || p.payee.toLowerCase().includes(q) || p.txHash.toLowerCase().includes(q) || String(p.id).includes(q)) &&
-        (!statusFilter || (p.metadata === "CANCELLED" ? "CANCELLED" : "RECORDED") === statusFilter) &&
+        (!statusFilter || getStatus(p) === statusFilter) &&
         (!dateFrom || (p.timestamp !== undefined && p.timestamp >= Math.floor(new Date(`${dateFrom}T00:00:00`).getTime() / 1000))) &&
         (!dateTo || (p.timestamp !== undefined && p.timestamp <= Math.floor(new Date(`${dateTo}T23:59:59.999`).getTime() / 1000))) &&
         (!assetFilter || (p.assetCode ?? "XLM") === assetFilter)
     );
-  }, [payments, debouncedSearch, statusFilter, dateFrom, dateTo, assetFilter]);
+  }, [payments, debouncedSearch, statusFilter, dateFrom, dateTo, assetFilter, getStatus]);
 
   // Client-side pagination — page and page size are persisted in the URL
   // search params so filtered/paginated views are shareable.
@@ -468,10 +510,29 @@ function PaymentsClient() {
                       {renderPaymentAmount(payment)}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                        {getPaymentStatus(payment)}
-                      </span>
+                      {(() => {
+                        const status = getStatus(payment);
+                        const isCancelled = status === "CANCELLED";
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${isCancelled ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${isCancelled ? "bg-red-500" : "bg-green-500"}`} />
+                            {status}
+                            {!isCancelled && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancel(payment)}
+                                className="ml-1 text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                                title="Cancel payment"
+                                aria-label={`Cancel payment #${payment.id}`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs">
                       {payment.timestamp
