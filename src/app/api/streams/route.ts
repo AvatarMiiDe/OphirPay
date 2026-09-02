@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
@@ -11,7 +12,7 @@ import { withRequestLogging } from "@/lib/request-logging";
  * GET /api/streams/[id] — single stream lookup
  * Reads from OphirPayContract on-chain.
  */
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/streams", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -28,12 +29,12 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/streams");
   }
-});
+}));
 
 /**
  * POST /api/streams — create stream (requires wallet signing, delegates to client)
  */
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/streams", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -55,4 +56,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/streams/[id]");
   }
-});
+}));

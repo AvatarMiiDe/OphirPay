@@ -26,6 +26,7 @@ interface TxStatus {
 }
 
 export default function FeeConfigPage() {
+  usePageTitle(PAGE_TITLES.FEE_CONFIG);
   const toast = useToast();
   const { wallet } = useWallet();
   const queryClient = useQueryClient();

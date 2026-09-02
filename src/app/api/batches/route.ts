@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
+import type { PaymentStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { createBatchSchema, paginationSchema } from "@/lib/validation-schemas";
+import { createBatchSchema, idempotencyKeySchema, paginationSchema } from "@/lib/validation-schemas";
 import {
   successResponse,
   validationError,
   badRequestError,
   unauthorizedError,
+  conflictError,
   handleApiError,
 } from "@/lib/api-response";
 import { withRequestLogging } from "@/lib/request-logging";
@@ -21,7 +24,7 @@ import {
 
 // ── GET /api/batches — List batches with pagination ──────────
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/batches", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -93,11 +96,61 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/batches");
   }
-});
+}));
 
-// ── POST /api/batches — Create a new batch ──────────────────
+// ── POST /api/batches — Create a new batch (idempotent) ──────
 
-export const POST = withRequestLogging(async function POST(request: Request) {
+const IDEMPOTENCY_HEADER = "Idempotency-Key";
+
+/** True when `err` is a Prisma unique-constraint violation (P2002). */
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
+
+/**
+ * True for a Prisma P2002 (unique constraint) error. Detected by code rather
+ * than `instanceof` so it also fires for the error shape serialized across
+ * runtime boundaries, and it lets tests simulate the race cheaply.
+ */
+function isUniqueConstraintViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
+
+/** Shared shape for the child payments created with a batch. */
+function paymentCreateData(
+  payments: Array<{ amount: number; memo?: string; assetCode?: string }>,
+  batchId: string,
+  userId: string
+) {
+  return payments.map((p) => ({
+    amount: p.amount,
+    assetCode: p.assetCode || "XLM",
+    memo: p.memo || "",
+    // Child payments start as CREATED — they are never completed here.
+    status: "CREATED" as PaymentStatus,
+    userId,
+    batchId,
+  }));
+}
+
+async function fetchBatchWithPayments(batchId: string) {
+  return prisma.batch.findUnique({
+    where: { id: batchId },
+    include: { payments: true },
+  });
+}
+
+export const POST = withMetrics("POST /api/batches", withRequestLogging(async function POST(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -127,4 +180,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/batches/[id]");
   }
-});
+}));

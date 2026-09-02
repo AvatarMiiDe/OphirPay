@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import {
   successResponse,
   badRequestError,
   unauthorizedError,
+  conflictError,
   handleApiError,
 } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
@@ -12,7 +14,7 @@ import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, createRefundRecordSchema } from "@/lib/validation-schemas";
 import { withRequestLogging } from "@/lib/request-logging";
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/refunds", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -58,7 +60,7 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/refunds");
   }
-});
+}));
 
 // ── POST /api/refunds ─────────────────────────────────────────
 
@@ -67,7 +69,7 @@ export const GET = withRequestLogging(async function GET(request: Request) {
  * on-chain transition (approve_refund / process_refund) succeeded, so the
  * Request → Approve → Process flow is reflected in the list.
  */
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/refunds", withRequestLogging(async function POST(request: Request) {
   try {
     const csrfError = verifyCsrf(request);
     if (csrfError) return csrfError;
@@ -96,4 +98,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "PATCH /api/refunds/[id]");
   }
-});
+}));
