@@ -11,6 +11,7 @@ import {
   iterateAuditLogEntries,
   type AuditLogEntry,
 } from "@/lib/audit-log";
+import { z } from "zod";
 
 const auditLogQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
