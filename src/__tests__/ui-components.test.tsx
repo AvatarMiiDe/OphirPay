@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
@@ -343,5 +344,73 @@ describe("Toast system", () => {
     fireEvent.click(screen.getByRole("button", { name: /trigger/i }));
     expect(screen.getByText("Payment sent")).toBeInTheDocument();
     expect(screen.getByText("500 XLM → GABC...")).toBeInTheDocument();
+  });
+
+  it("uses polite announcements for payment information", () => {
+    function InfoTrigger() {
+      const toast = useToast();
+      return <button onClick={() => toast.info("Payment pending")}>Trigger</button>;
+    }
+
+    render(
+      <ToastProvider>
+        <InfoTrigger />
+      </ToastProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: /trigger/i }));
+
+    const announcement = screen.getByRole("status");
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+    expect(announcement).toHaveTextContent("Payment pending");
+  });
+
+  it("uses assertive announcements for payment errors", () => {
+    function ErrorTrigger() {
+      const toast = useToast();
+      return <button onClick={() => toast.error("Transaction failed")}>Trigger</button>;
+    }
+
+    render(
+      <ToastProvider>
+        <ErrorTrigger />
+      </ToastProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: /trigger/i }));
+
+    const announcement = screen.getByRole("alert");
+    expect(announcement).toHaveAttribute("aria-live", "assertive");
+    expect(announcement).toHaveTextContent("Transaction failed");
+  });
+
+  it("does not replace an announcement region when its parent rerenders", () => {
+    function RerenderingTrigger() {
+      const toast = useToast();
+      const [renderCount, setRenderCount] = useState(0);
+      return (
+        <>
+          <button onClick={() => toast.success("Payment sent")}>Toast</button>
+          <button onClick={() => setRenderCount((count) => count + 1)}>
+            Rerender {renderCount}
+          </button>
+        </>
+      );
+    }
+
+    const { rerender } = render(
+      <ToastProvider>
+        <RerenderingTrigger />
+      </ToastProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Toast" }));
+    const announcement = screen.getByRole("status");
+
+    rerender(
+      <ToastProvider>
+        <RerenderingTrigger />
+      </ToastProvider>
+    );
+
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toBe(announcement);
   });
 });
