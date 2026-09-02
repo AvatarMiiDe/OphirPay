@@ -376,6 +376,48 @@ enum Frequency {
   YEARLY
 }
 
+// ── Scheduled Payments ────────────────────────────────────────
+// One-off payments queued to be sent automatically once `scheduledFor`
+// passes. A Vercel cron hits /api/scheduled/run, which picks due rows,
+// submits them from the configured server account, and records the outcome.
+
+model ScheduledPayment {
+  id              String                @id @default(cuid())
+  userId          String
+
+  // Payment details
+  amount          Decimal               @db.Decimal(18, 7)
+  assetCode       String                @default("XLM")
+  assetIssuer     String?
+  destAddress     String
+  memo            String?
+
+  // When to send (must be in the future at creation time)
+  scheduledFor    DateTime
+
+  // Lifecycle
+  status          ScheduledPaymentStatus @default(SCHEDULED)
+  transactionHash String?
+  errorMessage    String?
+  executedAt      DateTime?
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  user            User                  @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status, scheduledFor])
+}
+
+enum ScheduledPaymentStatus {
+  SCHEDULED
+  PROCESSING
+  EXECUTED
+  FAILED
+  CANCELLED
+}
+
 // ── Payment Requests ──────────────────────────────────────────
 
 /// A shareable payment request / invoice-style link. Created by the payer,
