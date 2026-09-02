@@ -234,10 +234,19 @@ export async function parseRecipientsCsvToRows(
 /** Control characters (C0/C1) — never legitimate memo content. */
 const MEMO_CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
 
+export interface CsvParseError {
+  row: number;
+  message: string;
+}
+
+export interface CsvParseResult {
+  recipients: BatchRecipient[];
+  errors: CsvParseError[];
+}
+
 /**
- * Parse a CSV file into batch payment recipients.
- * Expected CSV format: address,amount,assetCode,memo
- * First row is treated as a header and skipped.
+ * Split a CSV row into fields, correctly handling quoted fields, commas inside quotes,
+ * and escaped quotes ("").
  */
 export async function parseRecipientsCsv(file: File): Promise<{
   recipients: BatchRecipient[];
@@ -256,22 +265,42 @@ export async function parseRecipientsCsv(file: File): Promise<{
     const row = i + 1;
     const cols = parsed[i].map((c) => c.trim());
 
-    if (cols.length < 2) {
-      errors.push({ row, message: "Each row must have at least address and amount." });
+    if (char === "," && !inQuotes) {
+      fields.push(current.trim());
+      current = "";
+      i++;
       continue;
     }
 
-    const [address, amountStr, assetCode = "XLM", memo] = cols;
+    current += char;
+    i++;
+  }
 
-    if (!/^G[A-Z0-9]{55}$/.test(address)) {
-      errors.push({ row, message: `Invalid Stellar address at row ${row}.` });
-      continue;
+  fields.push(current.trim());
+  return fields;
+}
+
+/**
+ * Parse CSV text or string into batch payment recipients.
+ * Handles UTF-8 BOM, CRLF/LF line endings, quoted fields, custom/extra columns, and validates fields.
+ */
+export function parseRecipientsCsvText(raw: string): CsvParseResult {
+  const errors: CsvParseError[] = [];
+  const recipients: BatchRecipient[] = [];
+
+  try {
+    if (!raw || typeof raw !== "string") {
+      errors.push({ row: 0, message: "CSV content is empty." });
+      return { recipients, errors };
     }
 
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      errors.push({ row, message: `Invalid amount at row ${row}.` });
-      continue;
+    // Strip UTF-8 BOM (U+FEFF) and normalize line endings
+    const text = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = text.split("\n").filter((l) => l.trim().length > 0);
+
+    if (lines.length === 0) {
+      errors.push({ row: 0, message: "CSV content is empty." });
+      return { recipients, errors };
     }
 
     // Memo validation mirrors the server-side memoField rules (max
@@ -307,6 +336,26 @@ export async function parseRecipientsCsv(file: File): Promise<{
 }
 
 // ── Template ──────────────────────────────────────────────────
+
+/**
+ * Parse a CSV file into batch payment recipients.
+ * Expected CSV format: address,amount,assetCode,memo
+ * First row is treated as a header.
+ */
+export async function parseRecipientsCsv(file: File): Promise<CsvParseResult> {
+  try {
+    if (!file) {
+      return { recipients: [], errors: [{ row: 0, message: "No file provided." }] };
+    }
+    const raw = await file.text();
+    return parseRecipientsCsvText(raw);
+  } catch (err) {
+    return {
+      recipients: [],
+      errors: [{ row: 0, message: `Failed to read file: ${err instanceof Error ? err.message : String(err)}` }],
+    };
+  }
+}
 
 /**
  * Generate a CSV template for batch payment imports.

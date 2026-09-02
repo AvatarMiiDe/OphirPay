@@ -88,6 +88,22 @@ paths:
     get:
       tags: [Payments]
       summary: List payments
+      description: |
+        Lists the authenticated user's payments, newest first
+        (`createdAt DESC, id DESC`).
+
+        Two pagination modes:
+
+        - **Keyset (default)** — pass `limit` and, for subsequent pages, the
+          opaque `cursor` returned in `meta.nextCursor`. Rows are fetched with
+          `take = limit + 1` to compute `hasMore`, so deep pages cost O(limit)
+          and ordering is stable under concurrent inserts. Set
+          `includeTotal=true` to also get `meta.total` (an expensive COUNT —
+          opt in only when you need it).
+        - **Offset (legacy)** — pass `page` + `limit` to get `meta` with
+          `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
+
+        `cursor` and `page` are mutually exclusive (400 if both provided).
       parameters:
         - name: page
           in: query
@@ -119,11 +135,15 @@ paths:
             the authenticated user — soft-deleted rows are hidden by default.
       responses:
         "200":
-          description: Paginated payment list
+          description: Paginated payment list (keyset or offset mode)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedPayments"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Payments]
       summary: Create a payment
@@ -247,6 +267,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /api/payments/export:
+    get:
+      tags: [Payments]
+      summary: Export payments as CSV
+      description: |
+        Server-side CSV export of the CURRENT filter results — every row
+        matching `status` / `search` (the same filters as GET /api/payments),
+        not just the page loaded in the browser. Returns a dated CSV
+        attachment that includes all key fields plus memo and transaction hash.
+        The response includes an `X-Export-Truncated` header set to `true`
+        when the result set exceeds the export row cap.
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments with this status
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only export payments matching this search term
+      responses:
+        "200":
+          description: CSV attachment with the matching payment rows
+          headers:
+            X-Export-Truncated:
+              description: true when the result set was truncated to the export cap
+              schema:
+                type: string
+                enum: ["true", "false"]
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ── Escrows ───────────────────────────────────────────────
   /api/escrows:
@@ -533,6 +596,14 @@ paths:
           description: Already-processed batch returned for a replayed idempotency key (meta.deduplicated is true)
         "201":
           description: Batch created with child payments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: "#/components/schemas/BatchResponse"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -907,6 +978,43 @@ paths:
       responses:
         "200":
           description: Session revoked
+
+  /api/auth/challenge:
+    get:
+      tags: [Session]
+      summary: Mint a proof-of-ownership challenge for a wallet
+      description: |
+        Returns a short-lived, server-signed challenge plus the exact message
+        the wallet must sign. `POST /api/auth/session` only issues a session
+        cookie when the signature over this message verifies against the
+        public key.
+      parameters:
+        - name: publicKey
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Stellar wallet public key (G...)
+      responses:
+        "200":
+          description: Challenge minted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge, message, expiresIn]
+                properties:
+                  challenge:
+                    type: string
+                    description: Single-use challenge token
+                  message:
+                    type: string
+                    description: Exact message the wallet must sign
+                  expiresIn:
+                    type: integer
+                    description: Challenge lifetime in seconds
+        "400":
+          description: Invalid or missing public key
 
   /api/csrf:
     get:
@@ -1537,6 +1645,10 @@ components:
             $ref: "#/components/schemas/PaymentResponse"
         meta:
           type: object
+          description: |
+            Keyset mode (default): `limit`, `nextCursor`, `hasMore` (+ `total`
+            when `includeTotal=true`). Offset mode (when `page` is passed):
+            `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
           properties:
             page: { type: integer }
             limit: { type: integer }
@@ -1663,6 +1775,11 @@ components:
         description:
           type: string
           maxLength: 500
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 255
+          description: Optional alternative to the Idempotency-Key header (trimmed before validation/storage)
         recipients:
           type: array
           minItems: 1
@@ -1693,6 +1810,22 @@ components:
           description: >-
             Optional body-form idempotency key. The Idempotency-Key header
             takes precedence when both are provided.
+
+    BatchResponse:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        idempotencyKey: { type: [string, 'null'] }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentResponse"
 
     CreateRecurrenceRequest:
       type: object
@@ -2120,4 +2253,3 @@ components:
       - RPC_UNAVAILABLE
       - DATABASE_UNAVAILABLE
       - CACHE_UNAVAILABLE
-      - EMAIL_UNAVAILABLE

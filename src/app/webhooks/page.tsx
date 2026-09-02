@@ -316,6 +316,19 @@ export default function WebhooksPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <Link
+                        href={`/webhooks/${wh.id}`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"
+                      >
+                        Dashboard
+                      </Link>
+                      <button
+                        onClick={() => handleReplay(wh.id)}
+                        disabled={replaying === wh.id || !wh.isActive}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-ophir-700 dark:text-ophir-300 hover:bg-ophir-50 dark:hover:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800 transition-colors disabled:opacity-50"
+                      >
+                        {replaying === wh.id ? "Replaying..." : "Replay"}
+                      </button>
                       <button
                         onClick={() => setExpandedId(expandedId === wh.id ? null : wh.id)}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"

@@ -17,6 +17,14 @@ export interface WebhookPayload {
   test?: boolean;
 }
 
+export interface WebhookDeliveryResult {
+  success: boolean;
+  statusCode?: number;
+  latencyMs: number;
+  attempts: number;
+  errorMessage?: string;
+}
+
 /**
  * Generate HMAC-SHA256 signature for a webhook payload.
  * Receiving endpoints can verify authenticity by recomputing the signature.
@@ -98,14 +106,13 @@ export async function deliverWebhook(
       clearTimeout(timeout);
       lastStatusCode = response.status;
 
-      // Treat any redirect (3xx) as a failure — we never follow it, so the
-      // destination cannot be swapped for an internal address mid-delivery.
       if (response.ok) {
         logger.info("Webhook delivered", { url, event: payload.event, attempt });
         incMetric("webhooks_delivered_total");
         return { success: true, statusCode: response.status };
       }
 
+      lastError = `HTTP ${response.status}`;
       logger.warn("Webhook delivery failed", { url, status: response.status, attempt });
     } catch (err) {
       logger.warn("Webhook delivery error", { url, error: String(err), attempt });
