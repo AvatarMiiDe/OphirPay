@@ -169,7 +169,6 @@ impl PaymentEventEmitter {
 
     /// Get event by ID with legacy backward compatibility.
     pub fn get_event(env: Env, event_id: u64) -> Result<PaymentEvent, EmitterError> {
-        // Read raw bytes first to avoid trapping on legacy data
         let raw: Option<soroban_sdk::Bytes> = env.storage().persistent().get(&event_id);
 
         if let Some(bytes) = raw {
@@ -231,17 +230,11 @@ impl PaymentEventEmitter {
 
         let mut events = Vec::new(&env);
         for id in start..=end {
-            // Read raw bytes first to avoid trapping on legacy data
-            let raw: Option<soroban_sdk::Bytes> = env.storage().persistent().get(&id);
-            
-            if let Some(bytes) = raw {
-                // Try V1 schema first (with version field) using FromXdr trait
-                if let Ok(event) = <PaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
-                    events.push_back(event);
-                } else if let Ok(legacy) = <LegacyPaymentEvent as soroban_sdk::xdr::FromXdr>::from_xdr(&bytes) {
-                    // Fallback to legacy schema (without version field)
-                    events.push_back(legacy.into_payment_event());
-                }
+            // Try V1 first, then fallback to legacy
+            if let Some(event) = env.storage().persistent().get::<_, PaymentEvent>(&id) {
+                events.push_back(event);
+            } else if let Some(legacy) = env.storage().persistent().get::<_, LegacyPaymentEvent>(&id) {
+                events.push_back(legacy.into_payment_event());
             }
         }
 
