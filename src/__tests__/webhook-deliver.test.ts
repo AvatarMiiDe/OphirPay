@@ -87,7 +87,7 @@ describe("deliverWebhook", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const ok = await deliverWebhook("https://example.com/hook", SECRET, samplePayload, 1);
-    expect(ok).toBe(true);
+    expect(ok.success).toBe(true);
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://example.com/hook");
@@ -121,7 +121,7 @@ describe("deliverWebhook", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const ok = await deliverWebhook("https://example.com/hook", SECRET, samplePayload, 1);
-    expect(ok).toBe(false);
+    expect(ok.success).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const metrics = getMetricsSnapshot();
@@ -143,7 +143,7 @@ describe("deliverWebhook", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     // Loopback URL is blocked by the guard before any fetch happens.
     const ok = await deliverWebhook("http://127.0.0.1:8080/hook", SECRET, samplePayload, 2);
-    expect(ok).toBe(false);
+    expect(ok.success).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
 
     const metrics = getMetricsSnapshot();

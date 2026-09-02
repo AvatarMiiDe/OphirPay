@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { PAGE_TITLES } from "@/lib/page-titles";
 import { useWallet } from "@/hooks/useMultiWallet";
 import { getWalletConnector } from "@/lib/wallets";
 import { CsvBatchImport, type CsvRecipientRow } from "@/components/CsvBatchImport";
+import { parseRecipientsCsvToRows, downloadCsvTemplate } from "@/lib/csv-import";
 import {
   isValidStellarAddress,
   buildBatchPaymentTx,
@@ -35,6 +36,7 @@ const BatchConfirmDialog = dynamic(
 );
 import Link from "next/link";
 import type { BatchRecipientInput } from "@/lib/stellar";
+import { downloadCsvTemplate } from "@/lib/csv-import";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -80,11 +82,12 @@ export default function NewBatchPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [mode, setMode] = useState<EntryMode>("manual");
   const [csvValid, setCsvValid] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── CSV import wiring ────────────────────────────────────
 
-  // Sync recipients from the valid CSV rows so the total, balance check,
-  // and send flow all work identically for both entry modes.
   const handleCsvRows = useCallback((validRows: CsvRecipientRow[]) => {
     setRecipients(
       validRows.map((r) => ({
@@ -100,12 +103,80 @@ export default function NewBatchPage() {
     setCsvValid(valid);
   }, []);
 
+  // ── CSV dropzone (legacy quick-import entry point) ──────────
+  // Parses with the same shared parser as the CSV tab and feeds the send
+  // flow through the exact same `handleCsvRows` path.
+  const handleCsvFile = useCallback(async (file: File) => {
+    try {
+      const { rows, fileErrors } = await parseRecipientsCsvToRows(file, {
+        selfAddress: wallet.publicKey ?? null,
+      });
+      if (fileErrors.length > 0) {
+        setCsvError(fileErrors.join("\n"));
+        setCsvValid(false);
+        handleCsvValidity(false);
+        return;
+      }
+      const invalidCount = rows.filter((r) => Object.keys(r.errors).length > 0).length;
+      const validRows: CsvRecipientRow[] = rows
+        .filter((r) => Object.keys(r.errors).length === 0)
+        .map((r) => ({
+          address: r.values.address,
+          amount: r.values.amount,
+          memo: r.values.memo || undefined,
+        }));
+      // A dropped file replaces the manual list only when it parses cleanly.
+      if (invalidCount === 0 && validRows.length > 0) {
+        setCsvError(null);
+        setCsvValid(true);
+        handleCsvValidity(true);
+        handleCsvRows(validRows);
+        setMode("csv");
+      } else {
+        setCsvError(
+          `${invalidCount} row(s) contain errors — fix the CSV and re-upload, or use the Upload CSV tab for a detailed preview.`
+        );
+        setCsvValid(false);
+        handleCsvValidity(false);
+      }
+    } catch {
+      setCsvError("Could not read the CSV file. Please check the format.");
+      setCsvValid(false);
+      handleCsvValidity(false);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [handleCsvRows, handleCsvValidity, wallet.publicKey]);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) handleCsvFile(file);
+    },
+    [handleCsvFile]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   // Switching modes remounts CsvBatchImport (its parsed state is reset), so
   // always start CSV mode with the submit button disabled until a file is
   // parsed and validated again.
   const switchMode = (next: EntryMode) => {
     setMode(next);
     if (next === "csv") setCsvValid(false);
+  };
+
+  const handleDownloadTemplate = () => {
+    downloadCsvTemplate();
   };
 
   // ── Recipient management ──────────────────────────────────
@@ -198,7 +269,6 @@ export default function NewBatchPage() {
       return false;
     }
 
-    // Check for duplicate addresses
     const addresses = recipients.map((r) => r.address.trim());
     const unique = new Set(addresses);
     if (unique.size !== addresses.length) {
@@ -231,13 +301,11 @@ export default function NewBatchPage() {
         memo: r.memo.trim() || undefined,
       }));
 
-      // 1. Build the batch transaction
       const { xdr } = await buildBatchPaymentTx({
         sourcePublicKey: wallet.publicKey,
         recipients: batchRecipients,
       });
 
-      // 2. Sign with the active wallet connector
       setStep("signing");
 
       if (!wallet.activeWalletId) {
@@ -250,11 +318,9 @@ export default function NewBatchPage() {
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
-      // 3. Submit to Horizon
       setStep("submitting");
       const response = await submitSignedTx(signedXdr);
 
-      // 4. Success!
       setStep("done");
       setResult({
         type: "success",
@@ -319,7 +385,7 @@ export default function NewBatchPage() {
           </p>
           <Link
             href="/"
-            className="text-sm text-ophir-600 dark:text-ophir-400 hover:underline"
+            className="inline-flex items-center justify-center min-h-[44px] px-2 text-sm text-ophir-600 dark:text-ophir-400 hover:underline"
           >
             ← Back to Dashboard
           </Link>
@@ -510,6 +576,81 @@ export default function NewBatchPage() {
         </p>
       </div>
 
+      {/* CSV Import Dropzone — prefill bridge for manual entry; the dedicated
+          CSV mode renders CsvBatchImport's own dropzone instead. */}
+      {mode === "manual" && (
+      <div
+        className={`bg-white dark:bg-gray-900 rounded-xl border-2 border-dashed p-4 sm:p-6 mb-4 transition-colors ${
+          isDragging
+            ? "border-ophir-500 bg-ophir-50 dark:bg-ophir-950/30"
+            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+        }`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        data-testid="csv-dropzone"
+      >
+        <div className="flex flex-col items-center text-center">
+          <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-6 h-6 text-gray-400"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+              />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Import recipients from CSV
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Drag and drop a .csv file here, or click to select
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors min-h-[44px]"
+            >
+              Choose CSV File
+            </button>
+            <button
+              type="button"
+              onClick={downloadCsvTemplate}
+              className="px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors min-h-[44px]"
+            >
+              Download Template
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleCsvFile(file);
+            }}
+            className="hidden"
+            aria-label="Upload CSV file"
+          />
+        </div>
+        {csvError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">
+              {csvError}
+            </p>
+          </div>
+        )}
+      </div>
+      )}
+
       {/* Wallet info */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 mb-4">
         <div className="flex items-center justify-between">
@@ -572,11 +713,31 @@ export default function NewBatchPage() {
         </div>
 
         {mode === "csv" ? (
-          <CsvBatchImport
-            selfAddress={wallet.publicKey}
-            onRowsChange={handleCsvRows}
-            onValidityChange={handleCsvValidity}
-          />
+          <>
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Download template
+            </button>
+            <CsvBatchImport
+              selfAddress={wallet.publicKey}
+              onRowsChange={handleCsvRows}
+              onValidityChange={handleCsvValidity}
+            />
+          </>
         ) : (
           <>
             <div className="flex items-center justify-between">
@@ -586,7 +747,7 @@ export default function NewBatchPage() {
               <button
                 onClick={addRecipient}
                 disabled={isSubmitting || recipients.length >= 50}
-                className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm text-ophir-600 dark:text-ophir-400 hover:text-ophir-700 dark:hover:text-ophir-300 font-medium disabled:opacity-50 transition-colors min-h-[44px]"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -782,7 +943,6 @@ function RecipientRow({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Address */}
         <div className="sm:col-span-2">
           <input
             type="text"
@@ -796,7 +956,6 @@ function RecipientRow({
           />
         </div>
 
-        {/* Amount */}
         <div className="relative">
           <input
             type="number"
@@ -816,7 +975,6 @@ function RecipientRow({
           </span>
         </div>
 
-        {/* Memo */}
         <input
           type="text"
           value={recipient.memo}
