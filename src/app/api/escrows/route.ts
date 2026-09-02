@@ -3,6 +3,7 @@ import { withMetrics } from "@/lib/metrics-middleware";
 
 import { successResponse, handleApiError, notFoundError, unauthorizedError } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { simulateContractCall, DEFAULT_CONTRACT_ID, CHAIN_READ_SOURCE } from "@/lib/contracts";
 import { validateIdParam } from "@/lib/validate-params";
 import { nativeToScVal } from "@stellar/stellar-sdk";
@@ -36,6 +37,9 @@ export const GET = withMetrics("GET /api/escrows", withRequestLogging(async func
  */
 export const POST = withMetrics("POST /api/escrows", withRequestLogging(async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError("Authentication required. Connect your wallet or provide an API key.");

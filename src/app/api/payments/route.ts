@@ -13,6 +13,7 @@ import {
 import { logger } from "@/lib/logger";
 import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
@@ -104,6 +105,9 @@ export const GET = withMetrics("GET /api/payments", withRequestLogging(async fun
 
 export const POST = withMetrics("POST /api/payments", withRequestLogging(async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
@@ -135,6 +139,11 @@ export const POST = withMetrics("POST /api/payments", withRequestLogging(async f
         // wrote a Stellar address into userId, breaking the relation).
         userId: auth.userId,
         sourceAccountId: parsed.data.sourceAccountId,
+        // Persist the destination Stellar address (not modeled as its own
+        // column) so payment-detail receipts can render the recipient.
+        metadata: parsed.data.destAddress
+          ? JSON.stringify({ destAddress: parsed.data.destAddress })
+          : undefined,
       },
     });
     if (updated.count === 0) return notFoundError("Payment");

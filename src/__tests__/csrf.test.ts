@@ -76,4 +76,12 @@ describe("verifyCsrf", () => {
     const cookie = csrfCookieHeader(token, true).split(";")[0];
     expect(verifyCsrf(makeRequest("POST", cookie, token))).toBeNull();
   });
+
+  it("skips CSRF when an API key header is present", () => {
+    const req = new Request("http://localhost/api/test", {
+      method: "POST",
+      headers: { authorization: "Bearer oph_testkey1234567890abcdef" },
+    });
+    expect(verifyCsrf(req)).toBeNull();
+  });
 });
