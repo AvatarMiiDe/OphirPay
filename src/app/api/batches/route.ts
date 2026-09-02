@@ -159,161 +159,25 @@ export const POST = withMetrics("POST /api/batches", withRequestLogging(async fu
       );
     }
 
-    const body = await request.json();
+    const batch = result.returnValue as Record<string, unknown>;
 
-    // The Idempotency-Key header takes precedence over the body field, so it
-    // is resolved BEFORE body validation: a valid header must win even when
-    // the lower-precedence body key is invalid (otherwise a client that
-    // sends both would be rejected for a key it never intended to use). When
-    // a header is present the body key is ignored entirely.
-    const headerKey = request.headers.get(IDEMPOTENCY_HEADER);
-    let idempotencyKey: string | null = null;
-    let parsed;
-    if (headerKey) {
-      const parsedKey = idempotencyKeySchema.safeParse(headerKey);
-      if (!parsedKey.success) {
-        return validationError(parsedKey.error);
-      }
-      idempotencyKey = parsedKey.data;
-      parsed = createBatchSchema.omit({ idempotencyKey: true }).safeParse(body);
-    } else {
-      parsed = createBatchSchema.safeParse(body);
-    }
-    if (!parsed.success) {
-      return validationError(parsed.error);
-    }
-
-    const { name, description, recipients: payments } =
-      parsed.data;
-    const { userId } = auth;
-
-    // Idempotency key (issue #170): the `Idempotency-Key` header takes
-    // precedence over the optional body field. A present-but-invalid header —
-    // including a whitespace-only value — is a validation error; it must never
-    // silently fall back to a fresh key, which would allow duplicate batches.
-    let idempotencyKey = parsed.data.idempotencyKey;
-    const headerKey = request.headers.get("idempotency-key");
-    if (headerKey !== null) {
-      const headerCheck = idempotencyKeySchema.safeParse(headerKey);
-      if (!headerCheck.success) {
-        return validationError(headerCheck.error);
-      }
-      idempotencyKey = headerCheck.data;
-    }
-
-    // Re-submission of an already-processed batch: same user + same key means
-    // no new batch. If the first attempt created the batch row but crashed
-    // before inserting its child payments (a partial write), the retry resumes
-    // by inserting only the missing payments.
-    if (idempotencyKey) {
-      const existing = await prisma.batch.findFirst({
-        where: { userId, idempotencyKey },
-        include: { payments: true },
-      });
-
-      if (existing) {
-        if (existing.payments.length === 0) {
-          await prisma.payment.createMany({
-            data: paymentCreateData(payments, existing.id, userId),
-          });
-          const resumed = await fetchBatchWithPayments(existing.id);
-          incMetric("batches_processed_total");
-          return successResponse(
-            resumed,
-            { deduplicated: true, resumed: true, timestamp: new Date().toISOString() },
-            200
-          );
-        }
-
-        incMetric("batches_processed_total");
-        return successResponse(
-          existing,
-          { deduplicated: true, timestamp: new Date().toISOString() },
-          200
-        );
-      }
-    }
-
-    // First submission (or a retry with a brand-new key): persist the batch and
-    // its child payments in one transaction so a keyed batch is never visible
-    // half-created — it either has all its payments or none.
-    let result;
-    try {
-      result = await prisma.$transaction(async (tx) => {
-        const created = await tx.batch.create({
-          data: {
-            name,
-            description,
-            userId,
-            // Server-generated when the client sends no key, so every batch
-            // records an idempotency key. Deduplication only applies to
-            // client-supplied keys, which retries actually re-send.
-            idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
-          },
-        });
-
-        await tx.payment.createMany({
-          data: paymentCreateData(payments, created.id, userId),
-        });
-
-        return tx.batch.findUnique({
-          where: { id: created.id },
-          include: { payments: true },
-        });
-      });
-    } catch (err) {
-      if (isUniqueConstraintViolation(err) && idempotencyKey) {
-        // A concurrent request won the race with the same key — serve the
-        // already-created batch instead of failing the retry.
-        const winner = await prisma.batch.findFirst({
-          where: { userId, idempotencyKey },
-          include: { payments: true },
-        });
-        if (winner) {
-          incMetric("batches_processed_total");
-          return successResponse(
-            winner,
-            { deduplicated: true, timestamp: new Date().toISOString() },
-            200
-          );
-        }
-        // A unique violation on the compound (userId, idempotencyKey) with no
-        // recoverable winner is a genuine data conflict — surface a 409 rather
-        // than failing the whole request.
-        return conflictError(
-          "A batch with this idempotency key already exists but could not be recovered."
-        );
-      }
-      throw err;
-    }
-
-      incMetric("batches_processed_total");
-
-      return successResponse(
-        result,
-        { timestamp: new Date().toISOString() },
-        201
+    // Optionally include batch payments
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get("payments") === "true") {
+      const paymentsResult = await simulateContractCall(
+        DEFAULT_CONTRACT_ID,
+        "get_payments_by_batch",
+        CHAIN_READ_SOURCE,
+        [nativeToScVal(batchId, { type: "u64" })]
       );
-    } catch (err) {
-      // Concurrent duplicate: another request with the same key won the race
-      // and the DB unique constraint rejected our insert. Return the winner
-      // as a deduplicated replay rather than surfacing a 409 to the client.
-      if (isUniqueConstraintError(err) && idempotencyKey) {
-        const winner = await prisma.batch.findFirst({
-          where: { userId, idempotencyKey },
-          include: { payments: true },
-        });
-        if (winner) {
-          return successResponse(
-            winner,
-            { timestamp: new Date().toISOString(), deduplicated: true },
-            200
-          );
-        }
-      }
-      throw err;
+      return successResponse({
+        ...batch,
+        payments: paymentsResult.status === "SIMULATION_FAILED" ? [] : paymentsResult.returnValue,
+      });
     }
+
+    return successResponse(batch);
   } catch (err) {
-    return handleApiError(err, "POST /api/batches");
+    return handleApiError(err, "GET /api/batches/[id]");
   }
 }));
