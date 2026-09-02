@@ -8,6 +8,7 @@ import {
   validationError,
   badRequestError,
   unauthorizedError,
+  badRequestError,
   handleApiError,
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
@@ -84,7 +85,12 @@ export const GET = withMetrics("GET /api/payments", withRequestLogging(async fun
       prisma.payment.count({ where: baseWhere }),
     ]);
 
-    logger.request("GET", `/api/payments?page=${page}&limit=${limit}`, 200, 0);
+    // Fetch one extra row to cheaply determine whether another page exists.
+    const rows = await prisma.payment.findMany({
+      where: keysetWhere,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    });
 
     const visible = useCursor ? payments.slice(0, limit) : payments;
     const pageInfo = useCursor

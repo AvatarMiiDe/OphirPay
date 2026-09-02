@@ -246,6 +246,16 @@ export const createPaymentRequestSchema = z.object({
 
 // ── Pagination (moved from validations.ts) ────────────────────
 
+export const paymentStatuses = [
+  "CREATED",
+  "PENDING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+
+export const paymentStatusSchema = z.enum(paymentStatuses);
+
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),

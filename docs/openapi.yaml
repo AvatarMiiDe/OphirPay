@@ -88,6 +88,22 @@ paths:
     get:
       tags: [Payments]
       summary: List payments
+      description: |
+        Lists the authenticated user's payments, newest first
+        (`createdAt DESC, id DESC`).
+
+        Two pagination modes:
+
+        - **Keyset (default)** — pass `limit` and, for subsequent pages, the
+          opaque `cursor` returned in `meta.nextCursor`. Rows are fetched with
+          `take = limit + 1` to compute `hasMore`, so deep pages cost O(limit)
+          and ordering is stable under concurrent inserts. Set
+          `includeTotal=true` to also get `meta.total` (an expensive COUNT —
+          opt in only when you need it).
+        - **Offset (legacy)** — pass `page` + `limit` to get `meta` with
+          `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
+
+        `cursor` and `page` are mutually exclusive (400 if both provided).
       parameters:
         - name: page
           in: query
@@ -119,11 +135,15 @@ paths:
             the authenticated user — soft-deleted rows are hidden by default.
       responses:
         "200":
-          description: Paginated payment list
+          description: Paginated payment list (keyset or offset mode)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedPayments"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [Payments]
       summary: Create a payment
@@ -1625,6 +1645,10 @@ components:
             $ref: "#/components/schemas/PaymentResponse"
         meta:
           type: object
+          description: |
+            Keyset mode (default): `limit`, `nextCursor`, `hasMore` (+ `total`
+            when `includeTotal=true`). Offset mode (when `page` is passed):
+            `page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`.
           properties:
             page: { type: integer }
             limit: { type: integer }
