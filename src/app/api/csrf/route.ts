@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import { NextResponse } from "next/server";
 import { generateCsrfToken, csrfCookieHeader } from "@/lib/csrf";
@@ -18,7 +19,7 @@ import { withRequestLogging } from "@/lib/request-logging";
  * - Cookie uses __Host- prefix in production (host-only)
  * - Token rotates on each mint (invalidates previous token)
  */
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/csrf", withRequestLogging(async function GET(request: Request) {
   const token = generateCsrfToken();
 
   // The __Host-/Secure flags are only valid over HTTPS; over plain http (dev
@@ -34,4 +35,4 @@ export const GET = withRequestLogging(async function GET(request: Request) {
       "Set-Cookie": csrfCookieHeader(token, secure),
     },
   });
-});
+}));

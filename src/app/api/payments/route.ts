@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
@@ -12,9 +13,11 @@ import {
 import { logger } from "@/lib/logger";
 import { withRequestLogging } from "@/lib/request-logging";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
 import { incMetric } from "@/lib/metrics-counters";
+import { buildPaymentWhere } from "@/lib/payment-filters";
 import {
   buildCursorWhere,
   computeNextCursor,
@@ -22,7 +25,7 @@ import {
   prismaPagination,
 } from "@/lib/pagination-utils";
 
-export const GET = withRequestLogging(async function GET(request: Request) {
+export const GET = withMetrics("GET /api/payments", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -47,16 +50,18 @@ export const GET = withRequestLogging(async function GET(request: Request) {
 
     const { page, limit, status, search, cursor: rawCursor } = parsed.data;
 
-    // Always scope to the authenticated user — never expose other users' data
-    const baseWhere: Record<string, unknown> = { userId: auth.userId };
-    if (status) baseWhere.status = status;
-    if (search) {
-      baseWhere.OR = [
-        { description: { contains: search } },
-        { memo: { contains: search } },
-        { transactionHash: { contains: search } },
-      ];
-    }
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted`
+    // is the explicit admin/debug opt-in to see them — it never crosses user
+    // boundaries, the result is still scoped to the authenticated user.
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+
+    // Always scope to the authenticated user — never expose other users' data.
+    // `status` and `search` (memo ILIKE + exact tx-hash, Issue #157) use the
+    // shared helper so the list route and CSV export stay in lockstep.
+    const baseWhere = buildPaymentWhere(auth.userId, { status, search });
+    // Soft-deleted rows are hidden by default (issue #50). `includeDeleted` is
+    // the explicit admin/debug opt-in to see them.
+    if (!includeDeleted) baseWhere.deletedAt = null;
 
     // Keyset (cursor) pagination is the default for plain list requests — it
     // never deep-skips, so later pages stay fast as the table grows. Offset
@@ -96,10 +101,13 @@ export const GET = withRequestLogging(async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, `GET /api/payments/[id]`);
   }
-});
+}));
 
-export const POST = withRequestLogging(async function POST(request: Request) {
+export const POST = withMetrics("POST /api/payments", withRequestLogging(async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
@@ -131,6 +139,11 @@ export const POST = withRequestLogging(async function POST(request: Request) {
         // wrote a Stellar address into userId, breaking the relation).
         userId: auth.userId,
         sourceAccountId: parsed.data.sourceAccountId,
+        // Persist the destination Stellar address (not modeled as its own
+        // column) so payment-detail receipts can render the recipient.
+        metadata: parsed.data.destAddress
+          ? JSON.stringify({ destAddress: parsed.data.destAddress })
+          : undefined,
       },
     });
     if (updated.count === 0) return notFoundError("Payment");
@@ -186,4 +199,4 @@ export const POST = withRequestLogging(async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, `PATCH /api/payments/[id]`);
   }
-});
+}));

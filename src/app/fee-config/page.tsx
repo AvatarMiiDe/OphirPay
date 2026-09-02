@@ -10,21 +10,19 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
 import { useWallet } from "@/hooks/useMultiWallet";
-import { useApiQuery } from "@/hooks/useApiQuery";
 import { setFeeConfig, setFeeCollector } from "@/lib/contract-advanced";
 import { 
   validateFeeBps, 
   validateFeeConfig,
   MAX_FEE_BPS,
+  useFeeConfig,
+  type FeeConfigData,
 } from "@/lib/fee-config";
 
-interface FeeConfigData {
-  payment_fee_bps: number;
-  escrow_fee_bps: number;
-  stream_fee_bps: number;
-  batch_base_fee: number;
-  batch_per_item_fee: number;
-  enabled: boolean;
+interface TxStatus {
+  type: "success" | "error";
+  message: string;
+  txHash?: string;
 }
 
 interface TxStatus {
@@ -34,6 +32,7 @@ interface TxStatus {
 }
 
 export default function FeeConfigPage() {
+  usePageTitle(PAGE_TITLES.FEE_CONFIG);
   const toast = useToast();
   const { wallet } = useWallet();
   const queryClient = useQueryClient();
@@ -54,14 +53,19 @@ export default function FeeConfigPage() {
   const [formEnabled, setFormEnabled] = useState(true);
   const [formCollector, setFormCollector] = useState("");
 
-  const {
-    data: rawConfig,
-    isLoading: loading,
-  } = useApiQuery<FeeConfigData>(["fee-config"], "/api/fee-config");
-  
-  const config = rawConfig && typeof rawConfig === "object" && "payment_fee_bps" in rawConfig
-    ? rawConfig
-    : null;
+  const { config, isLoading: loading } = useFeeConfig();
+
+  // Initialize form values from config when loaded
+  useEffect(() => {
+    if (config) {
+      setFormPaymentFee(config.payment_fee_bps);
+      setFormEscrowFee(config.escrow_fee_bps);
+      setFormStreamFee(config.stream_fee_bps);
+      setFormBatchBase(config.batch_base_fee);
+      setFormBatchPerItem(config.batch_per_item_fee);
+      setFormEnabled(config.enabled);
+    }
+  }, [config]);
 
   // Initialize form values from config when loaded
   useEffect(() => {
@@ -110,7 +114,7 @@ export default function FeeConfigPage() {
           message: "Fee configuration saved on-chain",
           txHash: result.txHash,
         });
-        toast.success("Fee configuration saved on-chain");
+        toast.success("Fee configuration saved on-chain", result.txHash ? `Tx: ${result.txHash.slice(0, 12)}...` : undefined);
         setShowFeeModal(false);
         queryClient.invalidateQueries({ queryKey: ["fee-config"] });
       } else {
@@ -154,7 +158,7 @@ export default function FeeConfigPage() {
           message: "Fee collector updated on-chain",
           txHash: result.txHash,
         });
-        toast.success("Fee collector updated on-chain");
+        toast.success("Fee collector updated on-chain", result.txHash ? `Tx: ${result.txHash.slice(0, 12)}...` : undefined);
         setShowCollectorModal(false);
         setCollector(formCollector);
       } else {

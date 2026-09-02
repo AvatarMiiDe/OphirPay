@@ -252,4 +252,12 @@ describe("CSRF Protection", () => {
       });
     });
   });
+
+  it("skips CSRF when an API key header is present", () => {
+    const req = new Request("http://localhost/api/test", {
+      method: "POST",
+      headers: { authorization: "Bearer oph_testkey1234567890abcdef" },
+    });
+    expect(verifyCsrf(req)).toBeNull();
+  });
 });
