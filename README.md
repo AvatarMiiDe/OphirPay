@@ -746,6 +746,10 @@ We welcome contributions! Here's how to get started:
 4. **Push** to your fork: `git push origin feat/amazing-feature`
 5. **Open** a Pull Request against `main`
 
+> 🛠️ **Setup trouble?** See the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+> for fixes to common issues (Freighter detection, Rust/wasm32 target,
+> Prisma migrations, WASM builds, Node version, port conflicts).
+
 ### Development Scripts
 
 ```bash
