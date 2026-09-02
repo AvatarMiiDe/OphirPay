@@ -28,9 +28,10 @@ OphirPay is a payment orchestration layer built on the Stellar blockchain. It co
 │       │              │             │                   │            │
 │  ┌────┴──────────────┴─────────────┴───────────────────┴────────┐   │
 │  │              Middleware Pipeline (per-route)                  │   │
-│  │  proxy (rateLimit + X-Request-Id) → verifyCsrf → validate →  │   │
-│  │  handler (withRequestLogging: id · method · path · status ·   │   │
-│  │  durationMs) → 200                                            │   │
+│  │  proxy (rateLimit + X-Request-Id) → handler calls           │   │
+│  │  verifyCsrf (session cookie auth only; API keys bypass) →    │   │
+│  │  validate → handler (withRequestLogging: id · method · path  │   │
+│  │  · status · durationMs) → 200                               │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 ├──────────────────────────────────────────────────────────────────────┤
