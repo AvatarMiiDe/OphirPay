@@ -209,6 +209,22 @@ const STATE_CHANGING_ROUTES: RouteEntry[] = [
     csrfProtected: true,
     description: "Revoke webhook (user-scoped)",
   },
+  {
+    method: "POST",
+    path: "/api/webhooks/[id]/replay",
+    authRequired: true,
+    requiredRole: null,
+    csrfProtected: true,
+    description: "Replay stored webhook events (user-scoped)",
+  },
+  {
+    method: "POST",
+    path: "/api/webhooks/[id]/deliveries/[deliveryId]/redeliver",
+    authRequired: true,
+    requiredRole: null,
+    csrfProtected: true,
+    description: "Redeliver a webhook payload (user-scoped)",
+  },
 
   // ── Notification Hooks ──────────────────────────────────────
   {
