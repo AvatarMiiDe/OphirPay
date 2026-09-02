@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import {
@@ -11,8 +12,9 @@ import { getAuthContext } from "@/lib/auth-session";
 import { verifyCsrf } from "@/lib/csrf";
 import { validateBody, createHookSchema } from "@/lib/validation-schemas";
 import { isSafeWebhookUrl } from "@/lib/webhook-url-guard";
+import { withRequestLogging } from "@/lib/request-logging";
 
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/hooks", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -45,16 +47,15 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/hooks");
   }
-}
+}));
 
 // ── POST /api/hooks ───────────────────────────────────────────
 
 /**
- * Persist a notification hook row AFTER the on-chain register_hook succeeded.
- * The on-chain id (captured from the tx return value) is stored so Deactivate
- * can target unregister_hook at the correct contract record.
+ * Update a notification hook ledger row AFTER the matching on-chain
+ * transition (unregister_hook) succeeded, so the list reflects deactivation.
  */
-export async function POST(request: Request) {
+export const POST = withMetrics("POST /api/hooks", withRequestLogging(async function POST(request: Request) {
   try {
     const csrfError = verifyCsrf(request);
     if (csrfError) return csrfError;
@@ -62,27 +63,22 @@ export async function POST(request: Request) {
     const auth = await getAuthContext(request);
     if (!auth) return unauthorizedError("Authentication required.");
 
-    const parsed = await validateBody(request, createHookSchema);
-    if (!parsed.success) return parsed.response;
+    const idParsed = await validateIdParam(params);
+    if (!idParsed.success) return idParsed.response;
+    const { id } = idParsed;
 
-    // SSRF guard — reject URLs targeting internal/private networks
-    if (!isSafeWebhookUrl(parsed.data.webhookUrl)) {
-      return badRequestError(
-        "Webhook URL must be a public http(s) endpoint — internal and private addresses are not allowed."
-      );
-    }
+    const bodyParsed = await validateBody(request, updateHookSchema);
+    if (!bodyParsed.success) return bodyParsed.response;
 
-    const hook = await prisma.notificationHook.create({
-      data: {
-        eventType: parsed.data.eventType,
-        webhookUrl: parsed.data.webhookUrl,
-        onChainId: parsed.data.onChainId ?? null,
-        userId: auth.userId, // never trust a client-supplied userId
-      },
+    // Scoped update — only the owner can change their own hook row
+    const result = await prisma.notificationHook.updateMany({
+      where: { id, userId: auth.userId },
+      data: { active: bodyParsed.data.active },
     });
+    if (result.count === 0) return badRequestError("Hook not found");
 
-    return successResponse(hook, undefined, 201);
+    return successResponse({ updated: true });
   } catch (err) {
-    return handleApiError(err, "POST /api/hooks");
+    return handleApiError(err, "PATCH /api/hooks/[id]");
   }
-}
+}));

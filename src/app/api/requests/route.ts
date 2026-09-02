@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withMetrics } from "@/lib/metrics-middleware";
 
 import prisma from "@/lib/prisma";
 import { createPaymentRequestSchema } from "@/lib/validation-schemas";
@@ -10,10 +11,12 @@ import {
 } from "@/lib/api-response";
 import { logger } from "@/lib/logger";
 import { getAuthContext } from "@/lib/auth-session";
+import { verifyCsrf } from "@/lib/csrf";
 import { dispatchWebhookEventAsync } from "@/lib/webhook-dispatcher";
 import { WEBHOOK_EVENTS } from "@/app/api/webhooks/event-types";
+import { withRequestLogging } from "@/lib/request-logging";
 
-export async function GET(request: Request) {
+export const GET = withMetrics("GET /api/requests", withRequestLogging(async function GET(request: Request) {
   try {
     const auth = await getAuthContext(request);
     if (!auth) {
@@ -30,10 +33,13 @@ export async function GET(request: Request) {
   } catch (err) {
     return handleApiError(err, "GET /api/requests");
   }
-}
+}));
 
-export async function POST(request: Request) {
+export const POST = withMetrics("POST /api/requests", withRequestLogging(async function POST(request: Request) {
   try {
+    const csrfError = verifyCsrf(request);
+    if (csrfError) return csrfError;
+
     const auth = await getAuthContext(request);
     if (!auth) {
       return unauthorizedError(
@@ -75,4 +81,4 @@ export async function POST(request: Request) {
   } catch (err) {
     return handleApiError(err, "POST /api/requests");
   }
-}
+}));
