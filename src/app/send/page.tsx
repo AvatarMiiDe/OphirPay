@@ -16,15 +16,21 @@ import {
   NETWORK_PASSPHRASE,
   STELLAR_NETWORK,
   XLM_STROOPS,
+  accountExists,
+  parseSubmissionError,
+  SPONSOR_MIN_STARTING_BALANCE,
 } from "@/lib/stellar";
-import { formatAmount, formatDate, shortenAddress } from "@/lib/utils";
+import { formatAmount, shortenAddress } from "@/lib/utils";
+import { validateMemo } from "@/lib/validation-helpers";
 import { recordPaymentOnChain } from "@/lib/contracts";
+import { downloadReceiptPdf } from "@/lib/receipt-pdf";
 import { estimateTransactionFee } from "@/lib/fee-estimator";
 import { useToast } from "@/components/ui/Toast";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useApiMutation } from "@/hooks/useApiQuery";
 import { AssetSelector } from "@/components/AssetSelector";
 import { XLM_ASSET, getAssetInfo, type AssetInfo } from "@/lib/assets";
+import { nextRunAt, FREQUENCY_OPTIONS, FREQUENCY_LABELS, frequencyLabel, type Frequency } from "@/lib/recurrence";
 import Link from "next/link";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -94,6 +100,17 @@ function SendPageClient() {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledFor, setScheduledFor] = useState("");
 
+  // Sponsored-account (new recipient) support
+  const [sponsorCreate, setSponsorCreate] = useState(false);
+  const [recipientStatus, setRecipientStatus] = useState<
+    "unknown" | "checking" | "funded" | "unfunded"
+  >("unknown");
+
+  // Recurring-payment mode: instead of a one-time on-chain send, the form
+  // records a DB Recurrence schedule (issue #172).
+  const [mode, setMode] = useState<"one-time" | "recurring">("one-time");
+  const [frequency, setFrequency] = useState<Frequency>("DAILY");
+
   // Path payment estimate state
   const [pathEstimate, setPathEstimate] = useState<PathPaymentEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState(false);
@@ -117,20 +134,20 @@ function SendPageClient() {
     invalidateKeys: [["dashboard", "payments"], ["payments", "onchain"], ["events", "onchain"]],
   });
 
-  // Scheduled payments — created via the API (no wallet signing needed);
-  // the cron endpoint executes them when the date arrives.
-  const schedulePaymentMutation = useApiMutation<
+  // Records a DB Recurrence schedule when the user picks the recurring mode.
+  const createRecurrenceMutation = useApiMutation<
     {
+      name: string;
+      frequency: string;
       amount: number;
       assetCode: string;
-      assetIssuer?: string;
-      memo?: string;
       destAddress: string;
-      scheduledFor: string;
+      description?: string;
+      sourceAccountId: string;
     },
-    { id: string }
-  >("/api/scheduled", {
-    invalidateKeys: [["scheduled"]],
+    { id: string; nextRunAt: string }
+  >("/api/recurring", {
+    invalidateKeys: [["recurring"]],
   });
 
   // Fetch live fee estimate on mount
@@ -162,6 +179,34 @@ function SendPageClient() {
       setSelectedAsset(getAssetInfo(assetParam));
     }
   }, [searchParams]);
+
+  // Detect whether the recipient account is funded. A 404 means the account
+  // does not exist yet, in which case we can offer to sponsor its creation.
+  useEffect(() => {
+    const dest = destination.trim();
+    if (!isValidStellarAddress(dest) || dest === wallet.publicKey) {
+      setRecipientStatus("unknown");
+      return;
+    }
+
+    let cancelled = false;
+    setRecipientStatus("checking");
+    const timer = setTimeout(() => {
+      accountExists(dest)
+        .then((exists) => {
+          if (cancelled) return;
+          setRecipientStatus(exists ? "funded" : "unfunded");
+        })
+        .catch(() => {
+          if (!cancelled) setRecipientStatus("unknown");
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [destination, wallet.publicKey]);
 
   // Fetch strict-send path estimate when cross-asset send is active
   useEffect(() => {
@@ -251,11 +296,22 @@ function SendPageClient() {
       setValidationError("Please enter a valid amount greater than 0.");
       return false;
     }
-    if (memo.length > 28) {
-      setValidationError("Memo must be 28 characters or fewer.");
+    const memoError = validateMemo(memo);
+    if (memoError) {
+      setValidationError(memoError);
       return false;
     }
-    if (isCrossAsset) {
+    if (recipientStatus === "unfunded" &&
+      !sponsorCreate &&
+      selectedAsset.type === "native" &&
+      mode === "one-time"
+    ) {
+      setValidationError(
+        "This recipient account does not exist yet. Enable “Fund new account (sponsor)” to create it in the same transaction, or use an existing address."
+      );
+      return false;
+    }
+    if (isCrossAsset && mode === "one-time") {
       if (isEstimating) {
         setValidationError("Calculating exchange rate path... Please wait.");
         return false;
@@ -315,6 +371,38 @@ function SendPageClient() {
     setStep("building");
 
     try {
+      // Recurring mode — record a DB Recurrence schedule instead of executing
+      // a one-time on-chain payment (issue #172).
+      if (mode === "recurring") {
+        const nextRun = nextRunAt(new Date(), frequency);
+        await createRecurrenceMutation.mutateAsync({
+          name: memo.trim() || `Recurring ${frequency.toLowerCase()} payment`,
+          frequency,
+          amount: parseFloat(amount),
+          assetCode: selectedAsset.code,
+          destAddress: destination.trim(),
+          description: memo.trim() || undefined,
+          sourceAccountId: wallet.publicKey,
+        });
+
+        setStep("done");
+        setResult({
+          type: "success",
+          txHash: "",
+          amount,
+          sourceAsset: selectedAsset,
+          destination: destination.trim(),
+          isCrossAsset: false,
+        });
+
+        fetchBalance();
+        toast.success(
+          "Recurring payment scheduled",
+          `${formatAmount(parseFloat(amount), selectedAsset.code)} ${frequencyLabel(frequency)} → ${shortenAddress(destination.trim(), 6)} · next run ${nextRun.toLocaleDateString()}`
+        );
+        return;
+      }
+
       // 1. Build the transaction
       let xdr: string;
 
@@ -342,6 +430,7 @@ function SendPageClient() {
           memo: memo.trim() || undefined,
           assetCode: selectedAsset.code,
           assetIssuer: selectedAsset.issuer,
+          sponsorCreate,
         });
         xdr = res.xdr;
       }
@@ -421,8 +510,7 @@ function SendPageClient() {
       }
     } catch (err) {
       setStep("done");
-      const message =
-        err instanceof Error ? err.message : "Transaction failed. Please try again.";
+      const message = parseSubmissionError(err);
       setResult({ type: "error", message });
       toast.error("Transaction failed", message);
     }
@@ -434,9 +522,13 @@ function SendPageClient() {
     setAmount("");
     setDestination("");
     setMemo("");
+    setSponsorCreate(false);
+    setRecipientStatus("unknown");
     setPathEstimate(null);
     setPathError(null);
     setValidationError(null);
+    setMode("one-time");
+    setFrequency("DAILY");
   };
 
   // ── Not connected state ──────────────────────────────────
@@ -604,19 +696,51 @@ function SendPageClient() {
             </div>
           )}
 
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col gap-3">
             <button
-              onClick={reset}
-              className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              onClick={() =>
+                downloadReceiptPdf({
+                  transactionHash: result.txHash,
+                  amount: result.amount,
+                  assetCode: selectedAsset.code,
+                  date: new Date().toISOString(),
+                  sender: wallet.publicKey!,
+                  recipient: result.destination,
+                  memo: memo.trim() || undefined,
+                })
+              }
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              Send Another
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                />
+              </svg>
+              Download Receipt (PDF)
             </button>
-            <Link
-              href="/"
-              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Back to Dashboard
-            </Link>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={reset}
+                className="px-5 py-2.5 rounded-lg bg-ophir-600 text-white text-sm font-medium hover:bg-ophir-700 transition-colors"
+              >
+                Send Another
+              </button>
+              <Link
+                href="/"
+                className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -764,7 +888,7 @@ function SendPageClient() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Send Payment
           </h1>
-          {isCrossAsset && (
+          {isCrossAsset && mode === "one-time" && (
             <span
               data-testid="cross-asset-badge"
               className="px-2.5 py-1 rounded-full text-xs font-semibold bg-ophir-100 text-ophir-800 dark:bg-ophir-950/50 dark:text-ophir-300 border border-ophir-200 dark:border-ophir-800"
@@ -774,9 +898,11 @@ function SendPageClient() {
           )}
         </div>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          {isCrossAsset
-            ? `Cross-asset transfer: Pay in ${selectedAsset.code}, recipient receives ${destAsset.code}`
-            : `Send ${selectedAsset.code} on the Stellar Testnet`}
+          {mode === "recurring"
+            ? `Schedule a recurring ${selectedAsset.code} payment on Stellar`
+            : isCrossAsset
+              ? `Cross-asset transfer: Pay in ${selectedAsset.code}, recipient receives ${destAsset.code}`
+              : `Send ${selectedAsset.code} on the Stellar Testnet`}
         </p>
       </div>
 
@@ -802,20 +928,63 @@ function SendPageClient() {
 
       {/* Form */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+        {/* Payment type toggle */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl" role="tablist" aria-label="Payment type">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "one-time"}
+            onClick={() => setMode("one-time")}
+            disabled={isSubmitting}
+            data-testid="mode-one-time"
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+              mode === "one-time"
+                ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            }`}
+          >
+            One-time
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "recurring"}
+            onClick={() => setMode("recurring")}
+            disabled={isSubmitting}
+            data-testid="mode-recurring"
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50 ${
+              mode === "recurring"
+                ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            }`}
+          >
+            Recurring
+          </button>
+        </div>
+
         {/* Destination */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             Destination Address
           </label>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={destination}
-            onChange={(e) => setDestination(e.target.value)}
+            onChange={setDestination}
             disabled={isSubmitting}
             placeholder="G..."
             data-testid="destination-input"
             className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            Start typing to autocomplete from your{" "}
+            <Link
+              href="/address-book"
+              className="text-ophir-600 dark:text-ophir-400 hover:underline"
+            >
+              address book
+            </Link>
+            .
+          </p>
         </div>
 
         {/* Source Asset Selector */}
@@ -832,28 +1001,70 @@ function SendPageClient() {
         </div>
 
         {/* Destination Asset Selector */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Recipient Receives (Destination Asset)
+        {mode === "one-time" && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Recipient Receives (Destination Asset)
+              </label>
+              {isCrossAsset && (
+                <button
+                  type="button"
+                  onClick={() => setDestAsset(selectedAsset)}
+                  className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+                >
+                  Match Source ({selectedAsset.code})
+                </button>
+              )}
+            </div>
+            <AssetSelector
+              publicKey={destination && isValidStellarAddress(destination) ? destination : null}
+              selectedAsset={destAsset}
+              onSelect={setDestAsset}
+              disabled={isSubmitting}
+            />
+          </div>
+        )}
+
+        {/* Recurring frequency picker + next-run preview */}
+        {mode === "recurring" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Frequency
             </label>
-            {isCrossAsset && (
-              <button
-                type="button"
-                onClick={() => setDestAsset(selectedAsset)}
-                className="text-xs text-ophir-600 dark:text-ophir-400 hover:underline"
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as Frequency)}
+              disabled={isSubmitting}
+              data-testid="frequency-input"
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {FREQUENCY_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {FREQUENCY_LABELS[f]}
+                </option>
+              ))}
+            </select>
+            {amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0 && (
+              <div
+                data-testid="next-run-preview"
+                className="mt-2 p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800"
               >
-                Match Source ({selectedAsset.code})
-              </button>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  First run scheduled for{" "}
+                  <span className="font-medium text-ophir-700 dark:text-ophir-300">
+                    {nextRunAt(new Date(), frequency).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                  , then {frequencyLabel(frequency).toLowerCase()}.
+                </p>
+              </div>
             )}
           </div>
-          <AssetSelector
-            publicKey={destination && isValidStellarAddress(destination) ? destination : null}
-            selectedAsset={destAsset}
-            onSelect={setDestAsset}
-            disabled={isSubmitting}
-          />
-        </div>
+        )}
 
         {/* Amount */}
         <div>
@@ -895,7 +1106,7 @@ function SendPageClient() {
         </div>
 
         {/* Cross-Asset Rate Preview Card */}
-        {isCrossAsset && (
+        {isCrossAsset && mode === "one-time" && (
           <div
             data-testid="rate-preview-card"
             className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 space-y-2.5"
@@ -975,44 +1186,30 @@ function SendPageClient() {
           />
         </div>
 
-        {/* Schedule for later */}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={scheduleEnabled}
-              onChange={(e) => setScheduleEnabled(e.target.checked)}
-              disabled={isSubmitting}
-              className="h-4 w-4 rounded border-gray-300 text-ophir-600 focus:ring-ophir-500"
-            />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Schedule this payment for later
-            </span>
-          </label>
-          {scheduleEnabled && (
-            <div className="mt-3">
-              <label
-                htmlFor="scheduled-for"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
-              >
-                Send on
-              </label>
+        {/* Sponsored account creation */}
+        {mode === "one-time" && recipientStatus === "unfunded" && selectedAsset.type === "native" && (
+          <div className="p-3 rounded-lg bg-ophir-50 dark:bg-ophir-950/30 border border-ophir-200 dark:border-ophir-800">
+            <label className="flex items-start gap-2.5 cursor-pointer">
               <input
-                id="scheduled-for"
-                type="datetime-local"
-                value={scheduledFor}
-                onChange={(e) => setScheduledFor(e.target.value)}
+                type="checkbox"
+                checked={sponsorCreate}
+                onChange={(e) => setSponsorCreate(e.target.checked)}
                 disabled={isSubmitting}
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ophir-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-ophir-600 focus:ring-ophir-500 disabled:opacity-50"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-                The payment is stored as a scheduled payment and executed
-                automatically when the date arrives. No wallet signature is
-                needed now — you can cancel it any time before it runs.
-              </p>
-            </div>
-          )}
-        </div>
+              <span className="text-sm">
+                <span className="font-medium text-gray-800 dark:text-gray-200">
+                  Fund new account (sponsor)
+                </span>
+                <span className="block text-gray-500 dark:text-gray-400 mt-0.5">
+                  This address isn’t funded yet. Sponsor its creation by sending a{" "}
+                  {SPONSOR_MIN_STARTING_BALANCE} XLM reserve in the same transaction
+                  (total debited: {SPONSOR_MIN_STARTING_BALANCE} XLM + your amount + fee).
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {/* Validation error */}
         {validationError && (
@@ -1026,7 +1223,7 @@ function SendPageClient() {
         {/* Submit */}
         <button
           onClick={handleSend}
-          disabled={isSubmitting || (isCrossAsset && (!pathEstimate || Boolean(pathError)))}
+          disabled={isSubmitting || (mode === "one-time" && isCrossAsset && (!pathEstimate || Boolean(pathError)))}
           data-testid="send-btn"
           className="w-full py-3 rounded-lg bg-gradient-to-r from-ophir-600 to-stellar-dark text-white font-medium text-sm hover:from-ophir-700 hover:to-stellar disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-ophir-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
         >
@@ -1052,8 +1249,8 @@ function SendPageClient() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              {step === "scheduling"
-                ? "Scheduling payment..."
+              {mode === "recurring"
+                ? "Scheduling recurring payment..."
                 : step === "building"
                   ? "Building transaction..."
                   : step === "signing"
@@ -1078,11 +1275,13 @@ function SendPageClient() {
                   d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
                 />
               </svg>
-              {isCrossAsset
-                ? pathError
-                  ? "No Path Available"
-                  : `Send ${amount || "0"} ${selectedAsset.code} → ~${pathEstimate?.destinationAmount || "0"} ${destAsset.code}`
-                : `Send ${selectedAsset.code}`}
+              {mode === "recurring"
+                ? "Schedule Recurring"
+                : isCrossAsset
+                  ? pathError
+                    ? "No Path Available"
+                    : `Send ${amount || "0"} ${selectedAsset.code} → ~${pathEstimate?.destinationAmount || "0"} ${destAsset.code}`
+                  : `Send ${selectedAsset.code}`}
             </>
           )}
         </button>
